@@ -229,14 +229,22 @@ function sankeyColumns(data: SankeyChart3DProps["data"]) {
     if (!nodes.has(id)) nodes.set(id, newNode(id, 0))
     return nodes.get(id)!
   }
+  // A flow is known by its ends, a second one between the same nodes by its count, so its
+  // key, and with it a focus on the flow, outlasts new data.
+  const seen = new Map<string, number>()
   const flows = data
     .filter((d) => d.value > 0)
-    .map((d, i) => ({
-      key: String(i),
-      source: node(d.source),
-      target: node(d.target),
-      value: d.value,
-    }))
+    .map((d) => {
+      const ends = JSON.stringify([d.source, d.target])
+      const count = seen.get(ends) ?? 0
+      seen.set(ends, count + 1)
+      return {
+        key: count ? `${ends}#${count}` : ends,
+        source: node(d.source),
+        target: node(d.target),
+        value: d.value,
+      }
+    })
 
   // Bellman-Ford for the longest paths: a pass more than there are nodes means a cycle.
   for (let pass = 0; flows.some((f) => f.target.column <= f.source.column); pass += 1) {

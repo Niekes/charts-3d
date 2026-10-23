@@ -971,6 +971,44 @@ describe("focus", () => {
     await chart.unmount()
   })
 
+  test("the scene, which the canvas paints and the hover reads, has the faded marks too", async () => {
+    let scene: { current: { fill: string }[] } = { current: [] }
+    function Scene() {
+      scene = useChart3D().scene
+      return null
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={squares} />
+        <Scene />
+      </ChartContainer3D>
+    )
+    await chart.send(move(25, 125))
+    expect(scene.current.map((mark) => mark.fill)).toEqual(["red", faded, "red", "red"])
+    await chart.unmount()
+  })
+
+  test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={squares} />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    const press = (type: string, clientX: number) =>
+      new MouseEvent(type, { bubbles: true, clientX, clientY: 125 })
+
+    await chart.send(move(25, 125))
+    expect(chart.host.textContent).toContain("tip-a")
+    await chart.send(press("pointerdown", 25))
+    await chart.send(press("pointermove", 75))
+    expect(chart.svg.setPointerCapture).toHaveBeenCalled()
+    expect(chart.host.textContent).not.toContain("tip-a")
+    expect(fills(chart.svg)).toContain(faded)
+
+    await chart.unmount()
+  })
+
   test("a focus on groups that no mark has any more fades nothing", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
