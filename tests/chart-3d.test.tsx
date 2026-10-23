@@ -5,6 +5,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import {
+  Axes3D,
   ChartContainer3D,
   ChartLegend3D,
   Marks3D,
@@ -320,6 +321,29 @@ describe("ChartLegend3D", () => {
     expect(html).toContain("background:var(--color-b)")
     // A key without a label shows the key.
     expect(html).toContain(">c<")
+  })
+})
+
+describe("Axes3D", () => {
+  test("hides a tick label that would cover another, so an axis seen end on keeps one", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    // From above, the y axis points at the camera and its ticks fall on one point.
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: Math.PI / 2 }}>
+        <Axes3D
+          spec={spec}
+          world={worldBox(spec)}
+          format={{ x: (v) => `x${v}`, y: (v) => `y${v}` }}
+        />
+      </ChartContainer3D>
+    )
+    const shown = [...chart.host.querySelectorAll("text")]
+      .filter((text) => !text.classList.contains("opacity-0"))
+      .map((text) => text.textContent!)
+
+    expect(shown.filter((label) => label.startsWith("y"))).toEqual(["y0"])
+    expect(shown.filter((label) => label.startsWith("x"))).toHaveLength(spec.x.ticks.length)
+    await chart.unmount()
   })
 })
 

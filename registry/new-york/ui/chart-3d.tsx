@@ -739,63 +739,121 @@ function Axes3D({
             strokeWidth={0.75}
           />
         ))}
-      {box.axes(spec).map((edge) => (
-        <AxisEdge3D
-          key={edge.axis}
-          edge={edge}
-          format={format[edge.axis] ?? String}
-          title={titles[edge.axis]}
-        />
+      {labelAxes(box.axes(spec), format, titles).map((axis) => (
+        <AxisEdge3D key={axis.key} ticks={axis.ticks} title={axis.title} />
       ))}
     </g>
   )
 }
 
+/** A label of the chart box in the units of the view box: a tick label or the title of an axis. */
+type AxisLabel = {
+  x: number
+  y: number
+  anchor: "start" | "middle" | "end"
+  text: React.ReactNode
+  /** The font size, which the overlap check reads. */
+  size: number
+  hidden?: boolean
+}
+
 /**
- * The tick labels of one axis on the outline of the box, pushed away from the
- * box along the normal of the edge, and the title of the axis further out.
+ * The labels of one axis on the outline of the box: a label per tick, pushed
+ * away from the box along the normal of the edge, and the title of the axis
+ * further out. `key` names the edge, one of the four the axis moves between
+ * as the camera turns.
  */
-function AxisEdge3D({
-  edge,
-  format,
-  title,
-}: {
-  edge: AxisEdge
-  format: (value: number) => React.ReactNode
+function axisLabels(
+  edge: AxisEdge,
+  format: (value: number) => React.ReactNode,
   title?: React.ReactNode
-}) {
-  // An axis without ticks, such as the rows of an empty chart, has nothing to label.
-  if (!edge.length) return null
+) {
   const { normal: n } = edge
   const start = edge[0].projected
   const end = edge[edge.length - 1].projected
   const anchor = n.x > 0.3 ? "start" : n.x < -0.3 ? "end" : "middle"
+  const label = (at: Point2D, out: number, text: React.ReactNode, size: number): AxisLabel => ({
+    x: at.x + n.x * out,
+    y: at.y + n.y * out,
+    anchor,
+    text,
+    size,
+  })
+  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
 
-  // The labels jump to another edge as the camera turns, so they fade out
-  // while it turns and fade back in a moment after it rests.
+  return {
+    key: `${edge.axis}:${edge[0].x},${edge[0].y},${edge[0].z}`,
+    ticks: edge.map((tick) => label(tick.projected, 10, format(tick[edge.axis]), 10)),
+    title: title ? label(middle, 44, title, 12) : undefined,
+  }
+}
+
+/**
+ * The labels of the axes, with every tick label hidden that would cover a
+ * title or a tick label before it, so an axis seen end on keeps its first
+ * label and a short one every other.
+ */
+function labelAxes(
+  edges: AxisEdge[],
+  format: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>,
+  titles: Partial<Record<keyof AxesSpec, React.ReactNode>>
+) {
+  // An axis without ticks, such as the rows of an empty chart, has nothing to label.
+  const axes = edges
+    .filter((edge) => edge.length)
+    .map((edge) => axisLabels(edge, format[edge.axis] ?? String, titles[edge.axis]))
+  const placed = axes.flatMap((axis) => (axis.title ? [bounds(axis.title)] : []))
+  for (const label of axes.flatMap((axis) => axis.ticks)) {
+    const b = bounds(label)
+    label.hidden = placed.some(
+      (p) => b.left < p.right && p.left < b.right && b.top < p.bottom && p.top < b.bottom
+    )
+    if (!label.hidden) placed.push(b)
+  }
+  return axes
+}
+
+/** The box a label covers, guessed from its text, as the browser lays it out only after the render. */
+function bounds({ x, y, anchor, text, size }: AxisLabel) {
+  // ponytail: 0.6em a character; measure with getBBox if wide fonts or rich labels still overlap.
+  const chars = typeof text === "string" || typeof text === "number" ? String(text).length : 4
+  const width = chars * size * 0.6
+  const left = x - width * { start: 0, middle: 0.5, end: 1 }[anchor]
+  return { left, right: left + width, top: y - size / 2, bottom: y + size / 2 }
+}
+
+/**
+ * The labels of one axis, dimmed while the camera turns. When the axis jumps
+ * to another edge of the box, its key changes, so they mount anew and fade in
+ * there.
+ */
+function AxisEdge3D({ ticks, title }: { ticks: AxisLabel[]; title?: AxisLabel }) {
   return (
-    <g className="transition-opacity delay-300 duration-300 in-data-[orbiting=true]:opacity-0 in-data-[orbiting=true]:delay-0 in-data-[orbiting=true]:duration-150">
-      {edge.map((tick, i) => (
+    <g className="transition-opacity duration-300 starting:opacity-0 in-data-[orbiting=true]:opacity-50">
+      {ticks.map(({ x, y, anchor, text, hidden }, i) => (
         <text
           key={i}
-          x={tick.projected.x + n.x * 10}
-          y={tick.projected.y + n.y * 10}
+          x={x}
+          y={y}
           textAnchor={anchor}
           dominantBaseline="central"
-          className="fill-muted-foreground text-[10px]"
+          className={cn(
+            "fill-muted-foreground text-[10px] transition-opacity",
+            hidden && "opacity-0"
+          )}
         >
-          {format(tick[edge.axis])}
+          {text}
         </text>
       ))}
       {title && (
         <text
-          x={(start.x + end.x) / 2 + n.x * 44}
-          y={(start.y + end.y) / 2 + n.y * 44}
-          textAnchor={anchor}
+          x={title.x}
+          y={title.y}
+          textAnchor={title.anchor}
           dominantBaseline="central"
           className="fill-foreground font-medium"
         >
-          {title}
+          {title.text}
         </text>
       )}
     </g>
