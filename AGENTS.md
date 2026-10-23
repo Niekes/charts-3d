@@ -206,9 +206,19 @@ renderer, so text stays sharp and the theme stays in CSS.
 
 ### Interaction
 
-The camera moves through one table, `SHORTCUTS` in the core: the keys of a
-row move the camera, and the shortcut panel - the keyboard button and `?` -
-lists every row. A new gesture is a new row, so the panel never misses one.
+The camera moves through one table, `SHORTCUTS` in the core: an action per
+row, with its default keys, or the hint of its gesture, and its label. The
+keys of an action move the camera, and the shortcut panel - the keyboard
+button and `?` - lists every action that is on, one row per label. A new
+gesture is a new action, so the panel never misses one.
+
+- **`keymap` lays itself over the table.** `keymapOf` merges it per action:
+  `false` turns an action off, keys replace its keys, a label renames it.
+  Everything that reads the keys - the handlers, `aria-keyshortcuts`, the
+  panel, the default `aria-label` - reads them from `keymapOf`.
+- **Keys are in the syntax of `aria-keyshortcuts`**, and `combo` brings a
+  binding and a press into one form, so they match exactly: a press with a
+  modifier the binding lacks goes to the browser.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
   zoom stop at their limits there and nowhere else.

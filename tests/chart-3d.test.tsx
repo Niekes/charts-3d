@@ -263,7 +263,188 @@ describe("shortcuts", () => {
 
     await chart.unmount()
   })
+
+  test("the panel lists an action by its label, its keys grouped by their modifiers", async () => {
+    const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
+    expect(chart.svg.getAttribute("aria-label")).toBe(
+      "3D chart. Drag to rotate it. Press ? for all shortcuts."
+    )
+    await chart.send(key("?"))
+
+    expect(rows(chart.host)).toEqual([
+      ["Rotate", "Drag", "←→↑↓"],
+      ["Pan", "SpaceDrag", "Shift←→↑↓"],
+      ["Zoom", "+−", "CtrlScroll"],
+      ["Reset", "0", "Double-click"],
+      ["Keyboard shortcuts", "?"],
+    ])
+
+    await chart.unmount()
+  })
+
+  test("keymap rebinds an action, and a press matches its keys exactly", async () => {
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: 0, tilt: 0 }}
+        keymap={{
+          rotateLeft: ["a"],
+          zoomIn: { keys: ["Control+Plus"] },
+          panLeft: ["Shift+Control+ArrowLeft"],
+        }}
+      >
+        <Camera />
+      </ChartContainer3D>
+    )
+    const read = () => view(chart.host)
+    const press = (key: string, init: KeyboardEventInit) =>
+      new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init })
+
+    await chart.send(key("ArrowLeft"))
+    expect(read().yaw).toBe(0)
+    await chart.send(key("a"))
+    expect(read().yaw).toBeCloseTo(-Math.PI / 36)
+
+    await chart.send(key("+"))
+    expect(read().scale).toBe(120)
+    // Shift is in the + of most keyboards already, so it does not count.
+    await chart.send(press("+", { ctrlKey: true, shiftKey: true }))
+    expect(read().scale).toBeCloseTo(144)
+    await chart.send(press("ArrowLeft", { ctrlKey: true, shiftKey: true }))
+    expect(read().origin.x).toBe(300)
+
+    // A modifier the keys lack leaves the press to the browser, which resets its zoom on Ctrl and 0.
+    const reset = press("0", { ctrlKey: true })
+    await chart.send(reset)
+    expect(reset.defaultPrevented).toBe(false)
+    expect(read().scale).toBeCloseTo(144)
+    const back = press("ArrowRight", { altKey: true, metaKey: true })
+    await chart.send(back)
+    expect(back.defaultPrevented).toBe(false)
+    expect(read().yaw).toBeCloseTo(-Math.PI / 36)
+
+    const keys = chart.svg.getAttribute("aria-keyshortcuts")!.split(" ")
+    expect(keys).toContain("Control+Plus")
+    expect(keys).toContain("Control+Shift+ArrowLeft")
+    expect(keys).not.toContain("ArrowLeft")
+
+    await chart.unmount()
+  })
+
+  test("an action turned off does nothing and leaves its event to the browser", async () => {
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: 0, tilt: 0 }}
+        aria-label="Sales"
+        keymap={{
+          zoomIn: [],
+          reset: false,
+          doubleClickReset: false,
+          wheelZoom: false,
+          dragRotate: false,
+          dragPan: false,
+        }}
+      >
+        <Camera />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const read = () => view(chart.host)
+    chart.svg.setPointerCapture = vi.fn()
+    expect(chart.svg.getAttribute("aria-label")).toBe("Sales")
+    expect(chart.svg.getAttribute("class")).not.toContain("touch-none")
+
+    await chart.send(key("ArrowRight"))
+    expect(read().yaw).toBeCloseTo(Math.PI / 36)
+    await chart.send(key("0"))
+    await chart.send(new MouseEvent("dblclick", { bubbles: true }))
+    expect(read().yaw).toBeCloseTo(Math.PI / 36)
+
+    await chart.send(key("+"))
+    const wheel = new WheelEvent("wheel", { deltaY: -200, ctrlKey: true, cancelable: true })
+    await chart.send(wheel)
+    expect(wheel.defaultPrevented).toBe(false)
+    expect(read().scale).toBe(120)
+
+    const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })
+    await chart.send(space)
+    expect(space.defaultPrevented).toBe(false)
+    // Without a drag, a press and a move hover the marks.
+    await chart.send(pointer("pointerdown", 150, 150))
+    await chart.send(pointer("pointermove", 196, 150))
+    expect(read().yaw).toBeCloseTo(Math.PI / 36)
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.send(key("?"))
+    expect(rows(chart.host).map(([label]) => label)).toEqual([
+      "Rotate",
+      "Pan",
+      "Zoom",
+      "Keyboard shortcuts",
+    ])
+
+    await chart.unmount()
+  })
+
+  test("keymap={false} stands the chart still, out of the tab order and without a panel", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} keymap={false}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(chart.svg.getAttribute("aria-label")).toBe("3D chart.")
+    expect(chart.svg.hasAttribute("tabindex")).toBe(false)
+    expect(chart.svg.hasAttribute("aria-keyshortcuts")).toBe(false)
+    expect(chart.host.querySelector("button")).toBeNull()
+
+    await chart.unmount()
+  })
+
+  test("keymap names the help keys and the labels of the panel", async () => {
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        keymap={{
+          help: { keys: ["h"], label: "Tastenkürzel" },
+          rotateLeft: { label: "Links drehen" },
+        }}
+      >
+        {null}
+      </ChartContainer3D>
+    )
+    const button = chart.host.querySelector("button")!
+    expect(button.getAttribute("aria-label")).toBe("Tastenkürzel")
+    expect(chart.svg.getAttribute("aria-label")).toBe(
+      "3D chart. Drag to rotate it. Press h for all shortcuts."
+    )
+
+    await chart.send(key("?"))
+    expect(button.getAttribute("aria-expanded")).toBe("false")
+    expect(button.hasAttribute("aria-controls")).toBe(false)
+    await chart.send(key("h"))
+    expect(button.getAttribute("aria-expanded")).toBe("true")
+    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+    expect(button.getAttribute("aria-controls")).toBe(panel.id)
+
+    expect(rows(chart.host).slice(0, 2)).toEqual([
+      ["Rotate", "Drag", "→↑↓"],
+      ["Links drehen", "←"],
+    ])
+    expect(rows(chart.host).at(-1)).toEqual(["Tastenkürzel", "h"])
+
+    await chart.unmount()
+  })
 })
+
+/** The rows of the open shortcut panel: the label, then the text of each group of keys. */
+function rows(host: HTMLElement) {
+  const panel = host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+  return [...panel.querySelectorAll("dt")].map((dt) => [
+    dt.nextElementSibling!.textContent,
+    ...[...dt.querySelectorAll('[data-slot="kbd-group"]')].map((group) => group.textContent),
+  ])
+}
 
 describe("pointer", () => {
   test("a press that wanders a few pixels stays a click, a drag turns the camera", async () => {

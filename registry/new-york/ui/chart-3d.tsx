@@ -100,46 +100,162 @@ const CLICK_DISTANCE = 4
 /** A step of the camera: turned by `yaw` and `tilt`, moved by `pan`, zoomed by the factor `zoom`, or reset. */
 type Move = { yaw?: number; tilt?: number; pan?: Point2D; zoom?: number; reset?: boolean }
 
-// The shortcuts of a chart: the keys of a row move the camera, and the
-// shortcut panel lists every row, so the two never disagree.
-const SHORTCUTS: { hint: string[]; label: string; keys?: Record<string, Move> }[] = [
-  { hint: ["Drag"], label: "Rotate" },
-  {
-    hint: ["←", "→", "↑", "↓"],
-    label: "Rotate",
-    keys: {
-      ArrowLeft: { yaw: -KEY_STEP },
-      ArrowRight: { yaw: KEY_STEP },
-      ArrowUp: { tilt: -KEY_STEP },
-      ArrowDown: { tilt: KEY_STEP },
-    },
-  },
-  { hint: ["Space", "Drag"], label: "Pan" },
-  {
-    hint: ["Shift", "←", "→", "↑", "↓"],
-    label: "Pan",
-    keys: {
-      "Shift+ArrowLeft": { pan: { x: -PAN_STEP, y: 0 } },
-      "Shift+ArrowRight": { pan: { x: PAN_STEP, y: 0 } },
-      "Shift+ArrowUp": { pan: { x: 0, y: -PAN_STEP } },
-      "Shift+ArrowDown": { pan: { x: 0, y: PAN_STEP } },
-    },
-  },
-  {
-    hint: ["+", "−"],
-    label: "Zoom",
-    keys: { "+": { zoom: ZOOM_STEP }, "=": { zoom: ZOOM_STEP }, "-": { zoom: 1 / ZOOM_STEP } },
-  },
-  { hint: ["Ctrl", "Scroll"], label: "Zoom" },
-  { hint: ["0"], label: "Reset", keys: { "0": { reset: true } } },
-  { hint: ["Double-click"], label: "Reset" },
-  { hint: ["?"], label: "Shortcuts" },
-]
-const KEYS: Record<string, Move | undefined> = Object.assign({}, ...SHORTCUTS.map((s) => s.keys))
-// The keys as `aria-keyshortcuts` writes them: `+` delimits, so the plus key is `Plus`.
-const KEY_SHORTCUTS = Object.keys(KEYS)
-  .map((k) => (k === "+" ? "Plus" : k))
-  .join(" ")
+/** The actions a key triggers: each steps the camera, `help` opens the shortcut panel. */
+export type KeyAction3D =
+  | "rotateLeft"
+  | "rotateRight"
+  | "rotateUp"
+  | "rotateDown"
+  | "panLeft"
+  | "panRight"
+  | "panUp"
+  | "panDown"
+  | "zoomIn"
+  | "zoomOut"
+  | "reset"
+  | "help"
+
+/** The gestures of the pointer: a drag turns the camera, with Space held it pans, Ctrl or ⌘ with the wheel zooms, a double click resets. */
+export type Gesture3D = "dragRotate" | "dragPan" | "wheelZoom" | "doubleClickReset"
+
+/**
+ * The shortcuts of a chart over their defaults, per action: `false` turns an
+ * action off, keys replace its keys and a label renames it in the shortcut
+ * panel, where the actions of one label share a row. Keys are written the way
+ * `aria-keyshortcuts` writes them, such as `"Shift+ArrowLeft"` or
+ * `"Control+Plus"`, and the panel shows the first.
+ */
+export type Keymap3D = {
+  [A in KeyAction3D]?: false | string[] | { keys?: string[]; label?: string }
+} & { [G in Gesture3D]?: false | { label?: string } }
+
+type Action3D = KeyAction3D | Gesture3D
+
+// The shortcuts of a chart, in the order of the shortcut panel: the keys of
+// an action move the camera, a gesture shows its hint, and the panel lists
+// every action that is on, so the two never disagree. `keymap` overrides them.
+const SHORTCUTS: Record<
+  Action3D,
+  { label: string; keys?: string[]; hint?: string[]; move?: Move }
+> = {
+  dragRotate: { label: "Rotate", hint: ["Drag"] },
+  rotateLeft: { label: "Rotate", keys: ["ArrowLeft"], move: { yaw: -KEY_STEP } },
+  rotateRight: { label: "Rotate", keys: ["ArrowRight"], move: { yaw: KEY_STEP } },
+  rotateUp: { label: "Rotate", keys: ["ArrowUp"], move: { tilt: -KEY_STEP } },
+  rotateDown: { label: "Rotate", keys: ["ArrowDown"], move: { tilt: KEY_STEP } },
+  dragPan: { label: "Pan", hint: ["Space", "Drag"] },
+  panLeft: { label: "Pan", keys: ["Shift+ArrowLeft"], move: { pan: { x: -PAN_STEP, y: 0 } } },
+  panRight: { label: "Pan", keys: ["Shift+ArrowRight"], move: { pan: { x: PAN_STEP, y: 0 } } },
+  panUp: { label: "Pan", keys: ["Shift+ArrowUp"], move: { pan: { x: 0, y: -PAN_STEP } } },
+  panDown: { label: "Pan", keys: ["Shift+ArrowDown"], move: { pan: { x: 0, y: PAN_STEP } } },
+  zoomIn: { label: "Zoom", keys: ["Plus", "="], move: { zoom: ZOOM_STEP } },
+  zoomOut: { label: "Zoom", keys: ["-"], move: { zoom: 1 / ZOOM_STEP } },
+  wheelZoom: { label: "Zoom", hint: ["Ctrl", "Scroll"] },
+  reset: { label: "Reset", keys: ["0"], move: { reset: true } },
+  doubleClickReset: { label: "Reset", hint: ["Double-click"] },
+  help: { label: "Keyboard shortcuts", keys: ["?"] },
+}
+
+const MODIFIERS = ["Control", "Alt", "Meta", "Shift"]
+// The keys that `aria-keyshortcuts` names, because `+` delimits and a space separates.
+const NAMED: Record<string, string> = { Plus: "+", Space: " " }
+const ARIA: Record<string, string> = { "+": "Plus", " ": "Space" }
+const KBD: Record<string, string> = {
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  "-": "−",
+  " ": "Space",
+  Control: "Ctrl",
+  Meta: "⌘",
+}
+
+/** Keys split at `+`, which is the key itself at the end: `"Control++"` is Control and `+`. */
+const split = (keys: string) => keys.split(/\+(?!$)/)
+
+/**
+ * Keys in the one form a binding and a press compare in: the modifiers in a
+ * fixed order, then the key, Plus as `+` and Space as " ". Shift counts only
+ * beside a named key; a character such as "?" or "A" is typed with it already.
+ */
+function combo(keys: string) {
+  const parts = split(keys)
+  const key = NAMED[parts.at(-1)!] ?? parts.at(-1)!
+  const mods = MODIFIERS.filter((m) => parts.includes(m) && (m !== "Shift" || key.length > 1))
+  return [...mods, key].join("+")
+}
+
+/** The keys of a press, in the form of `combo`. */
+function pressed(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "metaKey" | "shiftKey">) {
+  const mods = [
+    e.ctrlKey && "Control",
+    e.altKey && "Alt",
+    e.metaKey && "Meta",
+    e.shiftKey && "Shift",
+  ]
+  return combo([...mods, e.key].filter(Boolean).join("+"))
+}
+
+/** Keys in the form of `combo`, the way `aria-keyshortcuts` writes them. */
+function aria(keys: string) {
+  const parts = split(keys)
+  return [...parts.slice(0, -1), ARIA[parts.at(-1)!] ?? parts.at(-1)].join("+")
+}
+
+/** Every action, `keymap` over its defaults: on unless it is off or a key action without keys. */
+function shortcutsOf(keymap: Keymap3D | false) {
+  return (Object.keys(SHORTCUTS) as Action3D[]).map((action) => {
+    const own: Keymap3D[KeyAction3D] = keymap && keymap[action]
+    const { keys = [], ...shortcut } = {
+      ...SHORTCUTS[action],
+      ...(Array.isArray(own) ? { keys: own } : own || {}),
+    }
+    const on = own !== false && (shortcut.hint !== undefined || keys.length > 0)
+    return { ...shortcut, action, on, keys: keys.map(combo) }
+  })
+}
+
+type Shortcut = ReturnType<typeof shortcutsOf>[number]
+
+/**
+ * The rows of the shortcut panel: the actions by label, the keys of a row in
+ * groups of the same modifiers, a gesture in a group of its own.
+ */
+function rowsOf(shortcuts: Shortcut[]) {
+  const rows = new Map<string, Map<string, string[]>>()
+  for (const { action, label, keys, hint } of shortcuts) {
+    const parts = hint ?? split(keys[0]).map((k) => KBD[k] ?? k)
+    const group = hint ? action : parts.slice(0, -1).join("+")
+    const groups = rows.get(label) ?? new Map<string, string[]>()
+    const known = groups.get(group)
+    rows.set(label, groups.set(group, known ? [...known, parts.at(-1)!] : parts))
+  }
+  return [...rows].map(([label, groups]) => ({ label, groups: [...groups.values()] }))
+}
+
+/**
+ * What a keymap does: the actions that are on, the step of each key, the help
+ * keys and the rows of the panel. Without the `panel`, the help keys have
+ * nothing to open and are off.
+ */
+function keymapOf(keymap: Keymap3D | false, panel: boolean) {
+  const all = shortcutsOf(keymap)
+  const on = all.filter((s) => s.on && (panel || s.action !== "help"))
+  return {
+    on: (action: Action3D) => on.some((s) => s.action === action),
+    moves: Object.fromEntries(on.flatMap((s) => s.keys.map((k) => [k, s.move]))) as Record<
+      string,
+      Move | undefined
+    >,
+    help: on.find((s) => s.action === "help")?.keys ?? [],
+    label: all.find((s) => s.action === "help")!.label,
+    aria: on.flatMap((s) => s.keys.map(aria)).join(" "),
+    rows: panel ? rowsOf(on) : [],
+  }
+}
+
+type Keymap = ReturnType<typeof keymapOf>
 
 export type ChartContainer3DProps = {
   /** The series of the chart: a label and a color per key, as in the chart of shadcn/ui. */
@@ -176,6 +292,12 @@ export type ChartContainer3DProps = {
    * @defaultValue true
    */
   shortcuts?: boolean
+  /**
+   * Rebinds, renames or turns off the keys and the gestures of the chart, per
+   * action; `false` turns them all off and the chart stands still.
+   * @defaultValue {}
+   */
+  keymap?: Keymap3D | false
 }
 
 function ChartContainer3D({
@@ -187,9 +309,10 @@ function ChartContainer3D({
   legend = false,
   renderer: requested = "svg",
   shortcuts = true,
+  keymap = {},
   className,
   children,
-  "aria-label": ariaLabel = "3D chart. Drag to rotate it, press ? for all shortcuts.",
+  "aria-label": ariaLabel,
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const uniqueId = React.useId()
@@ -201,7 +324,8 @@ function ChartContainer3D({
     height,
     setTooltip
   )
-  const { view, orbiting, handlers } = useOrbit(defaultView, width, leave, hover)
+  const keys = keymapOf(keymap, shortcuts)
+  const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, leave, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
     () => ({ config, camera, renderer, scene, repaint }),
@@ -220,10 +344,7 @@ function ChartContainer3D({
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"
-          aria-label={ariaLabel}
-          aria-keyshortcuts={shortcuts ? `${KEY_SHORTCUTS} ?` : KEY_SHORTCUTS}
-          tabIndex={0}
-          className="block h-auto w-full cursor-grab touch-none outline-hidden select-none mask-y-from-96% active:cursor-grabbing"
+          {...keymapProps(keys, ariaLabel)}
           data-orbiting={orbiting}
           onPointerLeave={leave}
           {...handlers}
@@ -233,10 +354,34 @@ function ChartContainer3D({
         <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
         <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
       </div>
-      {shortcuts && <ChartShortcuts3D />}
+      {keys.rows.length > 0 && <ChartShortcuts3D {...keys} />}
       {legend && <ChartLegend3D config={config} />}
     </div>
   )
+}
+
+/**
+ * What the svg says about its keymap: a label that names the drag and the
+ * help key if they are on, the keys, the focus only if a key does something
+ * and the grab cursor only if a drag does; without one, a touch scrolls the page.
+ */
+function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement> {
+  const drag = keys.on("dragRotate") || keys.on("dragPan")
+  const help = keys.help[0]
+  const said = [
+    "3D chart.",
+    keys.on("dragRotate") && "Drag to rotate it.",
+    help && `Press ${aria(help)} for all shortcuts.`,
+  ]
+  return {
+    "aria-label": label ?? said.filter(Boolean).join(" "),
+    "aria-keyshortcuts": keys.aria || undefined,
+    tabIndex: keys.aria ? 0 : undefined,
+    className: cn(
+      "block h-auto w-full outline-hidden select-none mask-y-from-96%",
+      drag && "cursor-grab touch-none active:cursor-grabbing"
+    ),
+  }
 }
 
 /**
@@ -286,24 +431,25 @@ function moved(view: View3D, move: Move, initial: View3D): View3D {
 }
 
 /**
- * The view of the camera, and the handlers that move it: a drag turns it,
- * or pans it while Space is held, the keys of `SHORTCUTS` step it, Ctrl or ⌘
- * with the wheel zooms it and a double click resets it. `orbiting` is true
- * while the camera turns. `onDragStart` runs when a press becomes a drag,
- * `onHover` on a move without one.
+ * The view of the camera, and the handlers that move it, as far as `keys`
+ * has them on: a drag turns it, or pans it while Space is held, the keys
+ * step it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
+ * `orbiting` is true while the camera turns. `onDragStart` runs when a press
+ * becomes a drag, `onHover` on a move without one.
  */
 function useOrbit(
   defaultView: View3D,
   width: number,
+  keys: Keymap,
   onDragStart: () => void,
   onHover: (e: React.PointerEvent<SVGSVGElement>) => void
 ) {
   const [view, setView] = React.useState(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
   const drag = React.useRef<Point2D & { moved: boolean }>(null)
-  const space = React.useRef(false)
-  const ref = useWheelZoom(setView)
+  const ref = useWheelZoom(setView, keys.on("wheelZoom"))
   const move = (step: Move) => setView((v) => moved(v, step, defaultView))
+  const { space, ...keyHandlers } = useKeys(keys, move, setOrbiting)
   const release = () => {
     drag.current = null
     setOrbiting(false)
@@ -312,7 +458,10 @@ function useOrbit(
   const handlers: React.SVGProps<SVGSVGElement> = {
     ref,
     onPointerDown: (e) => {
-      drag.current = { x: e.clientX, y: e.clientY, moved: false }
+      // Space is held only while the drag pans; without it, the drag turns.
+      if (space.current || keys.on("dragRotate")) {
+        drag.current = { x: e.clientX, y: e.clientY, moved: false }
+      }
     },
     onPointerMove: (e) => {
       const d = drag.current
@@ -332,35 +481,52 @@ function useOrbit(
     },
     onPointerUp: release,
     onPointerCancel: release,
-    onDoubleClick: () => move({ reset: true }),
-    onKeyDown: (e) => {
-      // Held on the chart, Space pans a drag instead of scrolling the page.
-      if (e.key === " ") space.current = true
-      const step = (e.shiftKey && KEYS[`Shift+${e.key}`]) || KEYS[e.key]
-      if (!step && e.key !== " ") return
-      e.preventDefault()
-      if (!step) return
-      setOrbiting(Boolean(step.yaw || step.tilt))
-      move(step)
-    },
-    onKeyUp: (e) => {
-      if (e.key === " ") space.current = false
-      setOrbiting(false)
-    },
+    onDoubleClick: keys.on("doubleClickReset") ? () => move({ reset: true }) : undefined,
+    ...keyHandlers,
   }
 
   return { view, orbiting, handlers }
 }
 
 /**
- * A ref for the svg that zooms the view with Ctrl or ⌘ and the wheel, which
- * is also how a trackpad pinches. The wheel alone still scrolls the page.
+ * The handlers that step the camera with the keys of `keys`, and `space`,
+ * which is true while Space is held for a drag to pan. A key that turns the
+ * camera marks it as orbiting until it is let go.
  */
-function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>) {
+function useKeys(
+  keys: Keymap,
+  move: (step: Move) => void,
+  setOrbiting: (orbiting: boolean) => void
+) {
+  const space = React.useRef(false)
+  const onKeyDown = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    // Held on the chart, Space pans a drag instead of scrolling the page.
+    const pan = e.key === " " && keys.on("dragPan")
+    if (pan) space.current = true
+    const step = keys.moves[pressed(e)]
+    if (!step && !pan) return
+    e.preventDefault()
+    if (!step) return
+    setOrbiting(Boolean(step.yaw || step.tilt))
+    move(step)
+  }
+  const onKeyUp = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    if (e.key === " ") space.current = false
+    setOrbiting(false)
+  }
+  return { space, onKeyDown, onKeyUp }
+}
+
+/**
+ * A ref for the svg that zooms the view with Ctrl or ⌘ and the wheel, which
+ * is also how a trackpad pinches, if `on`. The wheel alone still scrolls the page.
+ */
+function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>, on: boolean) {
   // React listens to the wheel passively, and only a listener that is not
   // passive can keep the browser from zooming the page.
   return React.useCallback(
     (svg: SVGSVGElement | null) => {
+      if (!on) return
       const onWheel = (e: WheelEvent) => {
         if (!e.ctrlKey && !e.metaKey) return
         e.preventDefault()
@@ -369,7 +535,7 @@ function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>) {
       svg?.addEventListener("wheel", onWheel, { passive: false })
       return () => svg?.removeEventListener("wheel", onWheel)
     },
-    [setView]
+    [setView, on]
   )
 }
 
@@ -679,42 +845,61 @@ function ChartTooltip3D({
 }
 
 /**
- * A button in the corner of the chart that lists `SHORTCUTS`. `?` on the
- * chart opens and closes the list, Escape closes it.
+ * A button in the corner of the chart, named `label`, that lists the rows of
+ * its keymap. The `help` keys on the chart open and close the list, Escape
+ * closes it.
  */
-function ChartShortcuts3D() {
+function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | "label">) {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
+  const id = React.useId()
+  // A dependency that stays the same while the keys do; no key is a line break.
+  const keys = help.join("\n")
 
   React.useEffect(() => {
     const chart = ref.current?.parentElement
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "?") setOpen((o) => !o)
+      if (keys.split("\n").includes(pressed(e))) setOpen((o) => !o)
       if (e.key === "Escape") setOpen(false)
     }
     chart?.addEventListener("keydown", onKeyDown)
     return () => chart?.removeEventListener("keydown", onKeyDown)
-  }, [])
+  }, [keys])
 
   return (
     <div ref={ref} className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
       <button
         type="button"
-        aria-label="Keyboard shortcuts"
+        data-slot="chart-3d-shortcuts-trigger"
+        aria-label={label}
         aria-expanded={open}
+        aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
         className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
       >
         <KeyboardIcon />
       </button>
-      {open && (
-        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl">
-          {SHORTCUTS.map(({ hint, label }, i) => (
-            <React.Fragment key={i}>
-              <span data-slot="kbd-group" className="flex gap-1">
-                {hint.map((key) => (
+      {open && <ChartShortcutList3D id={id} rows={rows} />}
+    </div>
+  )
+}
+
+/** The list of the shortcut panel: per row, its groups of keys and its label. */
+function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] }) {
+  return (
+    <dl
+      id={id}
+      data-slot="chart-3d-shortcuts"
+      className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl"
+    >
+      {rows.map(({ label, groups }) => (
+        <React.Fragment key={label}>
+          <dt className="flex flex-wrap gap-x-2 gap-y-1">
+            {groups.map((group, i) => (
+              <span key={i} data-slot="kbd-group" className="flex gap-1">
+                {group.map((key, j) => (
                   <kbd
-                    key={key}
+                    key={j}
                     data-slot="kbd"
                     className="pointer-events-none inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none"
                   >
@@ -722,12 +907,12 @@ function ChartShortcuts3D() {
                   </kbd>
                 ))}
               </span>
-              <span className="text-muted-foreground">{label}</span>
-            </React.Fragment>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </dt>
+          <dd className="text-muted-foreground">{label}</dd>
+        </React.Fragment>
+      ))}
+    </dl>
   )
 }
 

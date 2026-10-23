@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `keymap` on `ChartContainer3D`: rebinds, renames or turns off every key and
+  gesture of the chart, per action, in the syntax of `aria-keyshortcuts`.
+  `keymap={false}` stands the chart still and takes it out of the tab order.
+- `data-slot="chart-3d-shortcuts-trigger"` on the shortcut button and
+  `data-slot="chart-3d-shortcuts"` on its list, which is now a `<dl>` that the
+  button points to with `aria-controls`.
+
+### Changed
+
+- The shortcut panel has a row per label, with the keys and the gesture of an
+  action side by side: five rows instead of nine.
+
+### Fixed
+
+- A key with a modifier it is not bound with goes to the browser: Ctrl and
+  `0`, `-` or `=` zoom the page again while the chart has the focus.
+
 ## [0.3.0] - 2026-10-23
 
 ### Added
