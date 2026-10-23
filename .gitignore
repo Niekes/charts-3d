@@ -10,3 +10,4 @@ plans/
 build/
 .react-router/
 public/r/
+dist/

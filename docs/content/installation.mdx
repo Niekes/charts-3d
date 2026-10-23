@@ -45,6 +45,31 @@ npx shadcn@latest add @charts-3d/bar-chart-3d
 
 The namespace always serves the latest version. To pin a release, use the GitHub form above.
 
+## From npm
+
+The same components ship as an npm package, for projects that would rather update with npm than own a copy:
+
+```package-install
+npm install @niekes/charts-3d
+```
+
+The components style themselves with Tailwind classes, and Tailwind only generates the classes it finds. Add the package to its sources in your global CSS, with the path relative to that file:
+
+```css title="app/globals.css"
+@import "tailwindcss";
+@source "../node_modules/@niekes/charts-3d/dist";
+```
+
+Then import the charts from the package:
+
+```tsx
+import { BarChart3D, ChartContainer3D, type ChartConfig } from "@niekes/charts-3d"
+```
+
+The charts read the tokens of a shadcn/ui theme: `--chart-1` to `--chart-5`, `--muted`, `--muted-foreground`, `--border`, `--background` and `--foreground`. A project without shadcn/ui defines them itself, see [Theming](/docs/theming).
+
+**Registry or npm?** The registry copies the code into your project: you can change it, and you update it by hand. The package keeps the code in `node_modules`: you update it with npm, and you use it as it is.
+
 ## Your first chart
 
 ```tsx

@@ -12,6 +12,8 @@
   <a href="https://github.com/niekes/charts-3d/actions/workflows/main.yml"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fniekes%2Fcharts-3d%2Fmaster%2F.github%2Fbadges%2Fcoverage.json" alt="Coverage"></a>
   <a href="https://fallow.tools/docs/explanations/health/"><img src="https://raw.githubusercontent.com/niekes/charts-3d/master/.github/badges/health.svg" alt="fallow health"></a>
   <a href="https://ui.shadcn.com/docs/registry"><img src="https://img.shields.io/badge/shadcn-registry-000000?logo=shadcnui&logoColor=white" alt="shadcn registry"></a>
+  <a href="https://www.npmjs.com/package/@niekes/charts-3d"><img src="https://img.shields.io/npm/v/@niekes/charts-3d" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@niekes/charts-3d"><img src="https://img.shields.io/npm/dw/@niekes/charts-3d" alt="npm weekly downloads"></a>
   <a href="https://www.npmjs.com/package/d3-3d"><img src="https://img.shields.io/npm/v/d3-3d?label=d3-3d" alt="d3-3d version"></a>
   <a href="https://github.com/niekes/charts-3d/blob/master/LICENSE"><img src="https://img.shields.io/github/license/niekes/charts-3d" alt="License"></a>
   <img src="https://img.shields.io/badge/TypeScript-Ready-blue" alt="TypeScript">
@@ -37,7 +39,7 @@
     </tr>
 </table>
 
-Copy-paste components, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn on drag and on the arrow keys.
+Copy-paste components or an npm package, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn on drag and on the arrow keys.
 
 ## Sponsor charts-3d
 
@@ -71,7 +73,8 @@ Thank you to the people who make this possible. Sponsors at $25/mo and above get
 ## Using charts-3d
 
 ```bash
-npx shadcn@latest add niekes/charts-3d/bar-chart-3d
+npx shadcn@latest add niekes/charts-3d/bar-chart-3d   # the code, in your project
+npm install @niekes/charts-3d                          # the same components, from npm
 ```
 
 Everything else lives in the [documentation](https://niekes.github.io/charts-3d/docs): [installation](https://niekes.github.io/charts-3d/docs/installation), the [components](https://niekes.github.io/charts-3d/docs/components/bar-chart-3d), [theming](https://niekes.github.io/charts-3d/docs/theming) and [how it works](https://niekes.github.io/charts-3d/docs/how-it-works).

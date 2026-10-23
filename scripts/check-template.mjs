@@ -126,7 +126,7 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   const component = pascalCase(name)
   const source = read(`${UI}/${file}`)
 
-  if (!/-chart-3d$/.test(name)) {
+  if (!name.endsWith("-chart-3d")) {
     fail(`${UI}/${file}: a chart is named '<name>-chart-3d.tsx'`)
   }
   if (!new RegExp(`export\\s+function\\s+${component}\\b`).test(source)) {
@@ -156,6 +156,26 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   if (items.get(name)?.dependencies?.length) {
     fail(`registry.json: '${name}' must leave its npm dependencies to '${CORE}'`)
   }
+}
+
+/**
+ * The npm package and the registry ship the same files: `index.ts` re-exports
+ * every registry file, and nothing else.
+ */
+const barrel = read("index.ts")
+const reexports = [
+  ...barrel.matchAll(/^export \* from "\.\/registry\/new-york\/ui\/([\w-]+)"$/gm),
+].map(([, name]) => name)
+
+for (const file of files) {
+  if (!reexports.includes(basename(file, ".tsx"))) {
+    fail(
+      `index.ts: must re-export the registry file with 'export * from "./${UI}/${basename(file, ".tsx")}"'`
+    )
+  }
+}
+if (/^export (?!\* from "\.\/registry\/)/m.test(barrel)) {
+  fail("index.ts: may only re-export the registry files")
 }
 
 if (violations.length > 0) {

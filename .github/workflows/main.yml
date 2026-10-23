@@ -66,8 +66,13 @@ jobs:
           node-version: 22
           cache: "npm"
       - run: npm ci
-      # Typecheck, the registry JSON and the prerendered docs.
+      # Typecheck, the registry JSON, the prerendered docs and the npm package.
       - run: npm run build
+      # The package keeps the directive on top and ships only dist/ and the notices.
+      - name: Check the npm package
+        run: |
+          head -n 1 dist/index.js | grep -q '^"use client"'
+          npm pack --dry-run --ignore-scripts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:

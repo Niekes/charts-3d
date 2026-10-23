@@ -4,12 +4,19 @@
   // The docs site is a dev surface of the repository: no registry file
   // imports it, so its packages stay devDependencies while the dependencies
   // name what the registry items need at runtime.
-  "ignoreDependencies": ["fumadocs-core", "fumadocs-mdx", "fumadocs-ui", "react-router"],
+  "ignoreDependencies": [
+    "fumadocs-core",
+    "fumadocs-mdx",
+    "fumadocs-ui",
+    "react-dom",
+    "react-router",
+  ],
 
-  // The entry points. The registry files are consumed by the projects that
-  // install them, the docs by React Router, and the MDX pages, which import
-  // the examples, by the glob of the docs source.
+  // The entry points. `index.ts` is the npm package, the registry files are
+  // consumed by the projects that install them, the docs by React Router, and
+  // the MDX pages, which import the examples, by the glob of the docs source.
   "entry": [
+    "index.ts",
     "registry/new-york/ui/*.tsx",
     "docs/root.tsx",
     "docs/routes.ts",
@@ -39,10 +46,11 @@
 
   // The architecture:
   //
+  //   index.ts                             public-api -> charts, core
   //   registry/new-york/ui/*-chart-3d.tsx  charts   ->  core
   //   registry/new-york/ui/chart-3d.tsx    core     ->  lib
   //   lib/*                                lib      ->  (nothing)
-  //   tests/*                              tests    ->  charts, core
+  //   tests/*                              tests    ->  public-api, charts, core
   //   docs/*                               docs     ->  docs, charts, core, lib
   //   scripts/*                            tooling  ->  (nothing)
   //
@@ -52,6 +60,7 @@
   // registry at all.
   "boundaries": {
     "zones": [
+      { "name": "public-api", "patterns": ["index.ts"] },
       { "name": "charts", "patterns": ["registry/new-york/ui/*-chart-3d.tsx"] },
       { "name": "core", "patterns": ["registry/new-york/ui/chart-3d.tsx"] },
       { "name": "lib", "patterns": ["lib/**"] },
@@ -60,10 +69,11 @@
       { "name": "tooling", "patterns": ["scripts/**"] },
     ],
     "rules": [
+      { "from": "public-api", "allow": ["charts", "core"] },
       { "from": "charts", "allow": ["core"] },
       { "from": "core", "allow": ["lib"] },
       { "from": "lib", "allow": [] },
-      { "from": "tests", "allow": ["charts", "core"] },
+      { "from": "tests", "allow": ["public-api", "charts", "core"] },
       { "from": "docs", "allow": ["docs", "charts", "core", "lib"] },
       { "from": "tooling", "allow": [] },
     ],

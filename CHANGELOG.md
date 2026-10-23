@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The npm package `@niekes/charts-3d`: the same components as the registry, from
+  the same files, as ESM with type definitions. Add
+  `@source "../node_modules/@niekes/charts-3d/dist"` to your CSS so that Tailwind
+  generates their classes.
+
 ## [0.1.0] - 2026-10-23
 
 ### Added

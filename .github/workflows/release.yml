@@ -1,45 +1,65 @@
 name: Release
 
-# The registry is installed from the repository, not from npm: a release is
-# a tag that `npx shadcn add niekes/charts-3d/<item>#v<version>` can pin.
-# The shadcn CLI does not pass the tag on to the registry dependencies, so the
-# tag sits on a release commit beside `master` that pins the core to it too.
+# A release ships twice from one version: the shadcn registry, installed from
+# the repository, and the npm package `@niekes/charts-3d`.
+#
+# The registry is a tag that `npx shadcn add niekes/charts-3d/<item>#v<version>`
+# can pin. The shadcn CLI does not pass the tag on to the registry
+# dependencies, so the tag sits on a release commit beside `master` that pins
+# the core to it too.
+#
+# The package is staged on npm through trusted publishing: OIDC instead of a
+# token, provenance included. The version goes live once a maintainer
+# approves it with 2FA.
 on:
   push:
     branches: [master]
     paths:
       - package.json
+  # Retries a release whose tag or publish failed.
+  workflow_dispatch:
 
 jobs:
-  tag:
-    name: Tag the release
+  release:
+    name: Tag and stage on npm
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # npm stage publish needs the npm that ships with Node 24.
+          node-version: 24
           cache: npm
+          registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm test
-      - name: Check whether the version is new
+      - name: Check what is new
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "$VERSION" = "0.0.0" ] || git rev-parse "v$VERSION" >/dev/null 2>&1; then
-              echo "new=false" >> "$GITHUB_OUTPUT"
-              echo "v$VERSION is already tagged or not a release, skipping."
+          if [ "$VERSION" = "0.0.0" ]; then
+              echo "0.0.0 is not a release, skipping."
+              exit 0
+          fi
+          # Each half runs only if it is missing, so a rerun picks up where a failed release stopped.
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+              echo "v$VERSION is already tagged."
           else
-              echo "new=true" >> "$GITHUB_OUTPUT"
-              echo "Releasing v$VERSION."
+              echo "tag=true" >> "$GITHUB_OUTPUT"
+          fi
+          if npm view "@niekes/charts-3d@$VERSION" version >/dev/null 2>&1; then
+              echo "@niekes/charts-3d@$VERSION is already on npm."
+          else
+              echo "npm=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Tag and publish the GitHub release
-        if: steps.version.outputs.new == 'true'
+        if: steps.version.outputs.tag == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -57,3 +77,7 @@ jobs:
           git tag "v$VERSION"
           git push origin "v$VERSION"
           gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md
+      - name: Stage the npm package
+        if: steps.version.outputs.npm == 'true'
+        # npm stage publish runs prepack, which typechecks and builds dist/.
+        run: npm stage publish

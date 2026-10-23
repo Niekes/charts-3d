@@ -19,7 +19,7 @@ Node 22, 24 or newer is required. The docs run at `http://localhost:5173/charts-
 ```bash
 npm run lint     # the whole gate
 npm test         # the test suite
-npm run build    # typecheck + registry JSON + docs
+npm run build    # typecheck + registry JSON + docs + npm package
 ```
 
 `npm run lint` runs four things:
@@ -37,15 +37,16 @@ round trip.
 
 ## Repository layout
 
-| Path                                  | Zone      | What lives there                                       |
-| ------------------------------------- | --------- | ------------------------------------------------------ |
-| `registry/new-york/ui/chart-3d.tsx`   | `core`    | The container, camera, axes, tooltip and helpers.      |
-| `registry/new-york/ui/*-chart-3d.tsx` | `charts`  | One chart per file.                                    |
-| `registry.json`                       |           | The registry: one item per file.                       |
-| `lib/**`                              | `lib`     | `cn`, as every shadcn project has it.                  |
-| `tests/**`                            | `tests`   | The test suite, one file per registry item.            |
-| `docs/**`                             | `docs`    | The documentation site: Fumadocs on React Router.      |
-| `scripts/**`                          | `tooling` | Repository tooling. Imports nothing from the registry. |
+| Path                                  | Zone         | What lives there                                       |
+| ------------------------------------- | ------------ | ------------------------------------------------------ |
+| `index.ts`                            | `public-api` | The npm package: re-exports every registry file.       |
+| `registry/new-york/ui/chart-3d.tsx`   | `core`       | The container, camera, axes, tooltip and helpers.      |
+| `registry/new-york/ui/*-chart-3d.tsx` | `charts`     | One chart per file.                                    |
+| `registry.json`                       |              | The registry: one item per file.                       |
+| `lib/**`                              | `lib`        | `cn`, as every shadcn project has it.                  |
+| `tests/**`                            | `tests`      | The test suite, one file per registry item.            |
+| `docs/**`                             | `docs`       | The documentation site: Fumadocs on React Router.      |
+| `scripts/**`                          | `tooling`    | Repository tooling. Imports nothing from the registry. |
 
 Dependencies point inwards only. A chart builds on the core and never on another
 chart, and the core knows nothing about the charts.
@@ -56,7 +57,8 @@ chart, and the core knows nothing about the charts.
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its only registry dependency.
 3. Add `tests/<name>-chart-3d.test.tsx`, `docs/examples/<name>-chart-3d-demo.tsx` and
    `docs/content/components/<name>-chart-3d.mdx`.
-4. Run `npm run lint` and `npm test`.
+4. Re-export it from `index.ts` for the npm package.
+5. Run `npm run lint` and `npm test`.
 
 ## Code style
 
@@ -103,16 +105,28 @@ Pages are deployed to GitHub Pages from `master`.
 
 ## Releases
 
-A release is a tag, not an npm package: bump `version` in `package.json` and add
-its section to `CHANGELOG.md`. On `master`, the release workflow tags `v<version>`
-and publishes the GitHub release, and the items can be pinned with
-`npx shadcn add niekes/charts-3d/<item>#v<version>`.
+Every version ships twice, from the same files: as the shadcn registry and as
+the npm package `@niekes/charts-3d`. Bump `version` in `package.json` and add
+its section to `CHANGELOG.md`. On `master`, the release workflow then does both:
 
-The shadcn CLI does not pass the tag on to the registry dependencies, so the
-tag does not sit on the `master` commit. The workflow makes a release commit
-beside `master` in which every chart depends on `niekes/charts-3d/chart-3d#v<version>`,
-and tags that one: a pinned chart installs with the core of its release. On
-`master` the dependencies stay unpinned.
+- **The registry.** It tags `v<version>` and publishes the GitHub release, and
+  the items can be pinned with `npx shadcn add niekes/charts-3d/<item>#v<version>`.
+  The shadcn CLI does not pass the tag on to the registry dependencies, so the
+  tag does not sit on the `master` commit: the workflow makes a release commit
+  beside `master` in which every chart depends on
+  `niekes/charts-3d/chart-3d#v<version>`, and tags that one. On `master` the
+  dependencies stay unpinned.
+- **The package.** It stages the version on npm with `npm stage publish`,
+  through trusted publishing: OIDC instead of a token, provenance included. The
+  version goes live once a maintainer approves it with 2FA, with
+  `npm stage approve` or on npmjs.com.
+
+Each half runs only if it is missing, so a release that failed halfway can be
+rerun from the Actions tab (`workflow_dispatch`). The props and the exports of
+`index.ts` are the API of the package: a change to them is a breaking change.
+
+`npm pack --dry-run` shows what the package would ship: `dist/`, `LICENSE`,
+`NOTICE`, `README.md` and `package.json`.
 
 ## Support
 

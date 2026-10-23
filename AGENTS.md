@@ -59,14 +59,15 @@ computation (`barBox`, `barCorners`).
 Dependencies point inwards only. The zones are declared in `.fallowrc.jsonc`
 and a violation fails the build.
 
-| Zone      | Files                                 | May import                      |
-| --------- | ------------------------------------- | ------------------------------- |
-| `charts`  | `registry/new-york/ui/*-chart-3d.tsx` | `core`                          |
-| `core`    | `registry/new-york/ui/chart-3d.tsx`   | `lib`                           |
-| `lib`     | `lib/**`                              | nothing                         |
-| `tests`   | `tests/**`                            | `charts`, `core`                |
-| `docs`    | `docs/**`                             | `docs`, `charts`, `core`, `lib` |
-| `tooling` | `scripts/**`                          | nothing                         |
+| Zone         | Files                                 | May import                      |
+| ------------ | ------------------------------------- | ------------------------------- |
+| `public-api` | `index.ts`                            | `charts`, `core`                |
+| `charts`     | `registry/new-york/ui/*-chart-3d.tsx` | `core`                          |
+| `core`       | `registry/new-york/ui/chart-3d.tsx`   | `lib`                           |
+| `lib`        | `lib/**`                              | nothing                         |
+| `tests`      | `tests/**`                            | `public-api`, `charts`, `core`  |
+| `docs`       | `docs/**`                             | `docs`, `charts`, `core`, `lib` |
+| `tooling`    | `scripts/**`                          | nothing                         |
 
 Two consequences worth remembering:
 
@@ -119,7 +120,8 @@ The rules that `scripts/check-template.mjs` enforces:
   only the release commit, which the release workflow makes beside `master`,
   pins it to `#v<version>`, the version in `package.json`;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
-  and `docs/examples/<item>-demo.tsx`.
+  and `docs/examples/<item>-demo.tsx`;
+- `index.ts` re-exports every registry file with `export *`, and nothing else.
 
 How the charts draw, so that a new one draws the same way:
 
@@ -147,10 +149,29 @@ show in `docs/examples`. The examples import the charts as
 `@/components/ui/<item>`, the way a project that installed them does; Vite and
 TypeScript resolve that alias to the registry.
 
-`isbot` stays in `dependencies`, although no registry file uses it: React
-Router's default server entry requires it there. Moved to `devDependencies`,
-the React Router CLI adds it back and runs `npm install` with
-`NODE_ENV=production`, which removes every devDependency.
+The docs have their own server entry, `docs/entry.server.tsx`: without it,
+React Router's default entry needs `isbot` in `dependencies`, and the React
+Router CLI adds it there and runs `npm install` with `NODE_ENV=production`,
+which removes every devDependency. Keep the entry.
+
+### The npm package
+
+The same files ship as the npm package `@niekes/charts-3d`. `index.ts` is its
+public API: one `export *` per registry file and nothing else, which the
+template check enforces, so the package cannot drift from the registry.
+`tests/package.test.tsx` checks that no name gets lost in the re-exports.
+
+`npm run build:pack` bundles it with `vp pack` into `dist/`: ESM, the type
+definitions and a `"use client"` banner, because the bundler drops the
+directive of every registry file and Next.js has to load the components on
+the client. The npm dependencies stay external.
+
+- **The dependencies are the runtime of the package.** `dependencies` holds
+  what the registry files import at runtime, `react` is a peer dependency,
+  and everything the docs and the tests need is a devDependency.
+- **The props are semver.** Users of the registry own their copy, users of the
+  package depend on the API: a change to a prop or an export of `index.ts`
+  is a breaking change and needs a major version.
 
 ### Adding a chart
 
@@ -160,7 +181,8 @@ the React Router CLI adds it back and runs `npm install` with
 3. Add `tests/<name>-chart-3d.test.tsx`, `docs/examples/<name>-chart-3d-demo.tsx`
    and `docs/content/components/<name>-chart-3d.mdx`, and list the page in
    `docs/content/components/meta.json`.
-4. Run `npm run lint` and `npm test`.
+4. Add `export * from "./registry/new-york/ui/<name>-chart-3d"` to `index.ts`.
+5. Run `npm run lint` and `npm test`.
 
 ### Adding a core helper
 

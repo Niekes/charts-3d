@@ -5,7 +5,7 @@ import { fumadocsMdx } from "fumadocs-mdx/vite"
 import { remarkAutoTypeTable } from "fumadocs-typescript"
 import { defineConfig } from "vite-plus"
 
-// Generated files: the build, the coverage, the registry JSON, the React Router types and the badges.
+// Generated files: the builds, the coverage, the registry JSON, the React Router types and the badges.
 const ignorePatterns = [
   "build/**",
   "coverage/**",
@@ -13,6 +13,7 @@ const ignorePatterns = [
   ".react-router/**",
   ".source/**",
   ".github/badges/**",
+  "dist/**",
 ]
 
 export default defineConfig({
@@ -52,6 +53,27 @@ export default defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
+  },
+
+  // The npm package, `@niekes/charts-3d`, from the same files as the registry.
+  pack: {
+    entry: ["index.ts"],
+    format: ["esm"],
+    outDir: "dist",
+    platform: "neutral",
+    sourcemap: true,
+    dts: true,
+    // A bundler drops the directive of a module, so the package gets it back
+    // on top: the components use hooks, and Next.js has to load them on the client.
+    banner: '"use client"',
+    inputOptions: {
+      // The banner puts the directive back, so the warning that it is dropped is noise.
+      onLog(level, log, handler) {
+        if (log.code !== "MODULE_LEVEL_DIRECTIVE") handler(level, log)
+      },
+    },
+    alias: { "@": fileURLToPath(new URL(".", import.meta.url)) },
+    publint: true,
   },
 
   test: {
