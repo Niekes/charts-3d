@@ -5,7 +5,15 @@ import { fumadocsMdx } from "fumadocs-mdx/vite"
 import { remarkAutoTypeTable } from "fumadocs-typescript"
 import { defineConfig } from "vite-plus"
 
-const ignorePatterns = ["build/**", "coverage/**", "public/r/**", ".react-router/**", ".source/**"]
+// Generated files: the build, the coverage, the registry JSON, the React Router types and the badges.
+const ignorePatterns = [
+  "build/**",
+  "coverage/**",
+  "public/r/**",
+  ".react-router/**",
+  ".source/**",
+  ".github/badges/**",
+]
 
 export default defineConfig({
   // GitHub Pages serves the project under its name, the router knows it as its basename.
