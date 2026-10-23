@@ -19,7 +19,7 @@ const chartConfig = {
 
 export default function ScatterChart3DDemo() {
   return (
-    <ChartContainer3D config={chartConfig} legend>
+    <ChartContainer3D config={chartConfig} renderer="canvas" legend>
       <ScatterChart3D data={chartData} x="x" y="y" z="z" series="cluster" />
     </ChartContainer3D>
   )

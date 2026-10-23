@@ -5,11 +5,13 @@ import { box, cubes3D, sort, type AxesSpec, type CubeFace } from "d3-3d"
 
 import {
   Axes3D,
+  Marks3D,
   axis,
   center,
   shade,
   useChart3D,
   worldBox,
+  type Mark3D,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -52,8 +54,8 @@ export function BarChart3D<T extends Record<string, unknown>>({
   const values = data.flatMap((d) => series.map((key) => Number(d[key]) || 0))
 
   const { spec, world, size } = barBox(data.length, series.length, values, barSize)
-  const cubes = cubes3D().camera(camera)
-  const bars = cubes
+  const bars = cubes3D()
+    .camera(camera)
     .data(
       data.flatMap((d, i) =>
         series.map((key, j) => {
@@ -78,17 +80,18 @@ export function BarChart3D<T extends Record<string, unknown>>({
           z: (j) => config[series[j]]?.label ?? series[j],
         }}
       />
-      {bars.map((bar) => (
-        <Bar
-          key={`${bar.i}-${bar.key}`}
-          faces={bar.faces}
-          draw={cubes.draw}
-          color={`var(--color-${bar.key})`}
-          title={String(data[bar.i][index])}
-          label={config[bar.key]?.label ?? bar.key}
-          value={bar.value}
-        />
-      ))}
+      <Marks3D
+        marks={bars.flatMap((bar) =>
+          barMarks({
+            id: `${bar.i}-${bar.key}`,
+            faces: bar.faces,
+            color: `var(--color-${bar.key})`,
+            title: String(data[bar.i][index]),
+            label: config[bar.key]?.label ?? bar.key,
+            value: bar.value,
+          })
+        )}
+      />
     </>
   )
 }
@@ -132,47 +135,35 @@ function barCorners(
   })
 }
 
-/** One bar: the faces that look at the camera, shaded, and its entry and value on hover. */
-function Bar({
+/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. */
+function barMarks({
+  id,
   faces,
-  draw,
   color,
   title,
   label,
   value,
 }: {
+  id: string
   faces: CubeFace[]
-  draw: (face: CubeFace) => string
   color: string
   title: string
   label: React.ReactNode
   value: number
-}) {
-  const { setTooltip } = useChart3D()
+}): Mark3D[] {
   const tooltip = {
     at: center(faces.find((face) => face.face === "top")!),
     title,
     items: [{ label, value, color }],
   }
 
-  return (
-    <g onPointerEnter={() => setTooltip(tooltip)} onPointerLeave={() => setTooltip(null)}>
-      {/* The faces point outwards: a convex bar shows the ones facing the camera. */}
-      {faces
-        .filter((face) => face.ccw)
-        .map((face) => {
-          const fill = shade(face, color)
-          return (
-            <path
-              key={face.face}
-              d={draw(face)}
-              fill={fill}
-              stroke={fill}
-              strokeWidth={0.5}
-              strokeLinejoin="round"
-            />
-          )
-        })}
-    </g>
-  )
+  // The faces point outwards: a convex bar shows the ones facing the camera.
+  return faces
+    .filter((face) => face.ccw)
+    .map((face) => ({
+      key: `${id}-${face.face}`,
+      points: face.map((p) => p.projected),
+      fill: shade(face, color),
+      tooltip,
+    }))
 }

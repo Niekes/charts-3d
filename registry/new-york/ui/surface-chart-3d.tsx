@@ -6,6 +6,7 @@ import { gridPlanes3D, sort, type AxesSpec, type Point3D } from "d3-3d"
 
 import {
   Axes3D,
+  Marks3D,
   axis,
   center,
   linear,
@@ -40,7 +41,7 @@ export type SurfaceChart3DProps = {
  * of the chart config, by default its first two.
  */
 export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: SurfaceChart3DProps) {
-  const { config, camera, setTooltip } = useChart3D()
+  const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
   const rows = data.length
   const columns = data[0]?.length ?? 0
@@ -61,36 +62,24 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
     .z((p) => world.z(p.z))
   const points = data.flatMap((row, r) => row.map((y, c) => ({ x: toX(c), y, z: toZ(r) })))
 
+  const marks = grid
+    .data(points)
+    .sort(sort)
+    .map((quad) => {
+      const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
+      const t = Math.round(((height - lo) / (hi - lo || 1)) * 100)
+      return {
+        key: quad.plane,
+        points: quad.map((p) => p.projected),
+        fill: shade(quad, `color-mix(in oklch, var(--color-${high}) ${t}%, var(--color-${low}))`),
+        tooltip: { at: center(quad), items: [{ label: titles?.y ?? "value", value: height }] },
+      }
+    })
+
   return (
     <>
       <Axes3D spec={spec} world={world} format={format} titles={titles} />
-      {grid
-        .data(points)
-        .sort(sort)
-        .map((quad) => {
-          const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
-          const t = Math.round(((height - lo) / (hi - lo || 1)) * 100)
-          const fill = shade(
-            quad,
-            `color-mix(in oklch, var(--color-${high}) ${t}%, var(--color-${low}))`
-          )
-          return (
-            <path
-              key={quad.plane}
-              d={grid.draw(quad)}
-              fill={fill}
-              stroke={fill}
-              strokeWidth={0.5}
-              onPointerEnter={() =>
-                setTooltip({
-                  at: center(quad),
-                  items: [{ label: titles?.y ?? "value", value: height }],
-                })
-              }
-              onPointerLeave={() => setTooltip(null)}
-            />
-          )
-        })}
+      <Marks3D marks={marks} />
     </>
   )
 }

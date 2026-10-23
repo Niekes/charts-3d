@@ -59,8 +59,17 @@ describe("BarChart3D", () => {
         </ChartContainer3D>
       )
     )
-    const bar = host.querySelector("svg > g:last-of-type")!
-    await act(() => bar.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    // The middle of the face painted last, which nothing covers.
+    const face = [...host.querySelectorAll('path[fill^="color-mix"]')].at(-1)!
+    const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+    )
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }))
+    )
     expect(host.textContent).toMatch(/A\s*[13]/)
 
     await act(async () => root.unmount())

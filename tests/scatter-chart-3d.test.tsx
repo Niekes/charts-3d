@@ -52,8 +52,13 @@ describe("ScatterChart3D", () => {
         </ChartContainer3D>
       )
     )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     const point = host.querySelector("circle")!
-    await act(() => point.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })))
+    const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    )
     expect(host.textContent).toContain((1 / 3).toLocaleString())
     expect(host.textContent).not.toContain("0.3333333")
 

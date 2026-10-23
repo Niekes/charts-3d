@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { act } from "react"
+import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, test } from "vite-plus/test"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import {
   ChartContainer3D,
   ChartLegend3D,
+  Marks3D,
   axis,
   center,
   linear,
@@ -17,6 +18,46 @@ import {
 
 // React reports state updates outside act() unless the environment says it supports it.
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+
+/** Renders `element` into the document, with an svg of the size of its view box. */
+async function mount(element: ReactElement) {
+  const host = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(host)
+  await act(async () => root.render(element))
+  const svg = host.querySelector("svg")!
+  svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+  const send = (event: Event) => act(() => svg.dispatchEvent(event))
+  const unmount = async () => {
+    await act(async () => root.unmount())
+    host.remove()
+  }
+  return { host, svg, send, unmount }
+}
+
+const key = (key: string, shiftKey = false) =>
+  new KeyboardEvent("keydown", { key, shiftKey, bubbles: true })
+
+const marks = [
+  {
+    key: "square",
+    points: [
+      { x: 100, y: 100 },
+      { x: 200, y: 100 },
+      { x: 200, y: 200 },
+      { x: 100, y: 200 },
+    ],
+    fill: "red",
+    tooltip: { at: { x: 150, y: 150 }, items: [{ label: "Square", value: 1 }] },
+  },
+  {
+    key: "dot",
+    points: [{ x: 400, y: 100 }],
+    r: 10,
+    fill: "blue",
+    stroke: "white",
+    tooltip: { at: { x: 400, y: 100 }, items: [{ label: "Dot", value: 2 }] },
+  },
+]
 
 const point = (x: number, y: number, z: number) => ({
   x,
@@ -81,6 +122,165 @@ describe("keyboard", () => {
     expect(Number(host.querySelector("text")!.textContent)).toBeCloseTo(-Math.PI / 2)
 
     await act(async () => root.unmount())
+  })
+
+  test("an arrow key marks the chart as orbiting until it is released", async () => {
+    host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () => root.render(<ChartContainer3D config={{}}>{null}</ChartContainer3D>))
+    const svg = host.querySelector("svg")!
+    const send = (type: string) =>
+      act(() => svg.dispatchEvent(new KeyboardEvent(type, { key: "ArrowLeft", bubbles: true })))
+
+    expect(svg.dataset.orbiting).toBe("false")
+    await send("keydown")
+    expect(svg.dataset.orbiting).toBe("true")
+    await send("keyup")
+    expect(svg.dataset.orbiting).toBe("false")
+
+    await act(async () => root.unmount())
+  })
+})
+
+describe("shortcuts", () => {
+  function Camera() {
+    const { camera } = useChart3D()
+    return (
+      <text>
+        {JSON.stringify({ origin: camera.origin(), scale: camera.scale(), yaw: camera.rotateY() })}
+      </text>
+    )
+  }
+
+  test("Shift and an arrow pan, + and - and Ctrl with the wheel zoom, 0 and a double click reset", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    const read = () => JSON.parse(chart.host.querySelector("text")!.textContent!)
+
+    await chart.send(key("ArrowRight", true))
+    expect(read()).toEqual({ origin: { x: 340, y: 200 }, scale: 120, yaw: 0 })
+    // A pan moves the labels as they are, so they stay.
+    expect(chart.svg.dataset.orbiting).toBe("false")
+
+    await chart.send(key("+"))
+    expect(read().scale).toBeCloseTo(144)
+    await chart.send(key("-"))
+    expect(read().scale).toBeCloseTo(120)
+    const wheel = { deltaY: -200, bubbles: true, cancelable: true }
+    await chart.send(new WheelEvent("wheel", wheel))
+    expect(read().scale).toBeCloseTo(120)
+    await chart.send(new WheelEvent("wheel", { ...wheel, ctrlKey: true }))
+    expect(read().scale).toBeCloseTo(240)
+
+    await chart.send(key("0"))
+    expect(read()).toEqual({ origin: { x: 320, y: 200 }, scale: 120, yaw: 0 })
+    await chart.send(key("ArrowRight"))
+    expect(read().yaw).toBeCloseTo(Math.PI / 36)
+    await chart.send(new MouseEvent("dblclick", { bubbles: true }))
+    expect(read().yaw).toBe(0)
+
+    await chart.unmount()
+  })
+
+  test("? lists the shortcuts, Escape hides them and the button shows them again", async () => {
+    const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
+    const button = chart.host.querySelector("button")!
+
+    await chart.send(key("?"))
+    expect(chart.host.textContent).toContain("Pan")
+    expect(button.getAttribute("aria-expanded")).toBe("true")
+    await chart.send(key("Escape"))
+    expect(chart.host.textContent).not.toContain("Pan")
+    act(() => button.click())
+    expect(chart.host.textContent).toContain("Space")
+
+    await chart.unmount()
+  })
+})
+
+describe("Marks3D", () => {
+  test("draws a polygon as a path and a circle as a circle", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(html).toContain('d="M100,100L200,100L200,200L100,200Z" fill="red"')
+    expect(html).toMatch(/<circle cx="400" cy="100" r="10" fill="blue" stroke="white"/)
+  })
+
+  test("the mark under the pointer shows its tooltip, the one painted last on top", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const move = (clientX: number, clientY: number) =>
+      chart.send(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+
+    await move(150, 150)
+    expect(chart.host.textContent).toContain("Square")
+    await move(405, 100)
+    expect(chart.host.textContent).toContain("Dot")
+    await move(300, 300)
+    expect(chart.host.textContent).not.toMatch(/Square|Dot/)
+
+    await chart.unmount()
+  })
+})
+
+describe("renderer", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test("canvas draws as SVG where the browser has no canvas", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null)
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).toBeNull()
+    expect(chart.svg.querySelector("path")).not.toBeNull()
+
+    await chart.unmount()
+  })
+
+  test("canvas paints the marks on a canvas over the chart, and the hover still finds them", async () => {
+    const ctx = Object.fromEntries(
+      ["setTransform", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map((m) => [
+        m,
+        vi.fn(),
+      ])
+    )
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+    expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+    expect(ctx.stroke).toHaveBeenCalled()
+
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
   })
 })
 

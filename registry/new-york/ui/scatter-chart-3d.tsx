@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { extent } from "d3-array"
-import { points3D, sort, type AxesSpec, type Point2D } from "d3-3d"
+import { points3D, sort, type AxesSpec } from "d3-3d"
 
-import { Axes3D, axis, useChart3D, worldBox, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
+import { Axes3D, Marks3D, axis, useChart3D, worldBox } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per point. */
@@ -63,59 +63,33 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
     .z(({ d }) => world.z(read(d, "z")))
   const fallback = Object.keys(config)[0]
 
+  const marks = points
+    .data(data.map((d, i) => ({ d, i })))
+    .sort(sort)
+    .map((p) => {
+      const key = series ? String(p.d[series]) : fallback
+      return {
+        key: String(p.i),
+        points: [p.projected],
+        r: radius,
+        fill: `var(--color-${key})`,
+        // Ringed by the background, so that points in front stand out.
+        stroke: "var(--background)",
+        tooltip: {
+          at: p.projected,
+          title: series ? (config[key]?.label ?? key) : undefined,
+          items: (["x", "y", "z"] as const).map((a) => ({
+            label: titles?.[a] ?? fields[a],
+            value: read(p.d, a),
+          })),
+        },
+      }
+    })
+
   return (
     <>
       <Axes3D spec={spec} world={world} format={format} titles={titles} />
-      {points
-        .data(data.map((d, i) => ({ d, i })))
-        .sort(sort)
-        .map((p) => {
-          const key = series ? String(p.d[series]) : fallback
-          return (
-            <ScatterPoint
-              key={p.i}
-              at={p.projected}
-              radius={radius}
-              color={`var(--color-${key})`}
-              tooltip={{
-                at: p.projected,
-                title: series ? (config[key]?.label ?? key) : undefined,
-                items: (["x", "y", "z"] as const).map((a) => ({
-                  label: titles?.[a] ?? fields[a],
-                  value: read(p.d, a),
-                })),
-              }}
-            />
-          )
-        })}
+      <Marks3D marks={marks} />
     </>
-  )
-}
-
-/** One point, ringed by the background so that points in front stand out, and its tooltip. */
-function ScatterPoint({
-  at,
-  radius,
-  color,
-  tooltip,
-}: {
-  at: Point2D
-  radius: number
-  color: string
-  tooltip: Tooltip3D
-}) {
-  const { setTooltip } = useChart3D()
-
-  return (
-    <circle
-      cx={at.x}
-      cy={at.y}
-      r={radius}
-      fill={color}
-      className="stroke-background"
-      strokeWidth={1}
-      onPointerEnter={() => setTooltip(tooltip)}
-      onPointerLeave={() => setTooltip(null)}
-    />
   )
 }
