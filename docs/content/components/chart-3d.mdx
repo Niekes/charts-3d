@@ -122,6 +122,12 @@ A mark or a label can name the groups it belongs to in `groups`. While the point
 const marks = faces.map((face) => ({ ...face, groups: [flow.key] }))
 ```
 
+## Labels
+
+The labels of the box sit beside their ticks, away from the box, and slide round them as the camera turns. Where two would touch, they slide apart along their axis, and where that is not enough, every other one moves to a second row; only an axis seen nearly end on shows every second, fourth… label. A label gives way to one of an axis with fewer ticks, whose labels say more each. When an axis moves to another edge of the box, its labels fade from one edge to the other.
+
+The arrow keys glide the camera to its next view instead of jumping there. Where the reader asks for reduced motion, the camera jumps and the labels move without a transition.
+
 ## API Reference
 
 ### ChartContainer3D
@@ -139,3 +145,9 @@ Takes the props of a `div` as well.
 One shape that `Marks3D` draws, in paint order.
 
 <auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="Mark3D" />
+
+### Label3D
+
+A label that `Labels3D` draws beside a mark.
+
+<auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="Label3D" />

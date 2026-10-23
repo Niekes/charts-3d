@@ -521,6 +521,81 @@ describe("pointer", () => {
   })
 })
 
+describe("glide", () => {
+  /** A browser that can tell whether the reader asks for reduced motion. */
+  const motion = (reduced: boolean) =>
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query.includes("no-preference") !== reduced }),
+    })
+  const frames = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+  afterEach(() => {
+    vi.useRealTimers()
+    Reflect.deleteProperty(window, "matchMedia")
+  })
+
+  test("a key glides the camera to its view, a held key heads on from where it is, a drag stops it", async () => {
+    motion(false)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    const yaw = () => view(chart.host).yaw
+
+    await chart.send(key("ArrowRight"))
+    expect(yaw()).toBe(0)
+    await frames(50)
+    expect(yaw()).toBeGreaterThan(0)
+    expect(yaw()).toBeLessThan(Math.PI / 36)
+    await chart.send(key("ArrowRight"))
+    await frames(250)
+    expect(yaw()).toBe((2 * Math.PI) / 36)
+
+    await chart.send(key("ArrowRight"))
+    await frames(50)
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100))
+    await chart.send(pointer("pointermove", 123, 100))
+    const dragged = yaw()
+    await frames(250)
+    expect(yaw()).toBe(dragged)
+    await chart.unmount()
+  })
+
+  test("a reset glides the short way round, and where the reader asks for reduced motion, a key jumps", async () => {
+    motion(false)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    const yaw = () => view(chart.host).yaw
+    for (let i = 0; i < 71; i += 1) await chart.send(key("ArrowRight"))
+    await frames(250)
+    expect(yaw()).toBeCloseTo((71 * Math.PI) / 36)
+
+    // From 355°, the camera turns on through 360° instead of back through 180°.
+    await chart.send(key("0"))
+    await frames(50)
+    expect(yaw()).toBeGreaterThan(-Math.PI / 36)
+    expect(yaw()).toBeLessThan(0)
+    await frames(250)
+    expect(yaw()).toBe(0)
+
+    motion(true)
+    await chart.send(key("ArrowRight"))
+    expect(yaw()).toBeCloseTo(Math.PI / 36)
+    // A glide that the chart leaves on its way does not move it any more.
+    motion(false)
+    await chart.send(key("ArrowRight"))
+    await chart.unmount()
+    await frames(250)
+  })
+})
+
 describe("Marks3D", () => {
   test("draws a polygon as a path and a circle as a circle", () => {
     const html = renderToString(
@@ -571,6 +646,22 @@ describe("Labels3D", () => {
     expect(html).toMatch(
       /<text x="10" y="20" text-anchor="end"[^>]*paint-order="stroke"[^>]*>Apples<\/text>/
     )
+  })
+
+  test("lays a label toward a side of its point, touching it from there", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <Labels3D
+          labels={[
+            { key: "a", at: { x: 100, y: 50 }, text: "Apples", toward: { x: -1, y: 0 } },
+            { key: "b", at: { x: 100, y: 50 }, text: "Pears", toward: { x: 0, y: -1 } },
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    // Six letters of 6px each end at the point; a line of 10px stands on it.
+    expect(html).toMatch(/<text x="82" y="50" text-anchor="middle"[^>]*>Apples<\/text>/)
+    expect(html).toMatch(/<text x="100" y="45" text-anchor="middle"[^>]*>Pears<\/text>/)
   })
 })
 
@@ -741,8 +832,8 @@ describe("ChartLegend3D", () => {
 })
 
 describe("Axes3D", () => {
-  test("hides a tick label that would cover another, so an axis seen end on keeps one", async () => {
-    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+  test("thins an axis seen end on to its first label, and a label gives way to an axis with fewer ticks", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
     // From above, the y axis points at the camera and its ticks fall on one point.
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: Math.PI / 2 }}>
@@ -754,15 +845,16 @@ describe("Axes3D", () => {
       </ChartContainer3D>
     )
     const shown = [...chart.host.querySelectorAll("text")]
-      .filter((text) => !text.classList.contains("opacity-0"))
+      .filter((text) => Number(text.style.opacity) > 0)
       .map((text) => text.textContent!)
 
     expect(shown.filter((label) => label.startsWith("y"))).toEqual(["y0"])
-    expect(shown.filter((label) => label.startsWith("x"))).toHaveLength(spec.x.ticks.length)
+    // x0 would cover y0, and y has three ticks to the six of x.
+    expect(shown.filter((label) => label.startsWith("x"))).toEqual(["x2", "x4", "x6", "x8", "x10"])
     await chart.unmount()
   })
 
-  test("titles the axes, sets an axis on the right from its start, and labels with numbers and elements", () => {
+  test("titles the axes and labels them with numbers and elements", () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
     // Turned by π/4, one axis runs along the right side of the box.
     const html = renderToString(
@@ -776,9 +868,30 @@ describe("Axes3D", () => {
       </ChartContainer3D>
     )
     for (const title of ["Width", "Height", "Depth"]) expect(html).toContain(`>${title}</text>`)
-    expect(html).toContain('text-anchor="start"')
     expect(html).toContain(">100</text>")
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
+  })
+
+  test("draws an axis on all four of its edges and fades it from one to the next as the camera turns", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
+        <Axes3D spec={spec} world={worldBox(spec)} format={{ x: (v) => `x${v}` }} />
+      </ChartContainer3D>
+    )
+    const labels = () =>
+      [...chart.host.querySelectorAll("text")].filter((t) => t.textContent === "x0")
+    const shown = () => labels().find((t) => Number(t.style.opacity) > 0.5)
+    expect(labels()).toHaveLength(4)
+
+    const before = shown()!
+    for (let i = 0; i < 72 && shown() === before; i += 1) await chart.send(key("ArrowRight"))
+    // The label of the edge it left stays, unseen, so it fades out instead of vanishing.
+    expect(shown()).not.toBe(before)
+    expect(before.isConnected).toBe(true)
+    expect(before.style.opacity).toBe("0")
+    expect(before.getAttribute("class")).toContain("transition-[opacity,translate]")
+    await chart.unmount()
   })
 })
 

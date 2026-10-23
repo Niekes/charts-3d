@@ -170,12 +170,23 @@ How the charts draw, so that a new one draws the same way:
   `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
 - **Labels.** Text beside a mark, such as the name of a node, goes to
-  `Labels3D` as `Label3D`s: the point in the view box and the end of the text
-  there. The core draws it with every renderer, ringed by the background.
+  `Labels3D` as `Label3D`s: the point in the view box and the side of it the
+  text lies on, `toward`, a unit vector. The core draws it with every
+  renderer, ringed by the background. Give a direction that turns with the
+  camera, not an anchor that flips from start to end: `beside` slides the box
+  round its point, where a flipping anchor makes it jump.
 - **Focus.** A mark or a label names what it belongs to in `groups`: a flow,
   say, or the flows a node connects. While the pointer is on a mark, the core
   fades every mark and label that shares none of its groups, in place and with
   every renderer; a chart never fades anything itself.
+- **Axis labels.** `Axes3D` lays out the labels of all four edges of every
+  axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
+  axis fades from one edge to the next. `fit` gives the tick labels of an
+  edge their room along it - one row, slid along the edge up to `DODGE`, two
+  rows, then every 2nd, 4th… label - and `labelAxes` lets a label fade as it
+  nears one of an axis with fewer ticks. Whatever follows the camera is
+  geometry, in `x` and `y`; only a change of edge, row or stride moves in the
+  CSS transition, through `opacity` and `translate`.
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
   React moves the DOM nodes.
@@ -231,9 +242,13 @@ gesture is a new action, so the panel never misses one.
   pinches; the wheel alone scrolls the page. The listener is the core's own,
   because React listens to the wheel passively and cannot keep the browser
   from zooming the page.
-- **`orbiting` is true while the camera turns**, not while it pans or zooms,
-  which move the labels as they are. The axis labels read it from
-  `data-orbiting` on the svg.
+- **A key glides, a drag jumps.** `useGlide` moves the view to the step of a
+  key in `GLIDE` milliseconds, and a key pressed on the way heads on from
+  there; a drag and the wheel follow the pointer at once and stop a glide.
+  Where `prefers-reduced-motion` is not `no-preference`, as in jsdom, a glide
+  jumps, so the tests read the view right after a key.
+- **`orbiting` is true while the camera turns**, not while it pans or zooms.
+  Nothing in the core reads it; `data-orbiting` on the svg is there to style.
 
 ### Code style
 
