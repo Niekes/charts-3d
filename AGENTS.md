@@ -139,6 +139,9 @@ How the charts draw, so that a new one draws the same way:
   a circle, a CSS fill and, if it has one, a tooltip - and hands them to
   `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
+- **Labels.** Text beside a mark, such as the name of a node, goes to
+  `Labels3D` as `Label3D`s: the point in the view box and the end of the text
+  there. The core draws it with every renderer, ringed by the background.
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
   React moves the DOM nodes.

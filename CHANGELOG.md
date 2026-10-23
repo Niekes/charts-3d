@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `sankey-chart-3d`: flows from left to right, as bands between boxes. The core
+  gains `Labels3D`, for text beside the marks, and `cubeMarks`, which the bar
+  chart uses too.
 - `aria-keyshortcuts` on the chart, from the same table as the shortcut panel,
   and `data-slot="kbd"` on the keys of the panel, so a project restyles them
   the way it restyles the Kbd of shadcn/ui.

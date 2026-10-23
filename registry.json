@@ -59,6 +59,20 @@
         }
       ],
       "categories": ["charts", "3d"]
+    },
+    {
+      "name": "sankey-chart-3d",
+      "type": "registry:ui",
+      "title": "Sankey Chart 3D",
+      "description": "Flows from left to right, as bands between boxes.",
+      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "files": [
+        {
+          "path": "registry/new-york/ui/sankey-chart-3d.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "categories": ["charts", "3d"]
     }
   ]
 }

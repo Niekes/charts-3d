@@ -35,7 +35,10 @@
     <tr style="background-color: #f6f8fa">
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/bar-chart-3d"><img src="assets/examples/bar-chart-3d.png" alt="Bar Chart 3D"></a></td>
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/scatter-chart-3d"><img src="assets/examples/scatter-chart-3d.png" alt="Scatter Chart 3D"></a></td>
+    </tr>
+    <tr style="background-color: #f6f8fa">
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/surface-chart-3d"><img src="assets/examples/surface-chart-3d.png" alt="Surface Chart 3D"></a></td>
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/sankey-chart-3d"><img src="assets/examples/sankey-chart-3d.png" alt="Sankey Chart 3D"></a></td>
     </tr>
 </table>
 

@@ -1,0 +1,54 @@
+---
+title: Sankey Chart 3D
+description: Flows from left to right, as bands between boxes.
+---
+
+import SankeyChart3DDemo from "@/docs/examples/sankey-chart-3d-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SankeyChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/sankey-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/sankey-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `SankeyChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array lucide-react
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/sankey-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/sankey-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/sankey-chart-3d.tsx"
+  name="SankeyChart3DProps"
+/>

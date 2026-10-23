@@ -8,10 +8,9 @@ import {
   Marks3D,
   axis,
   center,
-  shade,
+  cubeMarks,
   useChart3D,
   worldBox,
-  type Mark3D,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -150,20 +149,11 @@ function barMarks({
   title: string
   label: React.ReactNode
   value: number
-}): Mark3D[] {
+}) {
   const tooltip = {
     at: center(faces.find((face) => face.face === "top")!),
     title,
     items: [{ label, value, color }],
   }
-
-  // The faces point outwards: a convex bar shows the ones facing the camera.
-  return faces
-    .filter((face) => face.ccw)
-    .map((face) => ({
-      key: `${id}-${face.face}`,
-      points: face.map((p) => p.projected),
-      fill: shade(face, color),
-      tooltip,
-    }))
+  return cubeMarks(id, faces, color, tooltip)
 }

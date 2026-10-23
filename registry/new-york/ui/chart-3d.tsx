@@ -10,6 +10,7 @@ import {
   type AxisEdge,
   type AxisSpec,
   type Camera3DInstance,
+  type CubeFace,
   type Point2D,
   type TransformedPoint,
 } from "d3-3d"
@@ -579,6 +580,41 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   )
 }
 
+/** A label beside a mark: `at` in the units of the view box, `anchor` the end of the text that sits there. */
+export type Label3D = {
+  key: string
+  at: Point2D
+  text: React.ReactNode
+  anchor: "start" | "middle" | "end"
+}
+
+/**
+ * The labels of the marks of a chart, ringed by the background so that they
+ * read on the marks. Like the labels of the box, they are SVG with every renderer.
+ */
+function Labels3D({ labels }: { labels: Label3D[] }) {
+  // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
+  return (
+    <g data-slot="chart-3d-labels">
+      {labels.map(({ key, at, text, anchor }) => (
+        <text
+          key={key}
+          x={at.x}
+          y={at.y}
+          textAnchor={anchor}
+          dominantBaseline="central"
+          paintOrder="stroke"
+          strokeWidth={3}
+          strokeLinejoin="round"
+          className="fill-foreground stroke-background text-[10px] font-medium"
+        >
+          {text}
+        </text>
+      ))}
+    </g>
+  )
+}
+
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
 
@@ -911,4 +947,29 @@ function center(points: TransformedPoint<unknown>[]): Point2D {
   return { x: sum.x / points.length, y: sum.y / points.length }
 }
 
-export { ChartContainer3D, ChartLegend3D, Axes3D, Marks3D, axis, linear, worldBox, shade, center }
+/** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
+function cubeMarks(id: string, faces: CubeFace[], color: string, tooltip: Tooltip3D): Mark3D[] {
+  // The faces point outwards: a convex shape shows the ones facing the camera.
+  return faces
+    .filter((face) => face.ccw)
+    .map((face) => ({
+      key: `${id}-${face.face}`,
+      points: face.map((p) => p.projected),
+      fill: shade(face, color),
+      tooltip,
+    }))
+}
+
+export {
+  ChartContainer3D,
+  ChartLegend3D,
+  Axes3D,
+  Marks3D,
+  Labels3D,
+  axis,
+  linear,
+  worldBox,
+  shade,
+  center,
+  cubeMarks,
+}

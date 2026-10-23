@@ -3,14 +3,17 @@ import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, test, vi } from "vite-plus/test"
+import { box, cubes3D } from "d3-3d"
 
 import {
   Axes3D,
   ChartContainer3D,
   ChartLegend3D,
+  Labels3D,
   Marks3D,
   axis,
   center,
+  cubeMarks,
   linear,
   shade,
   useChart3D,
@@ -250,6 +253,19 @@ describe("Marks3D", () => {
   })
 })
 
+describe("Labels3D", () => {
+  test("writes every label at its point, ringed by the background", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <Labels3D labels={[{ key: "a", at: { x: 10, y: 20 }, text: "Apples", anchor: "end" }]} />
+      </ChartContainer3D>
+    )
+    expect(html).toMatch(
+      /<text x="10" y="20" text-anchor="end"[^>]*paint-order="stroke"[^>]*>Apples<\/text>/
+    )
+  })
+})
+
 describe("renderer", () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -321,6 +337,23 @@ describe("helpers", () => {
 
   test("center is the mean of the projected points", () => {
     expect(center([point(0, 0, 0), point(2, 4, 0)])).toEqual({ x: 1, y: 2 })
+  })
+
+  test("cubeMarks shades the faces of a cube that look at the camera, each with the tooltip", () => {
+    // Seen from the front, the left and above.
+    const [cube] = cubes3D()
+      .rotateY(Math.PI / 6)
+      .rotateX(-Math.PI / 6)
+      .data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
+    const tooltip = { at: { x: 0, y: 0 }, items: [] }
+    const marks = cubeMarks("c", cube.faces, "red", tooltip)
+
+    expect(marks.map((m) => m.key).sort()).toEqual(["c-front", "c-left", "c-top"])
+    for (const mark of marks) {
+      expect(mark.fill).toMatch(/^color-mix\(in oklch, red \d+%, black\)$/)
+      expect(mark.points).toHaveLength(4)
+      expect(mark.tooltip).toBe(tooltip)
+    }
   })
 })
 
