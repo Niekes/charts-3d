@@ -16,13 +16,13 @@
   ],
   "homepage": "https://niekes.github.io/charts-3d/",
   "bugs": {
-    "url": "https://github.com/niekes/charts-3d/issues"
+    "url": "https://github.com/Niekes/charts-3d/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Niekes (https://niekes.com)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/niekes/charts-3d.git"
+    "url": "git+https://github.com/Niekes/charts-3d.git"
   },
   "funding": {
     "type": "github",
