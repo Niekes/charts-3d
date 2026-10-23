@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `data-slot="chart-3d-shortcuts-trigger"` on the shortcut button and
   `data-slot="chart-3d-shortcuts"` on its list, which is now a `<dl>` that the
   button points to with `aria-controls`.
+- `gizmo` on `ChartContainer3D`: the axes of the chart in its lower left
+  corner, turned with the camera but neither panned nor zoomed. Another corner
+  moves it, `gizmo={false}` hides it. It is `data-slot="chart-3d-gizmo"`, each
+  of its axes `data-axis`, in `--muted-foreground`.
 
 ### Changed
 

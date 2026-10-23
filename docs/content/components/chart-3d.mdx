@@ -56,7 +56,7 @@ The marks of a chart - its bars, points and faces - are drawn by the renderer of
 <ChartContainer3D config={chartConfig} renderer="canvas">
 ```
 
-The box, its labels, the tooltip and the legend stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none.
+The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none.
 
 ## Shortcuts
 
@@ -102,6 +102,16 @@ const keymap: Keymap3D = {
 Keys are written the way `aria-keyshortcuts` writes them: the modifiers `Control`, `Alt`, `Meta` and `Shift`, then the [`key`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key) of the press, joined by `+`, with `Plus` for the plus key and `Space` for the space bar. A press matches only with exactly the modifiers of its keys, so Ctrl and `0` still resets the zoom of the browser. Shift counts beside a named key such as `ArrowLeft`; a character such as `?` is typed with it already, so `"?"` matches without it. The gestures can be turned off and renamed, but not rebound.
 
 The keys work only while the chart has the focus, and every one can be turned off or rebound, as [WCAG 2.1.4](https://www.w3.org/WAI/WCAG22/Understanding/character-key-shortcuts.html) asks of shortcuts with a single character.
+
+## Gizmo
+
+The axes in the lower left corner turn with the camera, so a turned chart still shows which way is up and where its axes point. They neither pan nor zoom. `gizmo` moves them to another corner, `gizmo={false}` hides them.
+
+```tsx
+<ChartContainer3D config={chartConfig} gizmo="top-left">
+```
+
+The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hidden from screen readers. Each axis draws in `currentColor` and carries `data-axis`, so `className="[&_[data-axis=x]]:text-red-500"` on the container colors one axis.
 
 ## API Reference
 

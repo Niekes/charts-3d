@@ -105,8 +105,9 @@ Two consequences worth remembering:
   installs with `chart-3d` alone, so a user who adds the bar chart gets two
   files, not the whole registry.
 - **The core knows nothing about the charts.** It holds the container, the
-  camera and its shortcuts, the axes, the marks and their renderers, the
-  tooltip and the helpers (`axis`, `linear`, `worldBox`, `shade`, `center`).
+  camera and its shortcuts and gizmo, the axes, the marks and their
+  renderers, the tooltip and the helpers (`axis`, `linear`, `worldBox`,
+  `shade`, `center`).
   A helper that two charts need moves here.
 
 ### The chart template
@@ -188,8 +189,8 @@ How the charts draw, so that a new one draws the same way:
 
 `ChartContainer3D` takes `renderer`: `"svg"`, the default, or `"canvas"`, for
 charts with many marks. Only the marks change hands: the box, its labels, the
-tooltip, the legend and the shortcut panel are SVG and HTML with every
-renderer, so text stays sharp and the theme stays in CSS.
+tooltip, the legend, the shortcut panel and the gizmo are SVG and HTML with
+every renderer, so text stays sharp and the theme stays in CSS.
 
 - **SVG first.** The server, the prerender and the first render on the client
   draw SVG. An effect then switches to the requested renderer if the browser

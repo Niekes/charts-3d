@@ -574,6 +574,55 @@ describe("Labels3D", () => {
   })
 })
 
+describe("gizmo", () => {
+  /** The end of every axis of the gizmo, in paint order. */
+  const ends = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-slot="chart-3d-gizmo"] [data-axis]')].map((axis) => {
+      const text = axis.querySelector("text")!
+      return [axis.getAttribute("data-axis"), +text.getAttribute("x")!, +text.getAttribute("y")!]
+    })
+
+  test("draws the axes in the lower left, turned with the camera but neither panned nor zoomed, the nearest on top", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        {null}
+      </ChartContainer3D>
+    )
+    const gizmo = chart.host.querySelector('[data-slot="chart-3d-gizmo"]')!
+    expect(gizmo.getAttribute("class")).toContain("bottom-2 left-2")
+    // Seen from the front, x points right, y up and z at the camera, painted last.
+    const front = [
+      ["x", 42, 24],
+      ["y", 24, 6],
+      ["z", 24, 24],
+    ]
+    expect(ends(chart.host)).toEqual(front)
+
+    await chart.send(key("+"))
+    await chart.send(key("ArrowRight", true))
+    expect(ends(chart.host)).toEqual(front)
+
+    await chart.send(key("ArrowRight"))
+    expect(ends(chart.host)).not.toEqual(front)
+    await chart.unmount()
+  })
+
+  test("sits in the corner it is given, and false hides it", () => {
+    const corner = renderToString(
+      <ChartContainer3D config={{}} gizmo="top-right">
+        {null}
+      </ChartContainer3D>
+    )
+    expect(corner).toContain("top-2 right-2")
+    const hidden = renderToString(
+      <ChartContainer3D config={{}} gizmo={false}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(hidden).not.toContain("chart-3d-gizmo")
+  })
+})
+
 describe("renderer", () => {
   afterEach(() => {
     vi.restoreAllMocks()

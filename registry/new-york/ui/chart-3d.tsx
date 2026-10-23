@@ -6,6 +6,8 @@ import {
   axes3D,
   camera3D,
   normal,
+  points3D,
+  sort,
   type AxesSpec,
   type AxisEdge,
   type AxisSpec,
@@ -298,6 +300,11 @@ export type ChartContainer3DProps = {
    * @defaultValue {}
    */
   keymap?: Keymap3D | false
+  /**
+   * The corner that shows the axes of the chart, turned with the camera; `false` hides them.
+   * @defaultValue "bottom-left"
+   */
+  gizmo?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | false
 }
 
 function ChartContainer3D({
@@ -310,6 +317,7 @@ function ChartContainer3D({
   renderer: requested = "svg",
   shortcuts = true,
   keymap = {},
+  gizmo = "bottom-left",
   className,
   children,
   "aria-label": ariaLabel,
@@ -317,12 +325,10 @@ function ChartContainer3D({
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
-  const { scene, renderer, canvas, repaint, hover, leave } = useScene(
+  const { scene, renderer, canvas, repaint, hover, leave, tooltip } = useScene(
     requested,
     width,
-    height,
-    setTooltip
+    height
   )
   const keys = keymapOf(keymap, shortcuts)
   const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, leave, hover)
@@ -352,6 +358,7 @@ function ChartContainer3D({
           <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
         </svg>
         <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
+        <ChartGizmo3D camera={camera} corner={gizmo} />
         <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
       </div>
       {keys.rows.length > 0 && <ChartShortcuts3D {...keys} />}
@@ -388,17 +395,13 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
  * The marks of the chart and what reads them: the renderer that draws them,
  * the canvas it paints them on and the hover that shows their tooltips.
  */
-function useScene(
-  requested: Renderer3D,
-  width: number,
-  height: number,
-  setTooltip: (tooltip: Tooltip3D | null) => void
-) {
+function useScene(requested: Renderer3D, width: number, height: number) {
   const scene = React.useRef<Mark3D[]>([])
+  const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width)
   const { hover, leave } = useHover(scene, width, height, setTooltip)
-  return { scene, renderer, canvas, repaint, hover, leave }
+  return { scene, renderer, canvas, repaint, hover, leave, tooltip }
 }
 
 /** The camera of a view. The shapes of the chart hang on it, so a new view re-projects them all. */
@@ -709,6 +712,75 @@ function ChartCanvas3D({
       className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
     />
+  )
+}
+
+// The ends of the axes of the gizmo, in the space of d3-3d, where y points down: up in the chart.
+const GIZMO = [
+  { axis: "x", x: 1, y: 0, z: 0 },
+  { axis: "y", x: 0, y: -1, z: 0 },
+  { axis: "z", x: 0, y: 0, z: 1 },
+]
+
+const CORNERS = {
+  "top-left": "top-2 left-2",
+  "top-right": "top-2 right-2",
+  "bottom-left": "bottom-2 left-2",
+  "bottom-right": "bottom-2 right-2",
+}
+
+/**
+ * The axes of the world in a corner of the chart: turned with the camera,
+ * neither panned nor zoomed, the axis nearest the camera on top. An axis
+ * draws in `currentColor`, so a text color on its `data-axis` recolors it.
+ */
+function ChartGizmo3D({
+  camera,
+  corner,
+}: {
+  camera: Camera3DInstance
+  corner: ChartContainer3DProps["gizmo"]
+}) {
+  if (!corner) return null
+  // The letters at the ends, in a box of 48 around its middle.
+  const eye = camera3D()
+    .origin({ x: 24, y: 24 })
+    .scale(18)
+    .rotateY(camera.rotateY())
+    .rotateX(camera.rotateX())
+  const ends = points3D<(typeof GIZMO)[number]>().camera(eye).data(GIZMO).sort(sort)
+
+  return (
+    <svg
+      data-slot="chart-3d-gizmo"
+      viewBox="0 0 48 48"
+      aria-hidden="true"
+      className={cn("pointer-events-none absolute size-12 text-muted-foreground", CORNERS[corner])}
+    >
+      {ends.map(({ axis, projected: p }) => (
+        <g key={axis} data-axis={axis}>
+          <line
+            x1={24}
+            y1={24}
+            x2={24 + (p.x - 24) * 0.6}
+            y2={24 + (p.y - 24) * 0.6}
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+          <text
+            x={p.x}
+            y={p.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="currentColor"
+            className="text-[10px] font-medium"
+          >
+            {axis.toUpperCase()}
+          </text>
+        </g>
+      ))}
+    </svg>
   )
 }
 
