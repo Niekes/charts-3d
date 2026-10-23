@@ -1,0 +1,20 @@
+---
+title: Introduction
+description: 3D charts for shadcn/ui, built on d3-3d.
+---
+
+import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
+
+<BarChart3DDemo />
+
+charts-3d is a set of copy-paste chart components for [shadcn/ui](https://ui.shadcn.com). You install them with the shadcn CLI, the code lands in your project, and you own it from then on.
+
+- **Plain SVG.** No canvas, no WebGL. The charts render on the server, print sharply and take CSS like any other element.
+- **Your theme.** The colors come from the `--chart-1` to `--chart-5` tokens your theme already has, dark mode included.
+- **The config you know.** `ChartContainer3D` takes the same `ChartConfig` as the chart of shadcn/ui, so one config drives a 2D and a 3D chart.
+- **Built on [d3-3d](https://niekes.github.io/d3-3d/).** d3-3d does the projection, the depth sorting and the face orientation; React draws the result.
+
+<Cards>
+  <Card title="Installation" href="/docs/installation" />
+  <Card title="Bar Chart 3D" href="/docs/components/bar-chart-3d" />
+</Cards>

@@ -1,0 +1,24 @@
+---
+title: How it works
+description: d3-3d does the math, React draws the SVG.
+---
+
+## d3-3d does the math
+
+[d3-3d](https://niekes.github.io/d3-3d/) never touches the DOM. It turns 3D points into projected 2D points, the centroid of every shape and the orientation of every face. charts-3d projects the data on every render and returns plain `<path>` and `<circle>` elements.
+
+## One camera per chart
+
+`ChartContainer3D` keeps the view, the yaw and the tilt, in React state and builds a `camera3D()` from it. Every shape of the chart hangs on that camera with `.camera(camera)`, so a drag changes the state and the next render projects everything again.
+
+## Depth by the order of the elements
+
+SVG has no depth buffer: what comes later in the document is drawn on top. The charts sort their elements back to front with d3-3d's `sort`, and stable React keys make React move the existing DOM nodes rather than rebuild them. Bars sort by their footprint and draw only the faces turned towards the camera, the ones d3-3d marks `ccw`.
+
+## Rendered on the server
+
+Because the charts are SVG, the first frame is part of the HTML. The pages of this site are rendered at build time, and the charts in them are visible before any JavaScript runs.
+
+## Limits
+
+Sorting by depth is exact for bars on one floor and for points. Geometry that intersects itself, such as a very steep surface, can show artifacts. SVG stays fast up to a few thousand elements; beyond that a canvas or WebGL renderer is the better fit, and d3-3d provides the matrix for it.

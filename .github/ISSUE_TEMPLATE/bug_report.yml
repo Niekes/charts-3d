@@ -1,0 +1,56 @@
+name: Bug report
+description: A chart does not behave the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. A reproduction is worth more
+        than a description — a StackBlitz, a CodeSandbox or a minimal snippet is ideal.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+      placeholder: The bars of a negative series are drawn through the floor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: A StackBlitz, a CodeSandbox, a gist, or a minimal snippet that shows the problem.
+      placeholder: https://stackblitz.com/...
+    validations:
+      required: true
+
+  - type: input
+    id: item
+    attributes:
+      label: Registry item and version
+      description: The item you installed and the tag or commit, if you pinned one.
+      placeholder: niekes/charts-3d/bar-chart-3d#v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: d3-3d-version
+    attributes:
+      label: d3-3d version
+      placeholder: 2.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: stack
+    attributes:
+      label: React, Tailwind CSS and framework versions
+      placeholder: React 19.3, Tailwind CSS 4.3, Next.js 16.4
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: Console output, screenshots, or a link to a related issue.

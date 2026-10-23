@@ -1,0 +1,12 @@
+.vscode
+.DS_Store
+node_modules
+npm-debug.log
+*.tgz
+.vitest/
+coverage/
+plans/
+# The build: the prerendered docs, the React Router types and the registry JSON.
+build/
+.react-router/
+public/r/

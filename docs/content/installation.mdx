@@ -1,0 +1,74 @@
+---
+title: Installation
+description: Add a 3D chart to a shadcn/ui project.
+---
+
+## Requirements
+
+A project set up with shadcn/ui: React 19 and Tailwind CSS 4, with a `components.json`. If you start from scratch, run `npx shadcn@latest init` first.
+
+## Add a chart
+
+Every chart is an item of the registry in the GitHub repository. Install one with the shadcn CLI:
+
+```package-install
+npx shadcn@latest add niekes/charts-3d/bar-chart-3d
+```
+
+The CLI copies `chart-3d.tsx`, the shared core, and `bar-chart-3d.tsx` into your `components/ui` folder, and installs `d3-3d` and `d3-array`.
+
+Pin a release with a tag:
+
+```package-install
+npx shadcn@latest add niekes/charts-3d/bar-chart-3d#v0.1.0
+```
+
+The tag pins `chart-3d` as well: every release tag points to a commit in which the charts depend on the core of the same release.
+
+## A namespace instead
+
+The registry is also served as JSON from this site. Add it to the `registries` of your `components.json`:
+
+```json title="components.json"
+{
+  "registries": {
+    "@charts-3d": "https://niekes.github.io/charts-3d/r/{name}.json"
+  }
+}
+```
+
+Then the items install by their short name:
+
+```package-install
+npx shadcn@latest add @charts-3d/bar-chart-3d
+```
+
+The namespace always serves the latest version. To pin a release, use the GitHub form above.
+
+## Your first chart
+
+```tsx
+import { BarChart3D } from "@/components/ui/bar-chart-3d"
+import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+
+const chartData = [
+  { month: "January", desktop: 186, mobile: 80 },
+  { month: "February", desktop: 305, mobile: 200 },
+  { month: "March", desktop: 237, mobile: 120 },
+]
+
+const chartConfig = {
+  desktop: { label: "Desktop", color: "var(--chart-1)" },
+  mobile: { label: "Mobile", color: "var(--chart-2)" },
+} satisfies ChartConfig
+
+export function Visitors() {
+  return (
+    <ChartContainer3D config={chartConfig} legend className="max-w-xl">
+      <BarChart3D data={chartData} index="month" titles={{ y: "Visitors" }} />
+    </ChartContainer3D>
+  )
+}
+```
+
+Drag the chart or focus it and use the arrow keys to turn it.

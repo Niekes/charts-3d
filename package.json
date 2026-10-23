@@ -1,0 +1,93 @@
+{
+  "name": "charts-3d",
+  "version": "0.0.0",
+  "private": true,
+  "description": "3D charts for shadcn/ui, built on d3-3d. Copy-paste components distributed as a shadcn registry.",
+  "keywords": [
+    "3D",
+    "charts",
+    "d3",
+    "d3-3d",
+    "react",
+    "registry",
+    "shadcn",
+    "shadcn-ui",
+    "svg",
+    "visualization"
+  ],
+  "homepage": "https://niekes.github.io/charts-3d/",
+  "bugs": {
+    "url": "https://github.com/niekes/charts-3d/issues"
+  },
+  "license": "BSD-3-Clause",
+  "author": "Niekes (https://niekes.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niekes/charts-3d.git"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/niekes"
+  },
+  "type": "module",
+  "scripts": {
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "build": "npm run typecheck && npm run registry:build && npm run docs:build",
+    "test": "vp test run",
+    "test:watch": "vp test",
+    "coverage": "vp test run --coverage",
+    "coverage:badge": "node scripts/coverage-badge.mjs",
+    "registry:build": "shadcn build",
+    "docs:dev": "react-router dev",
+    "docs:build": "react-router build && mv build/client/index.html build/client/404.html && cp -R build/client/charts-3d/. build/client && rm -rf build/client/charts-3d",
+    "docs:preview": "vp preview --outDir build/client",
+    "lint:template": "node scripts/check-template.mjs",
+    "lint:fallow": "fallow dead-code --ci --format ${FALLOW_FORMAT:-human} && fallow health --ci --coverage-gaps --min-score 98 --format ${FALLOW_FORMAT:-human} && fallow dupes --ci --format ${FALLOW_FORMAT:-human}",
+    "lint": "react-router typegen && vp fmt --check && vp lint && npm run lint:template && npm run lint:fallow",
+    "hooks:install": "fallow hooks install --target git && fallow hooks install --target agent --agent claude && fallow hooks install --target agent --agent codex"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "d3-3d": "^2.2.0",
+    "d3-array": "^3.2.4",
+    "isbot": "^5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^8.5.0",
+    "@react-router/node": "^8.5.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/d3-array": "^3.2.2",
+    "@types/mdx": "^2.0.14",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.5",
+    "fallow": "^3.34.1",
+    "fumadocs-core": "^16.17.8",
+    "fumadocs-mdx": "^15.4.10",
+    "fumadocs-typescript": "^5.6.0",
+    "fumadocs-ui": "^16.17.8",
+    "jsdom": "^30.1.3",
+    "lucide-react": "^1.61.0",
+    "react-router": "^8.5.0",
+    "shadcn": "^4.22.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vitest": "5.0.5"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.18.0 || ^24.11.0 || >=26.0.0"
+    }
+  }
+}

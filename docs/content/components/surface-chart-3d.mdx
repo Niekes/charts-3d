@@ -1,0 +1,46 @@
+---
+title: Surface Chart 3D
+description: A shaded surface over a grid of heights.
+---
+
+import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SurfaceChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/surface-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/surface-chart-3d
+    ```
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/surface-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/surface-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/surface-chart-3d.tsx"
+  name="SurfaceChart3DProps"
+/>

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+
+  // The docs site is a dev surface of the repository: no registry file
+  // imports it, so its packages stay devDependencies while the dependencies
+  // name what the registry items need at runtime.
+  "ignoreDependencies": ["fumadocs-core", "fumadocs-mdx", "fumadocs-ui", "react-router"],
+
+  // The entry points. The registry files are consumed by the projects that
+  // install them, the docs by React Router, and the MDX pages, which import
+  // the examples, by the glob of the docs source.
+  "entry": [
+    "registry/new-york/ui/*.tsx",
+    "docs/root.tsx",
+    "docs/routes.ts",
+    "docs/routes/*.{ts,tsx}",
+    "docs/examples/*.tsx",
+    "docs/content/**/*.mdx",
+    "react-router.config.ts",
+  ],
+
+  // The registry template. Every rule that can catch a violation of the
+  // documented architecture is an error, so the gates fail the build.
+  "rules": {
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "error",
+    "unused-class-members": "error",
+    "private-type-leaks": "error",
+    "unresolved-imports": "error",
+    "unlisted-dependencies": "error",
+    "duplicate-exports": "error",
+    "circular-dependencies": "error",
+    "re-export-cycle": "error",
+    "boundary-violation": "error",
+    "coverage-gaps": "error",
+    "stale-suppressions": "warn",
+  },
+
+  // The architecture:
+  //
+  //   registry/new-york/ui/*-chart-3d.tsx  charts   ->  core
+  //   registry/new-york/ui/chart-3d.tsx    core     ->  lib
+  //   lib/*                                lib      ->  (nothing)
+  //   tests/*                              tests    ->  charts, core
+  //   docs/*                               docs     ->  docs, charts, core, lib
+  //   scripts/*                            tooling  ->  (nothing)
+  //
+  // Dependencies point inwards only. A chart builds on the core and never on
+  // another chart, so every chart installs with the core alone. The core
+  // knows nothing about the charts, and the tooling never imports the
+  // registry at all.
+  "boundaries": {
+    "zones": [
+      { "name": "charts", "patterns": ["registry/new-york/ui/*-chart-3d.tsx"] },
+      { "name": "core", "patterns": ["registry/new-york/ui/chart-3d.tsx"] },
+      { "name": "lib", "patterns": ["lib/**"] },
+      { "name": "tests", "patterns": ["tests/**"] },
+      { "name": "docs", "patterns": ["docs/**"] },
+      { "name": "tooling", "patterns": ["scripts/**"] },
+    ],
+    "rules": [
+      { "from": "charts", "allow": ["core"] },
+      { "from": "core", "allow": ["lib"] },
+      { "from": "lib", "allow": [] },
+      { "from": "tests", "allow": ["charts", "core"] },
+      { "from": "docs", "allow": ["docs", "charts", "core", "lib"] },
+      { "from": "tooling", "allow": [] },
+    ],
+    // Every analysed file has to belong to a zone, so a new module cannot
+    // be dropped into the registry without being placed in the architecture.
+    "coverage": {
+      "requireAllFiles": true,
+      "allowUnmatched": ["vite.config.ts", "react-router.config.ts"],
+    },
+    // House rules for the registry: no logging in code that lands in other projects.
+    "calls": {
+      "forbidden": [
+        { "from": "core", "callee": ["console.*", "debugger"] },
+        { "from": "charts", "callee": ["console.*", "debugger"] },
+      ],
+    },
+  },
+  // Test files have large `describe()` blocks which are not a code quality
+  // concern. The docs and the React Router config are exercised by the docs
+  // build and the template check by `npm run lint`, not by a unit test.
+  // Ignore them from the unit-size penalty and the coverage report.
+  "health": {
+    "ignore": ["tests/**", "docs/**", "scripts/**", "react-router.config.ts"],
+  },
+}

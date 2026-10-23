@@ -1,0 +1,46 @@
+---
+title: Scatter Chart 3D
+description: Points in a box, colored by series.
+---
+
+import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/scatter-chart-3d
+    ```
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/scatter-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/scatter-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/scatter-chart-3d.tsx"
+  name="ScatterChart3DProps"
+/>

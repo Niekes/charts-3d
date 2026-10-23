@@ -1,0 +1,38 @@
+---
+title: Theming
+description: Colors, shading and dark mode.
+---
+
+## The config
+
+`ChartContainer3D` takes a `ChartConfig`: one entry per series, with a label and a color. It has the same shape as the config of the shadcn/ui chart, so you can share one between a 2D and a 3D chart.
+
+```tsx
+const chartConfig = {
+  desktop: { label: "Desktop", color: "var(--chart-1)" },
+  mobile: {
+    label: "Mobile",
+    theme: { light: "oklch(0.6 0.118 184.704)", dark: "oklch(0.696 0.17 162.48)" },
+  },
+} satisfies ChartConfig
+```
+
+The container turns every key into a CSS variable, `--color-desktop` and `--color-mobile`, scoped to the chart. `color` is used in both themes, `theme` sets one color per theme.
+
+## The chart tokens
+
+The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the tooltip `--background` and `--foreground`.
+
+## Shading
+
+A face of a bar or a surface gets lighter or darker by how much it faces a light from the upper left:
+
+```css
+color-mix(in oklch, var(--color-desktop) 80%, black)
+```
+
+The shade is CSS, not a color computed in JavaScript, so it follows a theme switch without a re-render, and any color you set in the config works, including `var()` references.
+
+## Dark mode
+
+The dark colors apply under a `.dark` class on an ancestor, the convention of shadcn/ui and `next-themes`.

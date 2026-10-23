@@ -1,0 +1,59 @@
+name: Release
+
+# The registry is installed from the repository, not from npm: a release is
+# a tag that `npx shadcn add niekes/charts-3d/<item>#v<version>` can pin.
+# The shadcn CLI does not pass the tag on to the registry dependencies, so the
+# tag sits on a release commit beside `master` that pins the core to it too.
+on:
+  push:
+    branches: [master]
+    paths:
+      - package.json
+
+jobs:
+  tag:
+    name: Tag the release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Check whether the version is new
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$VERSION" = "0.0.0" ] || git rev-parse "v$VERSION" >/dev/null 2>&1; then
+              echo "new=false" >> "$GITHUB_OUTPUT"
+              echo "v$VERSION is already tagged or not a release, skipping."
+          else
+              echo "new=true" >> "$GITHUB_OUTPUT"
+              echo "Releasing v$VERSION."
+          fi
+      - name: Tag and publish the GitHub release
+        if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The notes are the section of this version in the changelog.
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
+          # Pin every dependency on this registry to the release, and check the pin.
+          sed -i "s|\"niekes/charts-3d/\([a-z0-9-]*\)\"|\"niekes/charts-3d/\1#v$VERSION\"|g" registry.json
+          npm run lint:template
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The release commit stays off `master`: only its tag is pushed.
+          git checkout --detach
+          git commit -am "🔖 chore(release): $VERSION"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md

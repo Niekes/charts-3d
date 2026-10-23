@@ -1,0 +1,53 @@
+---
+title: Chart 3D
+description: The container, camera, axes and tooltip that every 3D chart builds on.
+---
+
+import Chart3DDemo from "@/docs/examples/chart-3d-demo"
+
+`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box and `shade` lights a face.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <Chart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/chart-3d
+    ```
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array
+    ```
+
+    Copy the code into `components/ui/chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## API Reference
+
+### ChartContainer3D
+
+Takes the props of a `div` as well.
+
+<auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="ChartContainer3DProps" />
+
+### View3D
+
+<auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="View3D" />

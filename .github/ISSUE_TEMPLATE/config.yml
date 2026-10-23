@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/niekes/charts-3d/discussions
+    about: Ask a question or discuss an idea before opening an issue.
+  - name: A bug in the 3D math
+    url: https://github.com/niekes/d3-3d/issues/new/choose
+    about: Projection, depth sorting and face orientation come from d3-3d. Report those there.
+  - name: Sponsor charts-3d
+    url: https://github.com/sponsors/niekes
+    about: charts-3d is maintained by one person in spare time. Sponsorship keeps it healthy.
