@@ -51,7 +51,8 @@ jobs:
           node-version: ${{matrix.node}}
           cache: "npm"
       - run: npm ci
-      - run: npm test
+      # With coverage: below 98 % in any metric the job fails.
+      - run: npm run coverage
 
   build:
     name: Build

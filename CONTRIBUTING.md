@@ -18,7 +18,7 @@ Node 22, 24 or newer is required. The docs run at `http://localhost:5173/charts-
 
 ```bash
 npm run lint     # the whole gate
-npm test         # the test suite
+npm run coverage # the test suite, at 98 % coverage or above
 npm run build    # typecheck + registry JSON + docs + npm package
 ```
 
@@ -31,6 +31,10 @@ npm run build    # typecheck + registry JSON + docs + npm package
   CI, in the pre-commit hook and by the agent hooks.
 - `npm run lint:fallow` checks layering, dead code, test coverage and
   duplication, and that the fallow health score stays at 98 or above.
+
+`npm run coverage` runs the test suite and fails when the coverage of the
+registry drops below 98 % in any of statements, branches, functions and lines.
+`npm test` runs the tests alone, for the edit and test loop.
 
 All of them run in CI on every pull request, so running them locally saves you a
 round trip.

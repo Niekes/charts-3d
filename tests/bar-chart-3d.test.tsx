@@ -75,4 +75,23 @@ describe("BarChart3D", () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  test("a value that is not a number stands as no bar, and the labels fall back to the keys", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{ a: { color: "red" } }}>
+        <BarChart3D
+          data={[
+            { name: "x", a: "n/a", b: 2 },
+            { a: 1, b: 3 },
+          ]}
+          index="name"
+          keys={["a", "b"]}
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    // `b` has no label in the config, the entry without a name has an empty one.
+    expect(html).toMatch(/>b<\/text>/)
+    expect(html).toMatch(/><\/text>/)
+  })
 })

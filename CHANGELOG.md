@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `data-slot="kbd"` on the keys of the panel, so a project restyles them
   the way it restyles the Kbd of shadcn/ui.
 
+### Fixed
+
+- `SurfaceChart3D` no longer throws on an empty grid; it draws the box without a
+  surface.
+
 ## [0.2.0] - 2026-10-23
 
 ### Added

@@ -463,9 +463,9 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
   }, [scene, width])
 
   const canvas = React.useCallback(
-    (node: HTMLCanvasElement | null) => {
+    // A ref that returns its cleanup is never called with null.
+    (node: HTMLCanvasElement) => {
       element.current = node
-      if (!node) return
       repaint()
       const resize = new ResizeObserver(repaint)
       resize.observe(node)
@@ -496,8 +496,8 @@ function paint(
 ) {
   canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
   canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
-  const ctx = canvas.getContext("2d")
-  if (!ctx) return
+  // useRenderer draws on a canvas only where the browser gives one a 2D context.
+  const ctx = canvas.getContext("2d")!
   const scale = canvas.width / width
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"

@@ -56,7 +56,8 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
 
   const grid = gridPlanes3D<Point3D>()
     .camera(camera)
-    .rows(columns)
+    // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
+    .rows(Math.max(1, columns))
     .x((p) => world.x(p.x))
     .y((p) => world.y(p.y))
     .z((p) => world.z(p.z))
