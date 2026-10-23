@@ -504,7 +504,8 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
   return Object.fromEntries(
     Object.entries(to).map(([k, end]) => {
       const start = from[k] ?? enter ?? end
-      return [k, start + (end - start) * s]
+      // At the end the number itself, so no float drift stays in the data.
+      return [k, t >= 1 ? end : start + (end - start) * s]
     })
   )
 }

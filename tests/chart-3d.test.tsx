@@ -1100,4 +1100,16 @@ describe("useTween", () => {
 
     await chart.unmount()
   })
+
+  test("hands back the target numbers themselves at the end, without float drift", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 79.05191631611231 })
+    await chart.render({ a: 11.752360577143339 })
+    await act(() => vi.advanceTimersByTime(700))
+    // 79.05191631611231 + (11.752360577143339 - 79.05191631611231) is not the target.
+    expect(shown(chart.host)).toEqual({ a: 11.752360577143339 })
+
+    await chart.unmount()
+  })
 })
