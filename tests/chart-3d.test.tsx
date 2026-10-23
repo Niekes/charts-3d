@@ -190,13 +190,30 @@ describe("shortcuts", () => {
     const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
     const button = chart.host.querySelector("button")!
 
+    const shortcuts = chart.svg.getAttribute("aria-keyshortcuts")!.split(" ")
+    expect(shortcuts).toContain("Shift+ArrowLeft")
+    expect(shortcuts).toContain("Plus")
+    expect(shortcuts.at(-1)).toBe("?")
+
     await chart.send(key("?"))
     expect(chart.host.textContent).toContain("Pan")
     expect(button.getAttribute("aria-expanded")).toBe("true")
+    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Drag")
     await chart.send(key("Escape"))
     expect(chart.host.textContent).not.toContain("Pan")
     act(() => button.click())
     expect(chart.host.textContent).toContain("Space")
+
+    await chart.unmount()
+  })
+
+  test("without the panel, ? is no shortcut", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} shortcuts={false}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(chart.svg.getAttribute("aria-keyshortcuts")!.split(" ")).not.toContain("?")
 
     await chart.unmount()
   })

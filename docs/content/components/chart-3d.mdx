@@ -60,7 +60,7 @@ The box, its labels, the tooltip and the legend stay SVG and HTML with every ren
 
 ## Shortcuts
 
-Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it. `shortcuts={false}` hides the button.
+Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it. `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them.
 
 ## API Reference
 

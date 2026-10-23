@@ -135,6 +135,10 @@ const SHORTCUTS: { hint: string[]; label: string; keys?: Record<string, Move> }[
   { hint: ["?"], label: "Shortcuts" },
 ]
 const KEYS: Record<string, Move | undefined> = Object.assign({}, ...SHORTCUTS.map((s) => s.keys))
+// The keys as `aria-keyshortcuts` writes them: `+` delimits, so the plus key is `Plus`.
+const KEY_SHORTCUTS = Object.keys(KEYS)
+  .map((k) => (k === "+" ? "Plus" : k))
+  .join(" ")
 
 export type ChartContainer3DProps = {
   /** The series of the chart: a label and a color per key, as in the chart of shadcn/ui. */
@@ -215,6 +219,7 @@ function ChartContainer3D({
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={ariaLabel}
+        aria-keyshortcuts={shortcuts ? `${KEY_SHORTCUTS} ?` : KEY_SHORTCUTS}
         tabIndex={0}
         className="block h-auto w-full cursor-grab touch-none rounded-lg outline-hidden select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
         data-orbiting={orbiting}
@@ -668,10 +673,11 @@ function ChartShortcuts3D() {
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl">
           {SHORTCUTS.map(({ hint, label }, i) => (
             <React.Fragment key={i}>
-              <span className="flex gap-1">
+              <span data-slot="kbd-group" className="flex gap-1">
                 {hint.map((key) => (
                   <kbd
                     key={key}
+                    data-slot="kbd"
                     className="pointer-events-none inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none"
                   >
                     {key}
