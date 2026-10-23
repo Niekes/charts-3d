@@ -12,6 +12,7 @@ import {
   linear,
   shade,
   useChart3D,
+  useTween,
   worldBox,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -43,11 +44,14 @@ export type SurfaceChart3DProps = {
 export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
+  // The heights glide cell by cell, so the surface, its color ramp and the y axis follow.
+  const tweened = useTween(gridValues(data))
+  const heights = data.map((row, r) => row.map((_, c) => tweened[`${r}-${c}`]))
   const rows = data.length
   const columns = data[0]?.length ?? 0
   const [x0, x1] = domain.x ?? [0, columns - 1]
   const [z0, z1] = domain.z ?? [0, rows - 1]
-  const [lo = 0, hi = 0] = extent(data.flat())
+  const [lo = 0, hi = 0] = extent(heights.flat())
 
   const spec: AxesSpec = { x: axis(x0, x1), y: axis(lo, hi), z: axis(z0, z1) }
   const world = worldBox(spec)
@@ -61,7 +65,7 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
     .x((p) => world.x(p.x))
     .y((p) => world.y(p.y))
     .z((p) => world.z(p.z))
-  const points = data.flatMap((row, r) => row.map((y, c) => ({ x: toX(c), y, z: toZ(r) })))
+  const points = heights.flatMap((row, r) => row.map((y, c) => ({ x: toX(c), y, z: toZ(r) })))
 
   const marks = grid
     .data(points)
@@ -83,4 +87,9 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/** The height of every cell, keyed by its row and column, gliding into new data. */
+function gridValues(data: number[][]) {
+  return Object.fromEntries(data.flatMap((row, r) => row.map((y, c) => [`${r}-${c}`, y])))
 }

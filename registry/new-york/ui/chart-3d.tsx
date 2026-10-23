@@ -95,6 +95,8 @@ type ChartContext3D = {
   scene: React.RefObject<Mark3D[]>
   repaint: () => void
   focus: Focus3D
+  /** The time in ms a chart takes to glide into new data. */
+  animationDuration: number
 }
 
 const Chart3DContext = React.createContext<ChartContext3D | null>(null)
@@ -277,6 +279,11 @@ export type ChartContainer3DProps = {
   /** The series of the chart: a label and a color per key, as in the chart of shadcn/ui. */
   config: ChartConfig
   /**
+   * The time in ms a chart takes to glide into new data; 0 makes it jump.
+   * @defaultValue 600
+   */
+  animationDuration?: number
+  /**
    * Where the camera starts, and where a reset returns it.
    * @defaultValue { yaw: π/6, tilt: π/6 }
    */
@@ -327,6 +334,7 @@ function ChartContainer3D({
   defaultView = { yaw: Math.PI / 6, tilt: Math.PI / 6 },
   width = 640,
   height = 400,
+  animationDuration = 600,
   legend = false,
   renderer: requested = "svg",
   shortcuts = true,
@@ -348,8 +356,8 @@ function ChartContainer3D({
   const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, repaint, focus }),
-    [config, camera, renderer, repaint, focus]
+    () => ({ config, camera, renderer, scene, repaint, focus, animationDuration }),
+    [config, camera, renderer, repaint, focus, animationDuration]
   )
 
   return (
@@ -448,6 +456,57 @@ function moved(view: View3D, move: Move, initial: View3D): View3D {
     zoom: clamp(0.25, 8, (view.zoom ?? 1) * step.zoom),
     pan: { x: pan.x + step.pan.x, y: pan.y + step.pan.y },
   }
+}
+
+/** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
+type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
+
+/**
+ * Eases a chart into new data: the numbers of `values` glide from the ones
+ * on screen to these over the animationDuration of the container. A key
+ * that is new starts at `enter`, or where it ends; a key that is gone goes
+ * at once. Without time, or with reduced motion, the numbers jump.
+ */
+function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
+  const { animationDuration: duration } = useChart3D()
+  // The content, not the record: a chart builds `values` at every render, also while it turns.
+  const key = JSON.stringify(values)
+  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
+  const shown = tweenNumbers(tween, enter)
+
+  // Numbers from the render before, the React pattern of state set while rendering.
+  if (key !== tween.key) {
+    const jump =
+      duration === 0 || globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+    setTween({ key, from: shown, to: values, t: jump ? 1 : 0 })
+  }
+
+  React.useEffect(() => {
+    if (tween.t >= 1) return
+    let start: number | null = null
+    let frame = 0
+    const step = (now: number) => {
+      start ??= now
+      const t = Math.min(1, (now - start) / duration)
+      setTween((tw) => ({ ...tw, t }))
+      if (t < 1) frame = requestAnimationFrame(step)
+    }
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
+  }, [tween.key, duration])
+
+  return shown
+}
+
+/** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends. */
+function tweenNumbers({ from, to, t }: Tween, enter?: number) {
+  const s = t * t * (3 - 2 * t)
+  return Object.fromEntries(
+    Object.entries(to).map(([k, end]) => {
+      const start = from[k] ?? enter ?? end
+      return [k, start + (end - start) * s]
+    })
+  )
 }
 
 // How long the camera glides to the view a key asks for, in milliseconds.
@@ -1501,4 +1560,5 @@ export {
   shade,
   center,
   cubeMarks,
+  useTween,
 }

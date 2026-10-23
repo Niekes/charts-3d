@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+import { act } from "react"
+import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { describe, expect, test } from "vite-plus/test"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
 import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
@@ -62,5 +65,40 @@ describe("SurfaceChart3D", () => {
       expect(quads(html)).toHaveLength(0)
       expect(html).not.toContain("NaN")
     }
+  })
+})
+
+describe("SurfaceChart3D transitions", () => {
+  afterEach(() => vi.useRealTimers())
+
+  test("new data glides in over the animationDuration of the container", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+
+    await render([
+      [0, 1],
+      [2, 3],
+    ])
+    await render([
+      [0, 5],
+      [10, 15],
+    ])
+    // The y axis still shows the ticks of the old heights.
+    expect(host.textContent).not.toContain("15")
+    await act(() => vi.advanceTimersByTime(700))
+    expect(host.textContent).toContain("15")
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 })

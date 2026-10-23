@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `toward` on `Label3D`: a unit vector that lays the label on that side of its
   point and slides it round the point as the vector turns. The sankey chart
   lays its node labels with it.
+- `animationDuration` on `ChartContainer3D` and `useTween` in the core: a chart
+  tweens the numbers of its data before it projects, so new data glides in -
+  the axes, the domains and the shading follow - while the camera answers at
+  once. The bar, scatter, surface and sankey charts use it, and their docs
+  pages show an Update example that presses it.
 
 ### Changed
 

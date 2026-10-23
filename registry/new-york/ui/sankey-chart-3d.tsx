@@ -9,6 +9,7 @@ import {
   center,
   cubeMarks,
   useChart3D,
+  useTween,
   type ChartConfig,
   type Label3D,
 } from "@/registry/new-york/ui/chart-3d"
@@ -110,7 +111,10 @@ export function SankeyChart3D({
   format = (value) => value,
 }: SankeyChart3DProps) {
   const { config, camera } = useChart3D()
-  const { nodes, columns, ky } = sankeyLayout(data, nodePadding)
+  // The values glide flow by flow, a new one growing from 0; the layout follows them.
+  const values = useTween(Object.fromEntries(data.map((d, i) => [String(i), d.value])), 0)
+  const flows = data.map((d, i) => ({ ...d, value: values[String(i)] }))
+  const { nodes, columns, ky } = sankeyLayout(flows, nodePadding)
   const pieces = depthSort(
     cubes3D()
       .camera(camera)

@@ -17,6 +17,7 @@ import {
   linear,
   shade,
   useChart3D,
+  useTween,
   worldBox,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -991,5 +992,112 @@ describe("focus", () => {
 
     await act(async () => root.unmount())
     host.remove()
+  })
+})
+
+describe("useTween", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  /** Writes the numbers useTween returns as text, so every render shows them. */
+  function Tween({ values, enter }: { values: Record<string, number>; enter?: number }) {
+    return <text>{JSON.stringify(useTween(values, enter))}</text>
+  }
+  const shown = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
+
+  /** A chart of a `Tween`, which renders `values` and can render them again. */
+  async function mountTween(duration: number) {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (values: Record<string, number>, enter?: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}} animationDuration={duration}>
+            <Tween values={values} enter={enter} />
+          </ChartContainer3D>
+        )
+      )
+    const unmount = async () => {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+    return { host, render, unmount }
+  }
+
+  test("glides from the numbers on screen into the new ones over the duration", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 0 })
+    await chart.render({ a: 600 })
+
+    // The first render with new numbers still shows the old stand.
+    expect(shown(chart.host)).toEqual({ a: 0 })
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = shown(chart.host).a
+    expect(mid).toBeGreaterThan(0)
+    expect(mid).toBeLessThan(600)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(shown(chart.host)).toEqual({ a: 600 })
+
+    await chart.unmount()
+  })
+
+  test("a key that is new starts at enter, or where it ends, and one that is gone goes at once", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 0 })
+    await chart.render({ a: 600 })
+    await act(() => vi.advanceTimersByTime(700))
+
+    await chart.render({ a: 600, b: 300 }, 0)
+    expect(shown(chart.host)).toEqual({ a: 600, b: 0 })
+    await act(() => vi.advanceTimersByTime(700))
+    expect(shown(chart.host)).toEqual({ a: 600, b: 300 })
+
+    // Without enter, a new key starts where it ends, the rest glides from where it stands.
+    await chart.render({ a: 500, c: 8 })
+    expect(shown(chart.host)).toEqual({ a: 600, c: 8 })
+    await act(() => vi.advanceTimersByTime(700))
+    expect(shown(chart.host)).toEqual({ a: 500, c: 8 })
+    await chart.render({ a: 400 })
+    expect(shown(chart.host)).toEqual({ a: 500 })
+    await act(() => vi.advanceTimersByTime(700))
+    expect(shown(chart.host)).toEqual({ a: 400 })
+
+    await chart.unmount()
+  })
+
+  test("without time, or with reduced motion, the numbers jump", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const jump = await mountTween(0)
+    await jump.render({ a: 0 })
+    await jump.render({ a: 600 })
+    expect(shown(jump.host)).toEqual({ a: 600 })
+    await jump.unmount()
+
+    vi.stubGlobal("matchMedia", () => ({ matches: true }))
+    const reduce = await mountTween(600)
+    await reduce.render({ a: 0 })
+    await reduce.render({ a: 600 })
+    expect(shown(reduce.host)).toEqual({ a: 600 })
+    await reduce.unmount()
+  })
+
+  test("an update in the middle of a glide starts from the numbers on screen", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 0 })
+    await chart.render({ a: 600 })
+    await act(() => vi.advanceTimersByTime(200))
+    const mid = shown(chart.host).a
+
+    await chart.render({ a: 0 })
+    expect(shown(chart.host).a).toBe(mid)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(shown(chart.host)).toEqual({ a: 0 })
+
+    await chart.unmount()
   })
 })

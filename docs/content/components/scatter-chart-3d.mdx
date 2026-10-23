@@ -3,6 +3,7 @@ title: Scatter Chart 3D
 description: Points in a box, colored by series.
 ---
 
+import ScatterChart3DUpdateDemo from "@/docs/examples/scatter-chart-3d-update-demo"
 import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -43,6 +44,20 @@ import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
 
     Update the import paths to match your project setup.
 
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the points glide to their new positions over the `animationDuration`
+of the container, and the axes scale along.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-update-demo.tsx</include>
   </Tab>
 </Tabs>
 

@@ -10,6 +10,7 @@ import {
   center,
   cubeMarks,
   useChart3D,
+  useTween,
   worldBox,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
@@ -50,10 +51,9 @@ export function BarChart3D<T extends Record<string, unknown>>({
 }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const series = keys ?? Object.keys(config)
-  // A value that is not a number stands as no bar, one of height 0.
-  const cells = data.flatMap((d, i) =>
-    series.map((key, j) => ({ i, j, key, value: Number(d[key]) || 0 }))
-  )
+  // A value that is not a number stands as no bar, one of height 0; a new one grows from the floor.
+  const values = useTween(barValues(data, series), 0)
+  const cells = barCells(data, series, values)
 
   const { spec, world, size } = barBox(
     data.length,
@@ -98,6 +98,27 @@ export function BarChart3D<T extends Record<string, unknown>>({
         )}
       />
     </>
+  )
+}
+
+/** The cell of every bar: the entry `i` along x, the series `key` along z, with its tweened value. */
+function barCells<T extends Record<string, unknown>>(
+  data: T[],
+  series: string[],
+  values: Record<string, number>
+) {
+  return data.flatMap((_, i) =>
+    series.map((key, j) => ({ i, j, key, value: values[`${i}-${key}`] }))
+  )
+}
+
+/**
+ * The value of every cell of the chart, keyed as its mark: the entry `i`
+ * along x and the series `key` along z, standing as 0 where the entry holds none.
+ */
+function barValues<T extends Record<string, unknown>>(data: T[], series: string[]) {
+  return Object.fromEntries(
+    data.flatMap((d, i) => series.map((key) => [`${i}-${key}`, Number(d[key]) || 0]))
   )
 }
 

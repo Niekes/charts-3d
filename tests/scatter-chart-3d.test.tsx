@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { describe, expect, test } from "vite-plus/test"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
 import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
@@ -61,6 +61,40 @@ describe("ScatterChart3D", () => {
     )
     expect(host.textContent).toContain((1 / 3).toLocaleString())
     expect(host.textContent).not.toContain("0.3333333")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})
+
+describe("ScatterChart3D transitions", () => {
+  afterEach(() => vi.useRealTimers())
+
+  test("new data glides in over the animationDuration of the container", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { x: number; y: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} x="x" y="y" z="z" />
+          </ChartContainer3D>
+        )
+      )
+
+    await render([
+      { x: 0, y: 0, z: 0 },
+      { x: 10, y: 10, z: 10 },
+    ])
+    await render([
+      { x: 0, y: 0, z: 0 },
+      { x: 20, y: 20, z: 20 },
+    ])
+    // The axes still show the ticks of the old positions.
+    expect(host.textContent).not.toContain("20")
+    await act(() => vi.advanceTimersByTime(700))
+    expect(host.textContent).toContain("20")
 
     await act(async () => root.unmount())
     host.remove()

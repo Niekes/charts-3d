@@ -4,6 +4,7 @@ description: Bars on a floor, one row per entry and one per series.
 ---
 
 import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
+import BarChart3DUpdateDemo from "@/docs/examples/bar-chart-3d-update-demo"
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -43,6 +44,20 @@ import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
 
     Update the import paths to match your project setup.
 
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the chart glides into the new data over the `animationDuration`
+of its container, and the y axis scales along.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-update-demo.tsx</include>
   </Tab>
 </Tabs>
 
