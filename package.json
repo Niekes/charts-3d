@@ -1,6 +1,6 @@
 {
   "name": "@niekes/charts-3d",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "3D charts for shadcn/ui, built on d3-3d. A shadcn registry and an npm package from the same source.",
   "keywords": [
     "3D",

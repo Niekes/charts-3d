@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
 ### Added
 
+- `renderer="canvas"` on `ChartContainer3D`: the charts hand their marks to the
+  core, which draws them as SVG or on a canvas, and one hit test finds the
+  hovered mark for both. `Marks3D` draws the marks of your own shapes.
+- Pan, zoom and reset beside the rotation, with a panel of the shortcuts behind
+  the keyboard button and `?`.
+- The axis labels fade out while the camera turns and back in once it rests.
 - The npm package `@niekes/charts-3d`: the same components as the registry, from
   the same files, as ESM with type definitions. Add
   `@source "../node_modules/@niekes/charts-3d/dist"` to your CSS so that Tailwind
   generates their classes.
+
+### Changed
+
+- `chart-3d` depends on `lucide-react`, for the keyboard icon.
 
 ## [0.1.0] - 2026-10-23
 
