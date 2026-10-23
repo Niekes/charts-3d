@@ -216,21 +216,23 @@ function ChartContainer3D({
       {...props}
     >
       <ChartStyle id={chartId} config={config} />
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={ariaLabel}
-        aria-keyshortcuts={shortcuts ? `${KEY_SHORTCUTS} ?` : KEY_SHORTCUTS}
-        tabIndex={0}
-        className="block h-auto w-full cursor-grab touch-none rounded-lg outline-hidden select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
-        data-orbiting={orbiting}
-        onPointerLeave={leave}
-        {...handlers}
-      >
-        <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
-      </svg>
-      <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
-      <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
+      <div className="relative rounded-lg has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={ariaLabel}
+          aria-keyshortcuts={shortcuts ? `${KEY_SHORTCUTS} ?` : KEY_SHORTCUTS}
+          tabIndex={0}
+          className="block h-auto w-full cursor-grab touch-none outline-hidden select-none mask-y-from-96% active:cursor-grabbing"
+          data-orbiting={orbiting}
+          onPointerLeave={leave}
+          {...handlers}
+        >
+          <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
+        </svg>
+        <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
+        <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
+      </div>
       {shortcuts && <ChartShortcuts3D />}
       {legend && <ChartLegend3D config={config} />}
     </div>
@@ -538,7 +540,7 @@ function ChartCanvas3D({
   return (
     <canvas
       ref={canvas}
-      className="pointer-events-none absolute top-0 left-0 w-full"
+      className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
     />
   )
