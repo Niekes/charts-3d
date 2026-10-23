@@ -247,16 +247,39 @@ describe("SankeyChart3D", () => {
     expect(await hoverFlow(element)).toContain("A → x3")
   })
 
-  test("nodes without width keep their labels outside, by the side they sit on", () => {
-    // The left and the right face of such a node fall on one line, so they cannot tell the way out.
+  test("a node without width lifts its label over it, where its sides tell no way out", () => {
+    // The left and the right face of such a node fall on one line.
     const html = renderToString(
       <ChartContainer3D config={config}>
         <SankeyChart3D data={[{ source: "a", target: "b", value: 1 }]} nodeWidth={0} />
       </ChartContainer3D>
     )
-    const anchor = (label: string) =>
-      html.match(new RegExp(`<text[^>]*text-anchor="(\\w+)"[^>]*>${label}</text>`))?.[1]
-    expect([anchor("A"), anchor("B")]).toEqual(["end", "start"])
+    const label = (text: string) => {
+      const [, x, y, anchor] = html.match(
+        new RegExp(`<text x="([^"]*)" y="([^"]*)" text-anchor="(\\w+)"[^>]*>${text}</text>`)
+      )!
+      return { x: Number(x), y: Number(y), anchor }
+    }
+    expect([label("A").anchor, label("B").anchor]).toEqual(["middle", "middle"])
+    expect(label("A").x).toBeLessThan(label("B").x)
+  })
+
+  test("a label swings over its node as the camera turns the node edge on, instead of jumping across", () => {
+    const at = (yaw: number) => {
+      const html = renderToString(
+        chart([{ source: "a", target: "b", value: 1 }], { yaw, tilt: Math.PI / 6 })
+      )
+      const [, x, y] = html.match(/<text x="([^"]*)" y="([^"]*)"[^>]*>A<\/text>/)!
+      return { x: Number(x), y: Number(y) }
+    }
+    let worst = 0
+    for (let degree = 0; degree < 180; degree += 2) {
+      const [a, b] = [at((degree * Math.PI) / 180), at(((degree + 2) * Math.PI) / 180)]
+      worst = Math.max(worst, Math.hypot(b.x - a.x, b.y - a.y))
+    }
+    // The node moves by 5px a step. Round 90°, the label leaves the left of its node for the
+    // right: in a step, an anchor that flips would carry it across, a width and two gaps away.
+    expect(worst).toBeLessThan(12)
   })
 
   test("of two flows that cross, the lighter passes in front over the whole crossing", () => {

@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mark and label that shares none of its groups fades, in place and with every
   renderer. The sankey chart sets them: pointing at a flow lights it and its two
   nodes, pointing at a node its flows and the nodes at their other ends.
+- `toward` on `Label3D`: a unit vector that lays the label on that side of its
+  point and slides it round the point as the vector turns. The sankey chart
+  lays its node labels with it.
 
 ### Changed
 
@@ -32,11 +35,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The shortcut panel has a row per label, with the keys and the gesture of an
   action side by side: five rows instead of nine.
+- A key glides the camera to its next view in 200 ms instead of jumping
+  there, and a held key turns it smoothly; a reset turns the short way round.
+  Where the reader asks for reduced motion, the camera jumps as before.
+- The axis labels no longer dim while the camera turns: they slide round
+  their ticks with it, and fade where they come and go.
+- `d3-3d` 2.4.0 or later, for the edges of the chart box that `edges` lists.
 
 ### Fixed
 
 - A key with a modifier it is not bound with goes to the browser: Ctrl and
   `0`, `-` or `=` zoom the page again while the chart has the focus.
+- An axis label no longer vanishes where it has room: a label that would
+  touch its neighbour slides along the axis, two rows take labels that still
+  have none, and a label gives way only to an axis with fewer ticks. The two
+  series of the bar chart demo show from every angle.
+- The axis labels no longer jump: a label slides round its tick instead of
+  switching from one text anchor to another, and an axis that moves to
+  another edge of the box fades from one to the other.
+- The axis labels no longer flicker when the camera is level with the box,
+  where an axis jumped between the floor and the ceiling.
+- A node label of the sankey chart swings over its node as the node turns
+  edge on, instead of jumping across it.
 
 ## [0.3.0] - 2026-10-23
 

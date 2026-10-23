@@ -433,18 +433,86 @@ function useCamera(view: View3D, width: number, height: number) {
   )
 }
 
+const clamp = (lo: number, hi: number, value: number) => Math.max(lo, Math.min(hi, value))
+const ZERO = { x: 0, y: 0 }
+
 /** `view` moved by one step. The tilt stops at the zenith and the nadir, the zoom at 1/4 and 8. */
 function moved(view: View3D, move: Move, initial: View3D): View3D {
   if (move.reset) return initial
   const step = { yaw: 0, tilt: 0, zoom: 1, pan: { x: 0, y: 0 }, ...move }
   const pan = view.pan ?? { x: 0, y: 0 }
-  const clamp = (lo: number, hi: number, value: number) => Math.max(lo, Math.min(hi, value))
   return {
     ...view,
     yaw: view.yaw + step.yaw,
     tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt),
     zoom: clamp(0.25, 8, (view.zoom ?? 1) * step.zoom),
     pan: { x: pan.x + step.pan.x, y: pan.y + step.pan.y },
+  }
+}
+
+// How long the camera glides to the view a key asks for, in milliseconds.
+const GLIDE = 200
+
+/**
+ * The view of the camera, `jump`, which moves it at once, and `glide`, which
+ * moves it there in `GLIDE` milliseconds, easing out. A glide under way
+ * heads for the next view from where it is, so a held key turns the camera
+ * smoothly; a jump stops it. Where the reader asks for reduced motion, or
+ * the browser cannot say, a glide jumps.
+ */
+function useGlide(defaultView: View3D) {
+  const [view, setView] = React.useState(defaultView)
+  const now = React.useRef(defaultView)
+  const run = React.useRef<{ to: View3D; frame: number } | null>(null)
+  const show = React.useCallback((v: View3D) => setView((now.current = v)), [])
+  const stop = React.useCallback(() => {
+    cancelAnimationFrame(run.current?.frame ?? 0)
+    run.current = null
+  }, [])
+  const jump = React.useCallback(
+    (to: (from: View3D) => View3D) => {
+      stop()
+      show(to(now.current))
+    },
+    [show, stop]
+  )
+  React.useEffect(() => stop, [stop])
+
+  const glide = (to: (from: View3D) => View3D) => {
+    if (!window.matchMedia?.("(prefers-reduced-motion: no-preference)").matches) return jump(to)
+    const end = to(run.current?.to ?? now.current)
+    // The yaw turns the short way round, to an angle that looks the same.
+    const from = { ...now.current, yaw: end.yaw + remainder(now.current.yaw - end.yaw) }
+    const start = performance.now()
+    stop()
+    const frame = (time: number) => {
+      const t = clamp(0, 1, (time - start) / GLIDE)
+      show(t < 1 ? between(from, end, 1 - (1 - t) ** 3) : end)
+      if (t < 1) run.current = { to: end, frame: requestAnimationFrame(frame) }
+      else run.current = null
+    }
+    run.current = { to: end, frame: requestAnimationFrame(frame) }
+  }
+
+  return { view, jump, glide }
+}
+
+/** The angle `a` in the turn from -π to π. */
+function remainder(a: number) {
+  return a - 2 * Math.PI * Math.round(a / (2 * Math.PI))
+}
+
+/** The view the share `k` of the way from `from` to `to`. */
+function between(from: View3D, to: View3D, k: number): View3D {
+  const mix = (a: number, b: number) => a + (b - a) * k
+  const pan = from.pan ?? ZERO
+  const goal = to.pan ?? ZERO
+  return {
+    ...to,
+    yaw: mix(from.yaw, to.yaw),
+    tilt: mix(from.tilt, to.tilt),
+    zoom: mix(from.zoom ?? 1, to.zoom ?? 1),
+    pan: { x: mix(pan.x, goal.x), y: mix(pan.y, goal.y) },
   }
 }
 
@@ -462,12 +530,14 @@ function useOrbit(
   onDragStart: () => void,
   onHover: (e: React.PointerEvent<SVGSVGElement>) => void
 ) {
-  const [view, setView] = React.useState(defaultView)
+  const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
   const drag = React.useRef<Point2D & { moved: boolean }>(null)
-  const ref = useWheelZoom(setView, keys.on("wheelZoom"))
-  const move = (step: Move) => setView((v) => moved(v, step, defaultView))
-  const { space, ...keyHandlers } = useKeys(keys, move, setOrbiting)
+  const ref = useWheelZoom(jump, keys.on("wheelZoom"))
+  // A drag follows the pointer at once, a key and a double click glide.
+  const move = (step: Move) => jump((v) => moved(v, step, defaultView))
+  const step = (step: Move) => glide((v) => moved(v, step, defaultView))
+  const { space, ...keyHandlers } = useKeys(keys, step, setOrbiting)
   const release = () => {
     drag.current = null
     setOrbiting(false)
@@ -499,7 +569,7 @@ function useOrbit(
     },
     onPointerUp: release,
     onPointerCancel: release,
-    onDoubleClick: keys.on("doubleClickReset") ? () => move({ reset: true }) : undefined,
+    onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
   }
 
@@ -539,7 +609,7 @@ function useKeys(
  * A ref for the svg that zooms the view with Ctrl or ⌘ and the wheel, which
  * is also how a trackpad pinches, if `on`. The wheel alone still scrolls the page.
  */
-function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>, on: boolean) {
+function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean) {
   // React listens to the wheel passively, and only a listener that is not
   // passive can keep the browser from zooming the page.
   return React.useCallback(
@@ -548,12 +618,12 @@ function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>, on:
       const onWheel = (e: WheelEvent) => {
         if (!e.ctrlKey && !e.metaKey) return
         e.preventDefault()
-        setView((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200) }, v))
+        jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200) }, v))
       }
       svg?.addEventListener("wheel", onWheel, { passive: false })
       return () => svg?.removeEventListener("wheel", onWheel)
     },
-    [setView, on]
+    [jump, on]
   )
 }
 
@@ -881,12 +951,18 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   )
 }
 
-/** A label beside a mark: `at` in the units of the view box, `anchor` the end of the text that sits there. */
+/**
+ * A label beside a mark, at `at` in the units of the view box. `toward`, a
+ * unit vector, lays the label on that side of `at`, touching it, and slides
+ * it round `at` as the vector turns; without it, `anchor` is the end of the
+ * text that sits at `at`.
+ */
 export type Label3D = {
   key: string
   at: Point2D
   text: React.ReactNode
-  anchor: "start" | "middle" | "end"
+  anchor?: "start" | "middle" | "end"
+  toward?: Point2D
   /** The groups of the mark it names, so it fades with the mark out of focus. */
   groups?: string[]
 }
@@ -900,24 +976,29 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
   // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
-      {labels.map((label) => (
-        <text
-          key={label.key}
-          x={label.at.x}
-          y={label.at.y}
-          textAnchor={label.anchor}
-          dominantBaseline="central"
-          paintOrder="stroke"
-          strokeWidth={3}
-          strokeLinejoin="round"
-          className={cn(
-            "fill-foreground stroke-background text-[10px] font-medium",
-            fades(label) && "opacity-25"
-          )}
-        >
-          {label.text}
-        </text>
-      ))}
+      {labels.map((label) => {
+        const { x, y } = label.toward
+          ? beside(label.at, label.toward, textWidth(label.text, 10), 10, 0)
+          : label.at
+        return (
+          <text
+            key={label.key}
+            x={x}
+            y={y}
+            textAnchor={label.toward ? "middle" : label.anchor}
+            dominantBaseline="central"
+            paintOrder="stroke"
+            strokeWidth={3}
+            strokeLinejoin="round"
+            className={cn(
+              "fill-foreground stroke-background text-[10px] font-medium",
+              fades(label) && "opacity-25"
+            )}
+          >
+            {label.text}
+          </text>
+        )
+      })}
     </g>
   )
 }
@@ -1074,7 +1155,9 @@ function ChartLegend3D({ config }: { config: ChartConfig }) {
 
 /**
  * The walls of the chart box that face away from the camera, with their
- * gridlines, and an axis with ticks on the outline of the box.
+ * gridlines, and the labels of every axis on each of its four edges. Only the
+ * edge the axis sits on shows them, so when the axis moves to another edge,
+ * its labels fade from one to the other.
  */
 function Axes3D({
   spec,
@@ -1107,59 +1190,43 @@ function Axes3D({
             strokeWidth={0.75}
           />
         ))}
-      {labelAxes(box.axes(spec), format, titles).map((axis) => (
-        <AxisEdge3D key={axis.key} ticks={axis.ticks} title={axis.title} />
+      {labelAxes(box.edges(spec), format, titles).map((label) => (
+        <AxisLabel3D key={label.key} label={label} />
       ))}
     </g>
   )
 }
 
-/** A label of the chart box in the units of the view box: a tick label or the title of an axis. */
-type AxisLabel = {
-  x: number
-  y: number
-  anchor: "start" | "middle" | "end"
-  text: React.ReactNode
-  /** The font size, which the overlap check reads. */
-  size: number
-  hidden?: boolean
-}
+// The space between a tick and its label, the least space between two
+// labels, and the space over which a label fades as it nears another.
+const GAP = 6
+const PAD = 2
+const FADE = 4
+// How far a label may slide along its edge to make room, before the labels take two rows.
+const DODGE = 12
 
 /**
- * The labels of one axis on the outline of the box: a label per tick, pushed
- * away from the box along the normal of the edge, and the title of the axis
- * further out. `key` names the edge, one of the four the axis moves between
- * as the camera turns.
+ * A label of the chart box, a tick label or the title of an axis: its box
+ * `w`×`h` in the units of the view box, centred at `at` and moved by `shift`
+ * along its edge or into a second row.
  */
-function axisLabels(
-  edge: AxisEdge,
-  format: (value: number) => React.ReactNode,
-  title?: React.ReactNode
-) {
-  const { normal: n } = edge
-  const start = edge[0].projected
-  const end = edge[edge.length - 1].projected
-  const anchor = n.x > 0.3 ? "start" : n.x < -0.3 ? "end" : "middle"
-  const label = (at: Point2D, out: number, text: React.ReactNode, size: number): AxisLabel => ({
-    x: at.x + n.x * out,
-    y: at.y + n.y * out,
-    anchor,
-    text,
-    size,
-  })
-  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-
-  return {
-    key: `${edge.axis}:${edge[0].x},${edge[0].y},${edge[0].z}`,
-    ticks: edge.map((tick) => label(tick.projected, 10, format(tick[edge.axis]), 10)),
-    title: title ? label(middle, 44, title, 12) : undefined,
-  }
+type AxisLabel = {
+  key: string
+  axis: keyof AxesSpec
+  at: Point2D
+  w: number
+  h: number
+  shift: Point2D
+  text: React.ReactNode
+  opacity: number
+  title?: boolean
 }
 
 /**
- * The labels of the axes, with every tick label hidden that would cover a
- * title or a tick label before it, so an axis seen end on keeps its first
- * label and a short one every other.
+ * The labels of the axes on all their edges, shown on the edges the axes sit
+ * on. Every edge fits its own tick labels; then the labels of an axis give
+ * way to those of an axis with fewer ticks, which say more each, and the
+ * titles give way to the ticks.
  */
 function labelAxes(
   edges: AxisEdge[],
@@ -1169,62 +1236,193 @@ function labelAxes(
   // An axis without ticks, such as the rows of an empty chart, has nothing to label.
   const axes = edges
     .filter((edge) => edge.length)
-    .map((edge) => axisLabels(edge, format[edge.axis] ?? String, titles[edge.axis]))
-  const placed = axes.flatMap((axis) => (axis.title ? [bounds(axis.title)] : []))
-  for (const label of axes.flatMap((axis) => axis.ticks)) {
-    const b = bounds(label)
-    label.hidden = placed.some(
-      (p) => b.left < p.right && p.left < b.right && b.top < p.bottom && p.top < b.bottom
-    )
-    if (!label.hidden) placed.push(b)
+    .map((edge) => edgeLabels(edge, format[edge.axis] ?? String, titles[edge.axis]))
+  const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
+  const placed: AxisLabel[] = []
+  for (const label of [...shown.flatMap((a) => a.ticks), ...shown.flatMap((a) => a.title ?? [])]) {
+    label.opacity = shows(label, placed)
+    placed.push(label)
   }
-  return axes
-}
-
-/** The box a label covers, guessed from its text, as the browser lays it out only after the render. */
-function bounds({ x, y, anchor, text, size }: AxisLabel) {
-  // ponytail: 0.6em a character; measure with getBBox if wide fonts or rich labels still overlap.
-  const chars = typeof text === "string" || typeof text === "number" ? String(text).length : 4
-  const width = chars * size * 0.6
-  const left = x - width * { start: 0, middle: 0.5, end: 1 }[anchor]
-  return { left, right: left + width, top: y - size / 2, bottom: y + size / 2 }
+  return axes.flatMap((axis) => [...axis.ticks, ...(axis.title ? [axis.title] : [])])
 }
 
 /**
- * The labels of one axis, dimmed while the camera turns. When the axis jumps
- * to another edge of the box, its key changes, so they mount anew and fade in
- * there.
+ * The labels of one edge: a label per tick beside it, away from the box, in
+ * the rows that `fit` finds, and the title of the axis beyond them. The
+ * labels of an edge the axis does not sit on are there, but do not show.
  */
-function AxisEdge3D({ ticks, title }: { ticks: AxisLabel[]; title?: AxisLabel }) {
+function edgeLabels(
+  edge: AxisEdge,
+  format: (value: number) => React.ReactNode,
+  title?: React.ReactNode
+) {
+  const { axis, normal: n, chosen } = edge
+  const label = (key: string, at: Point2D, text: React.ReactNode, h: number, gap: number) => {
+    const w = textWidth(text, h)
+    return { key, axis, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
+  }
+  const id = `${axis}${edge.sides.join("")}`
+  const ticks = edge.map((tick, i) =>
+    label(`${id}-${i}`, tick.projected, format(tick[axis]), 10, GAP)
+  )
+  // How far a row of labels reaches out from the edge.
+  const depth = Math.max(...ticks.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
+  const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
+  const rows = fit(ticks, n, row)
+  const start = edge[0].projected
+  const end = edge[edge.length - 1].projected
+  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+  const head: AxisLabel | undefined = title
+    ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
+    : undefined
+  if (head && rows === 2) head.shift = row
+  // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
+  if (!chosen) for (const l of [...ticks, ...(head ? [head] : [])]) l.opacity = 0
+  return { chosen, ticks, title: head }
+}
+
+/**
+ * Fits the tick labels of an edge into the space between its ticks: in one
+ * row if they keep `PAD` apart, or slid along the edge if no label has to
+ * slide further than `DODGE`, else every other label a `row` further out if
+ * that is enough, else every `stride`-th label of one row, 2, 4, 8… The
+ * labels of a stride are among those of the one before, so as the edge
+ * shortens, a label only ever leaves and none comes in for it. Returns the rows.
+ */
+function fit(ticks: AxisLabel[], normal: Point2D, row: Point2D) {
+  if (clear(ticks, 1) || slide(ticks, normal)) return 1
+  ticks.forEach((t, i) => (t.shift = i % 2 ? row : ZERO))
+  if (clear(ticks, 2)) return 2
+  ticks.forEach((t) => (t.shift = ZERO))
+  let stride = 2
+  while (stride < ticks.length && !clear(ticks, stride, stride)) stride *= 2
+  ticks.forEach((t, i) => (t.opacity = i % stride ? 0 : 1))
+  return 1
+}
+
+/** Whether every label from every `every`-th keeps `PAD` apart from the one `step` after it. */
+function clear(ticks: AxisLabel[], step: number, every = 1) {
+  // A hair under PAD, as labels that `slide` sets exactly PAD apart may round to less.
+  return ticks.every(
+    (t, i) => i % every > 0 || i + step >= ticks.length || apart(t, ticks[i + step]) > PAD - 1e-6
+  )
+}
+
+/**
+ * Slides the labels of an edge along it, square to its `normal`, as little
+ * as they can until each has the room it needs. True if that is enough and
+ * no label slides further than `DODGE`; the slide grows from nothing as the
+ * labels near, so it follows the camera without a jump.
+ */
+function slide(ticks: AxisLabel[], normal: Point2D) {
+  const t = { x: -normal.y, y: normal.x }
+  const along = ({ at }: AxisLabel) => at.x * t.x + at.y * t.y
+  // The labels in their order along the edge, whichever way its ticks run.
+  const line = [...ticks].sort((a, b) => along(a) - along(b))
+  const gaps = line.slice(1).map((b, i) => room(line[i], b, normal, t))
+  const placed = dodge(line.map(along), gaps)
+  line.forEach((label, i) => {
+    const d = placed[i] - along(label)
+    label.shift = { x: t.x * d, y: t.y * d }
+  })
+  return line.every((label, i) => Math.abs(placed[i] - along(label)) <= DODGE) && clear(ticks, 1)
+}
+
+/**
+ * How far along `t` the label `b` has to stand from `a`, which comes before
+ * it there, for their boxes to keep `PAD` apart, as far as they stand apart
+ * along `normal`, square to `t`.
+ */
+function room(a: AxisLabel, b: AxisLabel, normal: Point2D, t: Point2D) {
+  const off = (b.at.x - a.at.x) * normal.x + (b.at.y - a.at.y) * normal.y
+  const x = ((a.w + b.w) / 2 + PAD - off * normal.x * Math.sign(t.x)) / Math.abs(t.x)
+  const y = ((a.h + b.h) / 2 + PAD - off * normal.y * Math.sign(t.y)) / Math.abs(t.y)
+  return Math.min(x, y)
+}
+
+/**
+ * Places points on a line in their order, `gaps[i]` at least between the
+ * i-th and the next, and moves them as little as it can: points that would
+ * come too close move as one block, centred on the places they want.
+ */
+function dodge(want: number[], gaps: number[]) {
+  const blocks: { start: number; offsets: number[]; at: number }[] = []
+  want.forEach((at, start) => {
+    let block = { start, offsets: [0], at }
+    let last = blocks.at(-1)
+    while (last && last.at + last.offsets.at(-1)! + gaps[block.start - 1] > block.at) {
+      blocks.pop()
+      const base = last.offsets.at(-1)! + gaps[block.start - 1]
+      const offsets = [...last.offsets, ...block.offsets.map((o) => o + base)]
+      const first = last.start
+      // Where the block moves its points the least: the mean of the places they want.
+      const mean = offsets.reduce((sum, o, k) => sum + want[first + k] - o, 0) / offsets.length
+      block = { start: first, offsets, at: mean }
+      last = blocks.at(-1)
+    }
+    blocks.push(block)
+  })
+  return blocks.flatMap((block) => block.offsets.map((o) => block.at + o))
+}
+
+/**
+ * How much of a label shows beside the labels placed before it: it fades as
+ * it nears a label of another axis, by as much as that one shows. As this
+ * follows the geometry, the label fades as smoothly as the camera turns.
+ */
+function shows(label: AxisLabel, placed: AxisLabel[]) {
+  return placed.reduce(
+    (opacity, p) =>
+      p.axis === label.axis
+        ? opacity
+        : Math.min(opacity, 1 - (1 - clamp(0, 1, apart(label, p) / FADE)) * p.opacity),
+    label.opacity
+  )
+}
+
+/** The space between the boxes of two labels, negative where they overlap. */
+function apart(a: AxisLabel, b: AxisLabel) {
+  const dx = Math.abs(a.at.x + a.shift.x - b.at.x - b.shift.x) - (a.w + b.w) / 2
+  const dy = Math.abs(a.at.y + a.shift.y - b.at.y - b.shift.y) - (a.h + b.h) / 2
+  return Math.max(dx, dy)
+}
+
+/**
+ * The centre of a box `w`×`h` that lies `gap` from `at` towards `toward`, a
+ * unit vector. As the vector turns, the box slides round `at` and keeps the
+ * gap, where an anchor that switches from start to end would jump.
+ */
+function beside(at: Point2D, toward: Point2D, w: number, h: number, gap: number): Point2D {
+  const out = gap + (Math.abs(toward.x) * w + Math.abs(toward.y) * h) / 2
+  return { x: at.x + toward.x * out, y: at.y + toward.y * out }
+}
+
+/** The width of a label at the font size `size`, guessed from its text, as the browser lays it out only after the render. */
+function textWidth(text: React.ReactNode, size: number) {
+  // ponytail: 0.6em a character; measure with getBBox if wide fonts or rich labels still overlap.
+  const chars = typeof text === "string" || typeof text === "number" ? String(text).length : 4
+  return chars * size * 0.6
+}
+
+/**
+ * A label of the chart box. Its place follows the camera at once; a change
+ * of edge, of row or of the labels that fit fades and moves it in a transition.
+ */
+function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: AxisLabel }) {
   return (
-    <g className="transition-opacity duration-300 starting:opacity-0 in-data-[orbiting=true]:opacity-50">
-      {ticks.map(({ x, y, anchor, text, hidden }, i) => (
-        <text
-          key={i}
-          x={x}
-          y={y}
-          textAnchor={anchor}
-          dominantBaseline="central"
-          className={cn(
-            "fill-muted-foreground text-[10px] transition-opacity",
-            hidden && "opacity-0"
-          )}
-        >
-          {text}
-        </text>
-      ))}
-      {title && (
-        <text
-          x={title.x}
-          y={title.y}
-          textAnchor={title.anchor}
-          dominantBaseline="central"
-          className="fill-foreground font-medium"
-        >
-          {title.text}
-        </text>
+    <text
+      x={at.x}
+      y={at.y}
+      textAnchor="middle"
+      dominantBaseline="central"
+      style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
+      className={cn(
+        "transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none",
+        title ? "fill-foreground font-medium" : "fill-muted-foreground text-[10px]"
       )}
-    </g>
+    >
+      {text}
+    </text>
   )
 }
 

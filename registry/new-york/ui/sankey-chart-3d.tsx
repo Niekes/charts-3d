@@ -37,6 +37,8 @@ const RIBBON = 0.7
 const SEGMENTS = 16
 // The depth between the middles of two lanes, where flows that cross pass one another.
 const SPACING = 0.36
+// Closer than this on the screen, the two sides of a node lift its label over it.
+const SWING = 8
 
 /**
  * A node of the layout, from its top `y0` to its bottom `y1` in the world. A
@@ -521,8 +523,10 @@ function depthSort<
 
 /**
  * The label of a node beside its `outer` face, pushed away from the other side,
- * so that it stays outside whichever way the camera turns. It carries the
- * groups of the node, so it fades with the node.
+ * so that it stays outside whichever way the camera turns. Seen edge on, where
+ * the two sides meet and away has no direction, the label lifts over the node,
+ * so it swings round to the other side instead of jumping across. It carries
+ * the groups of the node, so it fades with the node.
  */
 function nodeLabel(
   key: string,
@@ -533,8 +537,9 @@ function nodeLabel(
 ): Label3D {
   const side = (name: "left" | "right") => center(faces.find((face) => face.face === name)!)
   const at = side(outer)
-  const away =
-    Math.sign(at.x - side(outer === "left" ? "right" : "left").x) || (outer === "left" ? -1 : 1)
-  const anchor = away < 0 ? "end" : "start"
-  return { key, at: { x: at.x + 8 * away, y: at.y }, text, anchor, groups }
+  const away = at.x - side(outer === "left" ? "right" : "left").x
+  const lift = Math.max(0, SWING - Math.abs(away))
+  const length = Math.hypot(away, lift)
+  const toward = { x: away / length, y: -lift / length }
+  return { key, at: { x: at.x + 8 * toward.x, y: at.y + 8 * toward.y }, text, toward, groups }
 }
