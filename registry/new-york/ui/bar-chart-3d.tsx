@@ -11,6 +11,7 @@ import {
   cubeMarks,
   useChart3D,
   useTween,
+  useTweenAxes,
   worldBox,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
@@ -52,15 +53,15 @@ export function BarChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const series = keys ?? Object.keys(config)
   // A value that is not a number stands as no bar, one of height 0; a new one grows from the floor.
-  const values = useTween(barValues(data, series), 0)
+  const target = barValues(data, series)
+  const values = useTween(target, 0)
   const cells = barCells(data, series, values)
 
-  const { spec, world, size } = barBox(
-    data.length,
-    series.length,
-    cells.map((cell) => cell.value),
-    barSize
-  )
+  const box = barBox(data.length, series.length, Object.values(target), barSize)
+  // The value axis glides with the bars; the rows and the series stand where they are.
+  const spec = { ...box.spec, y: useTweenAxes(box.spec).y }
+  const world = worldBox(spec, box.depth)
+  const { size } = box
   const bars = cubes3D()
     .camera(camera)
     .data(
@@ -136,7 +137,7 @@ function barBox(entries: number, series: number, values: number[], barSize: numb
   // A shallow box for few series, so the bars stay square.
   const depth = Math.min(1, Math.max(0.25, series / entries))
   const size = { width: (2 / entries) * barSize, depth: ((2 * depth) / series) * barSize }
-  return { spec, world: worldBox(spec, depth), size }
+  return { spec, depth, size }
 }
 
 /**

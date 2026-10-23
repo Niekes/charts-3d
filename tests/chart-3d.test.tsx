@@ -2,7 +2,7 @@
 import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, test, vi } from "vite-plus/test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 import { box, cubes3D } from "d3-3d"
 
 import {
@@ -18,6 +18,7 @@ import {
   shade,
   useChart3D,
   useTween,
+  useTweenAxes,
   worldBox,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -996,6 +997,10 @@ describe("focus", () => {
 })
 
 describe("useTween", () => {
+  // A browser that says the reader has not asked for reduced motion, so the chart may glide.
+  beforeEach(() =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+  )
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -1077,7 +1082,8 @@ describe("useTween", () => {
     expect(shown(jump.host)).toEqual({ a: 600 })
     await jump.unmount()
 
-    vi.stubGlobal("matchMedia", () => ({ matches: true }))
+    // The reader asks for reduced motion: no-preference does not match.
+    vi.stubGlobal("matchMedia", () => ({ matches: false }))
     const reduce = await mountTween(600)
     await reduce.render({ a: 0 })
     await reduce.render({ a: 600 })
@@ -1111,5 +1117,39 @@ describe("useTween", () => {
     expect(shown(chart.host)).toEqual({ a: 11.752360577143339 })
 
     await chart.unmount()
+  })
+
+  test("useTweenAxes glides the ends of the axes, with the ticks of the new ones between them", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    function Axes({ hi }: { hi: number }) {
+      const spec = useTweenAxes({ x: axis(0, 1), y: axis(0, hi), z: axis(0, 1) })
+      return <text>{JSON.stringify(spec.y)}</text>
+    }
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (hi: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes hi={hi} />
+          </ChartContainer3D>
+        )
+      )
+    const y = () => JSON.parse(host.querySelector("text")!.textContent!)
+
+    await render(100)
+    await render(200)
+    // Rounded, the end jumps from 100 to 200; the axis glides there and shows its ticks up to where it is.
+    await act(() => vi.advanceTimersByTime(300))
+    const [lo, hi] = y().domain
+    expect(lo).toBe(0)
+    expect(hi).toBeGreaterThan(100)
+    expect(hi).toBeLessThan(200)
+    expect(y().ticks).toEqual(axis(0, 200).ticks.filter((t) => t <= hi))
+    await act(() => vi.advanceTimersByTime(400))
+    expect(y()).toEqual(axis(0, 200))
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 })

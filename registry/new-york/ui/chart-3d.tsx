@@ -95,8 +95,8 @@ type ChartContext3D = {
   scene: React.RefObject<Mark3D[]>
   repaint: () => void
   focus: Focus3D
-  /** The time in ms a chart takes to glide into new data. */
-  animationDuration: number
+  /** The time in ms a chart takes to glide into new data, 600 unless the container says. */
+  animationDuration?: number
 }
 
 const Chart3DContext = React.createContext<ChartContext3D | null>(null)
@@ -334,7 +334,7 @@ function ChartContainer3D({
   defaultView = { yaw: Math.PI / 6, tilt: Math.PI / 6 },
   width = 640,
   height = 400,
-  animationDuration = 600,
+  animationDuration,
   legend = false,
   renderer: requested = "svg",
   shortcuts = true,
@@ -353,7 +353,7 @@ function ChartContainer3D({
     height
   )
   const keys = keymapOf(keymap, shortcuts)
-  const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, hide, hover)
+  const { view, handlers } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
     () => ({ config, camera, renderer, scene, repaint, focus, animationDuration }),
@@ -373,7 +373,6 @@ function ChartContainer3D({
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           {...keymapProps(keys, ariaLabel)}
-          data-orbiting={orbiting}
           onPointerLeave={leave}
           {...handlers}
         >
@@ -383,7 +382,7 @@ function ChartContainer3D({
         <ChartGizmo3D camera={camera} corner={gizmo} />
         <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
       </div>
-      {keys.rows.length > 0 && <ChartShortcuts3D {...keys} />}
+      <ChartShortcuts3D {...keys} />
       {legend && <ChartLegend3D config={config} />}
     </div>
   )
@@ -458,6 +457,15 @@ function moved(view: View3D, move: Move, initial: View3D): View3D {
   }
 }
 
+/**
+ * Whether the chart may move on its own: only where the browser says the
+ * reader has not asked for reduced motion. Where it cannot say, as on the
+ * server and in jsdom, the chart jumps.
+ */
+function animates() {
+  return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: no-preference)").matches)
+}
+
 /** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
 type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
 
@@ -468,7 +476,7 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  * at once. Without time, or with reduced motion, the numbers jump.
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
-  const { animationDuration: duration } = useChart3D()
+  const { animationDuration: duration = 600 } = useChart3D()
   // The content, not the record: a chart builds `values` at every render, also while it turns.
   const key = JSON.stringify(values)
   const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
@@ -476,9 +484,7 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
 
   // Numbers from the render before, the React pattern of state set while rendering.
   if (key !== tween.key) {
-    const jump =
-      duration === 0 || globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-    setTween({ key, from: shown, to: values, t: jump ? 1 : 0 })
+    setTween({ key, from: shown, to: values, t: duration > 0 && animates() ? 0 : 1 })
   }
 
   React.useEffect(() => {
@@ -510,6 +516,30 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
   )
 }
 
+/**
+ * `spec` gliding into new data with the marks: the ends of every axis glide
+ * as `useTween` glides the numbers, where ends rounded from the numbers on
+ * screen would jump from one round number to the next, and the box with
+ * them. The ticks are those of `spec` that lie between the ends.
+ */
+function useTweenAxes(spec: AxesSpec): AxesSpec {
+  const axes = ["x", "y", "z"] as const
+  const ends = useTween(
+    Object.fromEntries(
+      axes.flatMap((a) => [
+        [`${a}0`, spec[a].domain[0]],
+        [`${a}1`, spec[a].domain[spec[a].domain.length - 1]],
+      ])
+    )
+  )
+  const glided = (a: keyof AxesSpec): AxisSpec => {
+    const [lo, hi] = [ends[`${a}0`], ends[`${a}1`]]
+    const inside = (t: number) => t >= Math.min(lo, hi) && t <= Math.max(lo, hi)
+    return { domain: [lo, hi], ticks: spec[a].ticks.filter(inside) }
+  }
+  return { x: glided("x"), y: glided("y"), z: glided("z") }
+}
+
 // How long the camera glides to the view a key asks for, in milliseconds.
 const GLIDE = 200
 
@@ -539,7 +569,7 @@ function useGlide(defaultView: View3D) {
   React.useEffect(() => stop, [stop])
 
   const glide = (to: (from: View3D) => View3D) => {
-    if (!window.matchMedia?.("(prefers-reduced-motion: no-preference)").matches) return jump(to)
+    if (!animates()) return jump(to)
     const end = to(run.current?.to ?? now.current)
     // The yaw turns the short way round, to an angle that looks the same.
     const from = { ...now.current, yaw: end.yaw + remainder(now.current.yaw - end.yaw) }
@@ -580,8 +610,8 @@ function between(from: View3D, to: View3D, k: number): View3D {
  * The view of the camera, and the handlers that move it, as far as `keys`
  * has them on: a drag turns it, or pans it while Space is held, the keys
  * step it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
- * `orbiting` is true while the camera turns. `onDragStart` runs when a press
- * becomes a drag, `onHover` on a move without one.
+ * `data-orbiting` among them is true while the camera turns. `onDragStart`
+ * runs when a press becomes a drag, `onHover` on a move without one.
  */
 function useOrbit(
   defaultView: View3D,
@@ -603,7 +633,7 @@ function useOrbit(
     setOrbiting(false)
   }
 
-  const handlers: React.SVGProps<SVGSVGElement> = {
+  const handlers: React.SVGProps<SVGSVGElement> & { "data-orbiting": boolean } = {
     ref,
     onPointerDown: (e) => {
       // Space is held only while the drag pans; without it, the drag turns.
@@ -631,9 +661,10 @@ function useOrbit(
     onPointerCancel: release,
     onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
+    "data-orbiting": orbiting,
   }
 
-  return { view, orbiting, handlers }
+  return { view, handlers }
 }
 
 /**
@@ -1146,6 +1177,8 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
     return () => chart?.removeEventListener("keydown", onKeyDown)
   }, [keys])
 
+  // Without a key or a panel, there is nothing to list.
+  if (!rows.length) return null
   return (
     <div ref={ref} className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
       <button
@@ -1322,8 +1355,9 @@ function edgeLabels(
     return { key, axis, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
   }
   const id = `${axis}${edge.sides.join("")}`
-  const ticks = edge.map((tick, i) =>
-    label(`${id}-${i}`, tick.projected, format(tick[axis]), 10, GAP)
+  // Keyed by value, so a tick that new data keeps glides on as the same label.
+  const ticks = edge.map((tick) =>
+    label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP)
   )
   // How far a row of labels reaches out from the edge.
   const depth = Math.max(...ticks.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
@@ -1562,4 +1596,5 @@ export {
   center,
   cubeMarks,
   useTween,
+  useTweenAxes,
 }

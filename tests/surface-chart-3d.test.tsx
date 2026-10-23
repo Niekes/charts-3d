@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, test, vi } from "vite-plus/test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
 import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
@@ -69,7 +69,14 @@ describe("SurfaceChart3D", () => {
 })
 
 describe("SurfaceChart3D transitions", () => {
-  afterEach(() => vi.useRealTimers())
+  // A browser that says the reader has not asked for reduced motion, so the chart may glide.
+  beforeEach(() =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+  )
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   test("new data glides in over the animationDuration of the container", async () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)

@@ -2,7 +2,7 @@
 import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, test, vi } from "vite-plus/test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
@@ -248,7 +248,14 @@ describe("BarChart3D labels", () => {
 })
 
 describe("BarChart3D transitions", () => {
-  afterEach(() => vi.useRealTimers())
+  // A browser that says the reader has not asked for reduced motion, so the chart may glide.
+  beforeEach(() =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+  )
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   test("new data glides in over the animationDuration of the container", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
@@ -272,6 +279,54 @@ describe("BarChart3D transitions", () => {
     expect(host.textContent).not.toContain("-20")
     await act(() => vi.advanceTimersByTime(700))
     expect(host.textContent).toContain("-20")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a bar that keeps its value keeps its height smooth, and a tick that stays glides as the same label", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (b: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={[{ name: "x", a: 100, b }]} index="name" />
+          </ChartContainer3D>
+        )
+      )
+    // The screen height of the bar of `a`, from the faces it shows.
+    const height = () => {
+      const faces = host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')
+      const ys = [...faces].flatMap((face) =>
+        face
+          .getAttribute("d")!
+          .slice(1, -1)
+          .split("L")
+          .map((c) => Number(c.split(",")[1]))
+      )
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    const tick = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')].find(
+        (t) => t.textContent === "100" && (t as SVGTextElement).style.opacity === "1"
+      )
+
+    await render(305)
+    const before = tick()
+    // From 305 to 480, the y axis rounds its end from 350 to 500, over 400 and 450.
+    await render(480)
+    let last = height()
+    let worst = 0
+    for (let frame = 0; frame < 45; frame += 1) {
+      await act(() => vi.advanceTimersByTime(16))
+      worst = Math.max(worst, Math.abs(height() - last))
+      last = height()
+    }
+    // The box shrinks under the bar by 30px in all; ends that jumped would take 10px at once.
+    expect(worst).toBeLessThan(2)
+    expect(tick()).toBe(before)
 
     await act(async () => root.unmount())
     host.remove()

@@ -201,8 +201,16 @@ How the charts draw, so that a new one draws the same way:
   y up. Use it instead of building the scales by hand.
 - **Transitions.** A chart glides into new data by tweening its numbers with
   `useTween`, before it projects - never the projected marks: every frame
-  reprojects, so the axes scale along, and the camera answers at once. A new
-  key starts at `enter`, a gone one goes at once, reduced motion jumps.
+  reprojects, and the camera answers at once. A new key starts at `enter`, a
+  gone one goes at once. Build the axes from the data the chart glides into
+  and hand them to `useTweenAxes`, which glides their ends with the marks:
+  axes rounded from the numbers on screen would jump from one round end to
+  the next, and the box with them. The tick labels are keyed by value, so a
+  tick that stays glides on.
+- **Motion only where the reader allows it.** `animates()` is true only where
+  the browser says `prefers-reduced-motion: no-preference`; elsewhere, on the
+  server and in jsdom too, the tweens and the camera jump. A test that wants
+  a glide stubs `matchMedia` and fakes `requestAnimationFrame`.
 
 ### Renderers
 
@@ -249,8 +257,8 @@ gesture is a new action, so the panel never misses one.
 - **A key glides, a drag jumps.** `useGlide` moves the view to the step of a
   key in `GLIDE` milliseconds, and a key pressed on the way heads on from
   there; a drag and the wheel follow the pointer at once and stop a glide.
-  Where `prefers-reduced-motion` is not `no-preference`, as in jsdom, a glide
-  jumps, so the tests read the view right after a key.
+  Where `animates()` is false, as in jsdom, a glide jumps, so the tests read
+  the view right after a key.
 - **`orbiting` is true while the camera turns**, not while it pans or zooms.
   Nothing in the core reads it; `data-orbiting` on the svg is there to style.
 

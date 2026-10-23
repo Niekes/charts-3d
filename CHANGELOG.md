@@ -29,8 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `animationDuration` on `ChartContainer3D` and `useTween` in the core: a chart
   tweens the numbers of its data before it projects, so new data glides in -
   the axes, the domains and the shading follow - while the camera answers at
-  once. The bar, scatter, surface and sankey charts use it, and their docs
-  pages show an Update example that presses it.
+  once. `useTweenAxes` glides the ends of the axes with the marks, so the box
+  scales smoothly instead of jumping from one round end to the next, and a
+  tick label that the new data keeps glides on. The bar, scatter, surface and
+  sankey charts use them, and their docs pages show an Update example that
+  presses it. Where the reader asks for reduced motion, or the browser cannot
+  say, the data jumps, as the camera does.
 
 ### Changed
 

@@ -10,6 +10,7 @@ import {
   axis,
   useChart3D,
   useTween,
+  useTweenAxes,
   worldBox,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -58,11 +59,8 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   const values = useTween(pointValues(data, fields))
   const read = (i: number, axis: keyof AxesSpec) => values[`${axis}${i}`]
 
-  const range = (a: keyof AxesSpec) => {
-    const [lo = 0, hi = 0] = extent(data, (_, i) => read(i, a))
-    return axis(lo, hi)
-  }
-  const spec: AxesSpec = { x: range("x"), y: range("y"), z: range("z") }
+  // The axes of the data the chart glides into; their ends glide along.
+  const spec = useTweenAxes(pointAxes(data, fields))
   const world = worldBox(spec)
 
   const points = points3D<{ d: T; i: number }>()
@@ -101,6 +99,18 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/** The axes that hold every entry of `data`, a nice one per field. */
+function pointAxes<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Record<keyof AxesSpec, keyof T & string>
+): AxesSpec {
+  const range = (a: keyof AxesSpec) => {
+    const [lo = 0, hi = 0] = extent(data, (d) => Number(d[fields[a]]))
+    return axis(lo, hi)
+  }
+  return { x: range("x"), y: range("y"), z: range("z") }
 }
 
 /** The position of every entry, keyed by its axis and index, gliding into new data. */

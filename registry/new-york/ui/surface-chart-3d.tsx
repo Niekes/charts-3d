@@ -13,6 +13,7 @@ import {
   shade,
   useChart3D,
   useTween,
+  useTweenAxes,
   worldBox,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -51,9 +52,11 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
   const columns = data[0]?.length ?? 0
   const [x0, x1] = domain.x ?? [0, columns - 1]
   const [z0, z1] = domain.z ?? [0, rows - 1]
+  // The color ramp follows the heights on screen, the axes glide to those of the data.
   const [lo = 0, hi = 0] = extent(heights.flat())
+  const [floor = 0, peak = 0] = extent(data.flat())
 
-  const spec: AxesSpec = { x: axis(x0, x1), y: axis(lo, hi), z: axis(z0, z1) }
+  const spec = useTweenAxes({ x: axis(x0, x1), y: axis(floor, peak), z: axis(z0, z1) })
   const world = worldBox(spec)
   const toX = linear([0, columns - 1], [x0, x1])
   const toZ = linear([0, rows - 1], [z0, z1])

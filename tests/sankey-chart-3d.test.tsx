@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, test, vi } from "vite-plus/test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D, type View3D } from "@/registry/new-york/ui/chart-3d"
 import { SankeyChart3D, type SankeyChart3DProps } from "@/registry/new-york/ui/sankey-chart-3d"
@@ -390,7 +390,14 @@ describe("SankeyChart3D", () => {
 })
 
 describe("SankeyChart3D transitions", () => {
-  afterEach(() => vi.useRealTimers())
+  // A browser that says the reader has not asked for reduced motion, so the chart may glide.
+  beforeEach(() =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+  )
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   test("new values glide in over the animationDuration of the container", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
