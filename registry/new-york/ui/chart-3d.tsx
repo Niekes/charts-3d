@@ -72,6 +72,19 @@ export type Mark3D = {
   stroke?: string
   /** Shown while the pointer is over the mark. */
   tooltip?: Tooltip3D
+  /**
+   * What the mark belongs to, such as a flow, or connects, such as a node.
+   * While the pointer is over a mark, every mark and label that shares none of
+   * its groups fades; one without groups never does.
+   */
+  groups?: string[]
+}
+
+/** The groups in focus, a store, so a change reaches the marks and labels without rendering the chart again. */
+type Focus3D = {
+  get: () => string[] | undefined
+  set: (groups?: string[]) => void
+  subscribe: (listener: () => void) => () => void
 }
 
 type ChartContext3D = {
@@ -81,6 +94,7 @@ type ChartContext3D = {
   /** The marks of the chart, which the hover and the canvas read. */
   scene: React.RefObject<Mark3D[]>
   repaint: () => void
+  focus: Focus3D
 }
 
 const Chart3DContext = React.createContext<ChartContext3D | null>(null)
@@ -325,17 +339,17 @@ function ChartContainer3D({
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const { scene, renderer, canvas, repaint, hover, leave, tooltip } = useScene(
+  const { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus } = useScene(
     requested,
     width,
     height
   )
   const keys = keymapOf(keymap, shortcuts)
-  const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, leave, hover)
+  const { view, orbiting, handlers } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, repaint }),
-    [config, camera, renderer, repaint]
+    () => ({ config, camera, renderer, scene, repaint, focus }),
+    [config, camera, renderer, repaint, focus]
   )
 
   return (
@@ -398,10 +412,11 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
 function useScene(requested: Renderer3D, width: number, height: number) {
   const scene = React.useRef<Mark3D[]>([])
   const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
+  const focus = useFocus()
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width)
-  const { hover, leave } = useHover(scene, width, height, setTooltip)
-  return { scene, renderer, canvas, repaint, hover, leave, tooltip }
+  const { hover, hide, leave } = useHover(scene, width, height, setTooltip, focus)
+  return { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus }
 }
 
 /** The camera of a view. The shapes of the chart hang on it, so a new view re-projects them all. */
@@ -543,21 +558,26 @@ function useWheelZoom(setView: React.Dispatch<React.SetStateAction<View3D>>, on:
 }
 
 /**
- * The tooltip of the mark under the pointer, the one painted last. `hover`
- * sets it only when the pointer moves onto another mark, so a move within
- * one does not render the chart again.
+ * The tooltip of the mark under the pointer, the one painted last, and the
+ * focus on its groups. `hover` sets them only when the pointer moves onto
+ * another mark, so a move within one does not render the chart again. Off
+ * the marks and while a drag turns the chart, `hide` drops the tooltip but
+ * keeps the focus, so a flow does not flash in the gaps beside it and can be
+ * followed from every side; `leave` drops both.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
   width: number,
   height: number,
-  setTooltip: (tooltip: Tooltip3D | null) => void
+  setTooltip: (tooltip: Tooltip3D | null) => void,
+  focus: Focus3D
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
   const show = (mark?: Mark3D) => {
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
     setTooltip(mark?.tooltip ?? null)
+    if (mark?.groups) focus.set(mark.groups)
   }
 
   return {
@@ -569,8 +589,46 @@ function useHover(
       }
       show(hit(scene.current, at))
     },
-    leave: () => show(undefined),
+    hide: () => show(undefined),
+    leave: () => {
+      show(undefined)
+      focus.set(undefined)
+    },
   }
+}
+
+/** A store for the groups in focus, which tells its listeners only when the groups change. */
+function useFocus(): Focus3D {
+  const [focus] = React.useState(() => {
+    let groups: string[] | undefined
+    const listeners = new Set<() => void>()
+    return {
+      get: () => groups,
+      set: (next?: string[]) => {
+        if (JSON.stringify(next) === JSON.stringify(groups)) return
+        groups = next
+        listeners.forEach((listener) => listener())
+      },
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    }
+  })
+  return focus
+}
+
+/**
+ * Whether an item fades under the focus: it has groups and shares none with
+ * the focus, while some item of `items` does, so a focus on groups that are
+ * gone fades nothing.
+ */
+function useFades(items: { groups?: string[] }[]) {
+  const { focus } = useChart3D()
+  const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
+  const lit = (of?: string[]) => of?.some((group) => groups?.includes(group)) ?? false
+  const on = items.some((item) => lit(item.groups))
+  return (item: { groups?: string[] }) => on && item.groups !== undefined && !lit(item.groups)
 }
 
 /** The topmost mark under `at`: the last one painted that holds it. */
@@ -790,13 +848,16 @@ function ChartGizmo3D({
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
+  const fades = useFades(marks)
+  // Faded in place, so the order, and with it the depth, stays as the chart painted it.
+  const drawn = marks.map((mark) => (fades(mark) ? { ...mark, fill: fade(mark.fill) } : mark))
   React.useLayoutEffect(() => {
-    scene.current = marks
+    scene.current = drawn
     repaint()
   })
 
   if (renderer === "canvas") return null
-  return marks.map(({ key, points, r, fill, stroke }) =>
+  return drawn.map(({ key, points, r, fill, stroke }) =>
     r === undefined ? (
       <path
         key={key}
@@ -826,6 +887,8 @@ export type Label3D = {
   at: Point2D
   text: React.ReactNode
   anchor: "start" | "middle" | "end"
+  /** The groups of the mark it names, so it fades with the mark out of focus. */
+  groups?: string[]
 }
 
 /**
@@ -833,22 +896,26 @@ export type Label3D = {
  * read on the marks. Like the labels of the box, they are SVG with every renderer.
  */
 function Labels3D({ labels }: { labels: Label3D[] }) {
+  const fades = useFades(labels)
   // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
-      {labels.map(({ key, at, text, anchor }) => (
+      {labels.map((label) => (
         <text
-          key={key}
-          x={at.x}
-          y={at.y}
-          textAnchor={anchor}
+          key={label.key}
+          x={label.at.x}
+          y={label.at.y}
+          textAnchor={label.anchor}
           dominantBaseline="central"
           paintOrder="stroke"
           strokeWidth={3}
           strokeLinejoin="round"
-          className="fill-foreground stroke-background text-[10px] font-medium"
+          className={cn(
+            "fill-foreground stroke-background text-[10px] font-medium",
+            fades(label) && "opacity-25"
+          )}
         >
-          {text}
+          {label.text}
         </text>
       ))}
     </g>
@@ -1195,6 +1262,11 @@ function shade(face: TransformedPoint<unknown>[], color: string) {
   const side = n.z < 0 ? -1 : 1
   const light = Math.max(0, side * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z))
   return `color-mix(in oklch, ${color} ${Math.round(65 + 35 * light)}%, black)`
+}
+
+/** `color` out of focus: a quarter of it over the background, opaque, so the seams between faces stay closed. */
+function fade(color: string) {
+  return `color-mix(in oklch, ${color} 25%, var(--background))`
 }
 
 /** The mean of the projected points, where a tooltip points at. */

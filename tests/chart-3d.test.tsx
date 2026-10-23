@@ -795,3 +795,88 @@ describe("worldBox", () => {
     expect([world.z(0), world.z(10)]).toEqual([-0.5, 0.5])
   })
 })
+
+describe("focus", () => {
+  /** A square mark 50 wide at `x`, in `groups`. */
+  const square = (key: string, x: number, groups?: string[]) => ({
+    key,
+    points: [
+      { x, y: 100 },
+      { x: x + 50, y: 100 },
+      { x: x + 50, y: 150 },
+      { x, y: 150 },
+    ],
+    fill: "red",
+    tooltip: { at: { x: x + 25, y: 125 }, items: [{ label: `tip-${key}`, value: 1 }] },
+    groups,
+  })
+  const squares = [
+    square("a", 0, ["a"]),
+    square("b", 100, ["b"]),
+    square("ab", 200, ["a", "b"]),
+    square("none", 300),
+  ]
+  const labels = [
+    { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const, groups: ["a"] },
+    { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const, groups: ["b"] },
+  ]
+  const faded = "color-mix(in oklch, red 25%, var(--background))"
+  const fills = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("path")].map((path) => path.getAttribute("fill"))
+  const fadedLabels = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("[data-slot=chart-3d-labels] text")].map((text) =>
+      text.classList.contains("opacity-25")
+    )
+  const move = (clientX: number, clientY: number) =>
+    new MouseEvent("pointermove", { bubbles: true, clientX, clientY })
+
+  test("the pointer on a mark fades the marks and labels that share none of its groups", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={squares} />
+        <Labels3D labels={labels} />
+      </ChartContainer3D>
+    )
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+
+    await chart.send(move(25, 125))
+    expect(chart.host.textContent).toContain("tip-a")
+    // b shares no group with a, ab shares one, and a mark without groups never fades.
+    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
+    expect(fadedLabels(chart.svg)).toEqual([false, true])
+
+    // Off the marks the tooltip goes and the focus stays; leaving the chart drops it.
+    await chart.send(move(25, 350))
+    expect(chart.host.textContent).not.toContain("tip-a")
+    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
+    await chart.send(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }))
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(fadedLabels(chart.svg)).toEqual([false, false])
+
+    await chart.unmount()
+  })
+
+  test("a focus on groups that no mark has any more fades nothing", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (marks: typeof squares) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Marks3D marks={marks} />
+          </ChartContainer3D>
+        )
+      )
+    await render(squares)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await act(() => svg.dispatchEvent(move(25, 125)))
+    expect(fills(svg)).toContain(faded)
+
+    await render([square("b", 100, ["b"]), square("c", 200, ["c"])])
+    expect(fills(svg)).toEqual(["red", "red"])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})

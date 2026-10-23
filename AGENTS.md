@@ -172,6 +172,10 @@ How the charts draw, so that a new one draws the same way:
 - **Labels.** Text beside a mark, such as the name of a node, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the end of the text
   there. The core draws it with every renderer, ringed by the background.
+- **Focus.** A mark or a label names what it belongs to in `groups`: a flow,
+  say, or the flows a node connects. While the pointer is on a mark, the core
+  fades every mark and label that shares none of its groups, in place and with
+  every renderer; a chart never fades anything itself.
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
   React moves the DOM nodes.

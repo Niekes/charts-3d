@@ -113,6 +113,15 @@ The axes in the lower left corner turn with the camera, so a turned chart still 
 
 The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hidden from screen readers. Each axis draws in `currentColor` and carries `data-axis`, so `className="[&_[data-axis=x]]:text-red-500"` on the container colors one axis.
 
+## Focus
+
+A mark or a label can name the groups it belongs to in `groups`. While the pointer is on a mark, every mark and label that shares none of its groups fades to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
+
+```tsx
+// The faces of a flow share its key; the faces of a node carry the keys of all its flows.
+const marks = faces.map((face) => ({ ...face, groups: [flow.key] }))
+```
+
 ## API Reference
 
 ### ChartContainer3D

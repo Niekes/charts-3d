@@ -13,7 +13,18 @@ const config = {
   a: { label: "A", color: "red" },
   b: { label: "B", color: "blue" },
   c: { label: "C", color: "green" },
+  d: { label: "D", color: "orange" },
+  e: { label: "E", color: "purple" },
+  f: { label: "F", color: "teal" },
 }
+
+// One crossing: a → c and b → d swap their order, and b → d is the lighter of the two.
+const knot = [
+  { source: "a", target: "c", value: 3 },
+  { source: "a", target: "d", value: 5 },
+  { source: "b", target: "c", value: 5 },
+  { source: "b", target: "d", value: 1 },
+]
 
 const chart = (data: SankeyChart3DProps["data"], defaultView?: View3D) => (
   <ChartContainer3D config={config} defaultView={defaultView}>
@@ -27,6 +38,80 @@ const faces = (html: string) =>
     fill,
     corners: d.split("L").map((c) => c.split(",").map(Number)),
   }))
+
+/**
+ * The indices in paint order of the faces of the flow from `source` to
+ * `target`, by slice: the share of its way that its color is mixed at.
+ */
+function slices(html: string, source: string, target: string) {
+  const color = new RegExp(`var\\(--color-${target}\\) (\\d+)%, var\\(--color-${source}\\)`)
+  const bySlice = new Map<number, number[]>()
+  faces(html).forEach(({ fill }, i) => {
+    const t = Number(fill.match(color)?.[1] ?? NaN)
+    if (!Number.isNaN(t)) bySlice.set(t, [...(bySlice.get(t) ?? []), i])
+  })
+  return bySlice
+}
+
+/**
+ * Renders `element` into the document and points at the middle of the last
+ * painted face whose fill `pick` takes. Returns, before and after, the corners
+ * of the faces in paint order, their fills, and the class of every label.
+ */
+async function pointAt(element: React.ReactElement, pick: (fill: string) => boolean) {
+  const host = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(host)
+  await act(async () => root.render(element))
+  const svg = host.querySelector("svg")!
+  svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+  // The faces of the chart, not the icon of its shortcut button.
+  const paths = () => [...svg.querySelectorAll("path")]
+  const read = () => ({
+    corners: paths().map((path) => path.getAttribute("d")),
+    fills: paths().map((path) => path.getAttribute("fill")!),
+    labels: Object.fromEntries(
+      [...host.querySelectorAll("[data-slot=chart-3d-labels] text")].map((text) => [
+        text.textContent,
+        text.getAttribute("class"),
+      ])
+    ),
+  })
+  const before = read()
+  const face = paths()
+    .filter((path) => pick(path.getAttribute("fill")!))
+    .at(-1)!
+  const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+  const [x, y] = [0, 1].map(
+    (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+  )
+  await act(() =>
+    svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }))
+  )
+  const after = read()
+  await act(async () => root.unmount())
+  host.remove()
+  return { before, after }
+}
+
+const escape = (css: string) => css.replace(/[()]/g, "\\$&")
+
+/** Whether a fill is a slice of the flow from the color `from` to the color `to`, faded or not. */
+const flowFill = (from: string, to: string) => (fill: string) =>
+  new RegExp(`${escape(to)} \\d+%, ${escape(from)}\\)`).test(fill)
+
+/** Whether a fill is a face of a node of `color`, faded or not: shaded straight from the color. */
+const nodeFill = (color: string) => (fill: string) =>
+  new RegExp(`(^|, )color-mix\\(in oklch, ${escape(color)} \\d+%, black\\)`).test(fill)
+
+const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+
+/** Whether, in every slice where both have faces, the flow `over` paints after the flow `under`. */
+function paintsOver(over: Map<number, number[]>, under: Map<number, number[]>) {
+  const shared = [...over.keys()].filter((t) => under.has(t))
+  return (
+    shared.length > 0 && shared.every((t) => Math.min(...over.get(t)!) > Math.max(...under.get(t)!))
+  )
+}
 
 /**
  * Renders `element` into the document, moves the pointer onto a face in the
@@ -172,5 +257,111 @@ describe("SankeyChart3D", () => {
     const anchor = (label: string) =>
       html.match(new RegExp(`<text[^>]*text-anchor="(\\w+)"[^>]*>${label}</text>`))?.[1]
     expect([anchor("A"), anchor("B")]).toEqual(["end", "start"])
+  })
+
+  test("of two flows that cross, the lighter passes in front over the whole crossing", () => {
+    // Straight ahead and straight behind, the eye sees only the depth of the lanes.
+    const view = (yaw: number) => {
+      const html = renderToString(chart(knot, { yaw, tilt: 0 }))
+      return { ac: slices(html, "a", "c"), bd: slices(html, "b", "d") }
+    }
+    const ahead = view(0)
+    expect(paintsOver(ahead.bd, ahead.ac)).toBe(true)
+    const behind = view(Math.PI)
+    expect(paintsOver(behind.ac, behind.bd)).toBe(true)
+  })
+
+  test("flows that cross part in depth by a lane where they pass, and meet the nodes level", () => {
+    // From straight above, the screen shows the depth: y = 200 + 120·z.
+    const html = renderToString(chart(knot, { yaw: 0, tilt: Math.PI / 2 }))
+    const all = faces(html)
+    const depths = (source: string, target: string) =>
+      [...slices(html, source, target).entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, ids]) => {
+          const ys = ids.flatMap((i) => all[i].corners.map(([, y]) => y))
+          return ((Math.min(...ys) + Math.max(...ys)) / 2 - 200) / 120
+        })
+    const [ac, bd, ad] = [depths("a", "c"), depths("b", "d"), depths("a", "d")]
+    // The lighter b → d in front (+z), a → c behind, a lane apart where they cross.
+    expect(Math.max(...bd)).toBeCloseTo(0.18, 2)
+    expect(Math.min(...ac)).toBeCloseTo(-0.18, 2)
+    // a → d crosses nothing and stays where it was.
+    expect(ad.every((z) => Math.abs(z) < 0.01)).toBe(true)
+    // At the nodes both start and end level: the outer corners of their first and last slices sit at z = ±0.14.
+    for (const flow of [slices(html, "a", "c"), slices(html, "b", "d")]) {
+      const ends = [...flow.entries()].sort(([a], [b]) => a - b)
+      for (const [ids, side] of [
+        [ends[0][1], Math.min],
+        [ends.at(-1)![1], Math.max],
+      ] as const) {
+        const corners = ids.flatMap((i) => all[i].corners)
+        const edge = side(...corners.map(([x]) => x))
+        const ys = corners.filter(([x]) => x === edge).map(([, y]) => y)
+        expect([Math.min(...ys), Math.max(...ys)]).toEqual([183.2, 216.8])
+      }
+    }
+  })
+
+  test("pointing at a flow fades the flows and nodes it does not connect, in place", async () => {
+    const [a, b, c] = ["var(--color-a)", "var(--color-b)", "var(--color-c)"]
+    const { before, after } = await pointAt(
+      chart(
+        [
+          { source: "a", target: "b", value: 2 },
+          { source: "a", target: "c", value: 1 },
+        ],
+        { yaw: 0, tilt: 0 }
+      ),
+      flowFill(a, b)
+    )
+    expect(before.fills.some(faded)).toBe(false)
+    const fades = (is: (fill: string) => boolean) => after.fills.filter(is).map(faded)
+    expect(new Set(fades(flowFill(a, c)))).toEqual(new Set([true]))
+    expect(new Set(fades(nodeFill(c)))).toEqual(new Set([true]))
+    for (const lit of [flowFill(a, b), nodeFill(a), nodeFill(b)]) {
+      expect(new Set(fades(lit))).toEqual(new Set([false]))
+    }
+    expect(after.labels.C).toContain("opacity-25")
+    expect([after.labels.A, after.labels.B].join(" ")).not.toContain("opacity-25")
+    // Faded in place: the depth order stays as it was.
+    expect(after.corners).toEqual(before.corners)
+  })
+
+  test("pointing at a node keeps its flows and the nodes at their other ends", async () => {
+    const [a, b, c, x] = [
+      "var(--color-a)",
+      "var(--color-b)",
+      "var(--color-c)",
+      "var(--muted-foreground)",
+    ]
+    const { after } = await pointAt(
+      chart(
+        [
+          { source: "a", target: "b", value: 2 },
+          { source: "b", target: "c", value: 2 },
+          { source: "x", target: "c", value: 1 },
+        ],
+        { yaw: 0, tilt: 0 }
+      ),
+      nodeFill(b)
+    )
+    const fades = (is: (fill: string) => boolean) => new Set(after.fills.filter(is).map(faded))
+    for (const lit of [flowFill(a, b), flowFill(b, c), nodeFill(a), nodeFill(b), nodeFill(c)]) {
+      expect(fades(lit)).toEqual(new Set([false]))
+    }
+    // x → c, its waypoint included, and x fade.
+    expect(fades(flowFill(x, c))).toEqual(new Set([true]))
+    expect(fades(nodeFill(x))).toEqual(new Set([true]))
+    expect(after.labels.x).toContain("opacity-25")
+  })
+
+  test("a flow that crosses nothing, above flows that cross, paints over them from above", () => {
+    // Seen from above and ahead, the lanes face the eye too, but the height decides between knots.
+    const html = renderToString(
+      chart([{ source: "e", target: "f", value: 2 }, ...knot], { yaw: 0, tilt: Math.PI / 3 })
+    )
+    expect(paintsOver(slices(html, "e", "f"), slices(html, "b", "d"))).toBe(true)
+    expect(paintsOver(slices(html, "e", "f"), slices(html, "a", "c"))).toBe(true)
   })
 })
