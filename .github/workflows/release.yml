@@ -1,35 +1,29 @@
 name: Release
 
-# A release ships twice from one version: the shadcn registry, installed from
-# the repository, and the npm package `@niekes/charts-3d`.
+# A release ships twice from one version: the npm package `@niekes/charts-3d`
+# and the shadcn registry, installed from the repository.
 #
 # The registry is a tag that `npx shadcn add niekes/charts-3d/<item>#v<version>`
 # can pin. The shadcn CLI does not pass the tag on to the registry
 # dependencies, so the tag sits on a release commit beside `master` that pins
 # the core to it too.
-#
-# The package is staged on npm through trusted publishing: OIDC instead of a
-# token, provenance included. The version goes live once a maintainer
-# approves it with 2FA.
 on:
   push:
     branches: [master]
     paths:
       - package.json
-  # Retries a release whose tag or publish failed.
+  # Retries a release whose publish failed.
   workflow_dispatch:
 
 jobs:
-  release:
-    name: Tag and stage on npm
+  publish:
+    name: Stage on npm
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           # npm stage publish needs the npm that ships with Node 24.
@@ -38,34 +32,32 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm test
-      - name: Check what is new
+      - name: Check whether the version is new
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "$VERSION" = "0.0.0" ]; then
-              echo "0.0.0 is not a release, skipping."
+          if npm view "@niekes/charts-3d@$VERSION" version >/dev/null 2>&1; then
+              echo "new=false" >> "$GITHUB_OUTPUT"
+              echo "@niekes/charts-3d@$VERSION is already on npm, skipping the publish."
+          else
+              echo "new=true" >> "$GITHUB_OUTPUT"
+              echo "Publishing @niekes/charts-3d@$VERSION."
+          fi
+      - name: Stage the publish
+        if: steps.version.outputs.new == 'true'
+        # Trusted publishing: OIDC instead of a token, provenance included.
+        # The version goes live once a maintainer approves it with 2FA.
+        # npm stage publish runs prepack, which typechecks and builds dist/.
+        run: npm stage publish
+      - name: Release on GitHub
+        # Runs for a version that is on npm already as well, so a rerun adds a
+        # missing release. The notes are the version's section in CHANGELOG.md.
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+              echo "v$VERSION is released on GitHub already."
               exit 0
           fi
-          # Each half runs only if it is missing, so a rerun picks up where a failed release stopped.
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-              echo "v$VERSION is already tagged."
-          else
-              echo "tag=true" >> "$GITHUB_OUTPUT"
-          fi
-          if npm view "@niekes/charts-3d@$VERSION" version >/dev/null 2>&1; then
-              echo "@niekes/charts-3d@$VERSION is already on npm."
-          else
-              echo "npm=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Tag and publish the GitHub release
-        if: steps.version.outputs.tag == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # The notes are the section of this version in the changelog.
-          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
           # Pin every dependency on this registry to the release, and check the pin.
           sed -i "s|\"niekes/charts-3d/\([a-z0-9-]*\)\"|\"niekes/charts-3d/\1#v$VERSION\"|g" registry.json
           npm run lint:template
@@ -76,8 +68,7 @@ jobs:
           git commit -am "🔖 chore(release): $VERSION"
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md
-      - name: Stage the npm package
-        if: steps.version.outputs.npm == 'true'
-        # npm stage publish runs prepack, which typechecks and builds dist/.
-        run: npm stage publish
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 { f = 1; next } /^## \[/ { f = 0 } f' CHANGELOG.md |
+              gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file -
+        env:
+          GH_TOKEN: ${{ github.token }}

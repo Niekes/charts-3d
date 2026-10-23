@@ -32,6 +32,17 @@ For non-skill agents, treat the task map below as the local onboarding source: r
 
 <!-- fallow:setup-hooks:end -->
 
+## Releasing
+
+A release is a pull request that bumps the version in `package.json` and
+updates `CHANGELOG.md` (for example the `release/0.3.0` branch). Merging it
+into `master` triggers `.github/workflows/release.yml`, which stages the new
+version on npm - but only when `package.json` changed and the version is not
+on npm yet - and, if it is missing, tags the pinned release commit and creates
+the `vX.Y.Z` release on GitHub. The version goes live once a maintainer
+approves it with 2FA. Never run `npm publish`, `npm stage approve` or push a
+version tag by hand.
+
 ## The registry template
 
 `charts-3d` is a shadcn registry: its files are copied into other projects. Its

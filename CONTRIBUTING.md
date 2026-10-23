@@ -105,25 +105,32 @@ Pages are deployed to GitHub Pages from `master`.
 
 ## Releases
 
-Every version ships twice, from the same files: as the shadcn registry and as
-the npm package `@niekes/charts-3d`. Bump `version` in `package.json` and add
-its section to `CHANGELOG.md`. On `master`, the release workflow then does both:
+Every version ships twice, from the same files: as the npm package
+`@niekes/charts-3d` and as the shadcn registry. A release is a pull request
+that bumps the version in `package.json` and updates `CHANGELOG.md` - for
+example the `release/0.3.0` branch. Merging it into `master` starts it: when
+`package.json` changed, the [Release workflow](.github/workflows/release.yml)
+does both:
 
-- **The registry.** It tags `v<version>` and publishes the GitHub release, and
-  the items can be pinned with `npx shadcn add niekes/charts-3d/<item>#v<version>`.
-  The shadcn CLI does not pass the tag on to the registry dependencies, so the
-  tag does not sit on the `master` commit: the workflow makes a release commit
-  beside `master` in which every chart depends on
+- **The package.** It stages the version on npm with `npm stage publish`,
+  through trusted publishing: OIDC instead of a token, provenance included. A
+  maintainer then approves the staged version with 2FA, on npmjs.com or with
+  `npm stage approve <stage-id>`, and only then is it installable.
+- **The registry.** It tags `v<version>` and creates the GitHub release, with
+  the version's section of `CHANGELOG.md` as its notes, and the items can be
+  pinned with `npx shadcn add niekes/charts-3d/<item>#v<version>`. The shadcn
+  CLI does not pass the tag on to the registry dependencies, so the tag does
+  not sit on the `master` commit: the workflow makes a release commit beside
+  `master` in which every chart depends on
   `niekes/charts-3d/chart-3d#v<version>`, and tags that one. On `master` the
   dependencies stay unpinned.
-- **The package.** It stages the version on npm with `npm stage publish`,
-  through trusted publishing: OIDC instead of a token, provenance included. The
-  version goes live once a maintainer approves it with 2FA, with
-  `npm stage approve` or on npmjs.com.
 
-Each half runs only if it is missing, so a release that failed halfway can be
-rerun from the Actions tab (`workflow_dispatch`). The props and the exports of
-`index.ts` are the API of the package: a change to them is a breaking change.
+The workflow skips the publish when the version is already on npm, so
+dependency updates that touch `package.json` without a version bump never
+trigger one, and it can be rerun by hand from the Actions tab, which also adds
+a missing GitHub release. Do not run `npm publish` or push a version tag by
+hand. The props and the exports of `index.ts` are the API of the package: a
+change to them is a breaking change.
 
 `npm pack --dry-run` shows what the package would ship: `dist/`, `LICENSE`,
 `NOTICE`, `README.md` and `package.json`.
