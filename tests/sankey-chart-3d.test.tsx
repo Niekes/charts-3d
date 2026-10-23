@@ -28,6 +28,30 @@ const faces = (html: string) =>
     corners: d.split("L").map((c) => c.split(",").map(Number)),
   }))
 
+/**
+ * Renders `element` into the document, moves the pointer onto a face in the
+ * middle of the flow, away from the nodes, and returns the text the chart shows.
+ */
+async function hoverFlow(element: React.ReactElement) {
+  const host = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(host)
+  await act(async () => root.render(element))
+  const svg = host.querySelector("svg")!
+  svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+  const slices = [...host.querySelectorAll('path[fill^="color-mix(in oklch, color-mix"]')]
+  const corners = slices[slices.length >> 1].getAttribute("d")!.slice(1, -1).split("L")
+  const [x, y] = [0, 1].map(
+    (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+  )
+  await act(() =>
+    svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }))
+  )
+  const text = host.textContent
+  await act(async () => root.unmount())
+  host.remove()
+  return text
+}
+
 describe("SankeyChart3D", () => {
   // The charts are plain SVG, so they render on the server without a DOM.
   test("draws the nodes, labelled, and the flows between them in the colors of their ends", () => {
@@ -120,24 +144,33 @@ describe("SankeyChart3D", () => {
   })
 
   test("a flow under the pointer shows its ends and its value in the tooltip", async () => {
-    const host = document.body.appendChild(document.createElement("div"))
-    const root = createRoot(host)
-    await act(async () => root.render(chart([{ source: "a", target: "b", value: 2 }])))
-    const svg = host.querySelector("svg")!
-    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
-    // A face in the middle of the flow, away from the nodes.
-    const slices = [...host.querySelectorAll('path[fill^="color-mix(in oklch, color-mix"]')]
-    const corners = slices[slices.length >> 1].getAttribute("d")!.slice(1, -1).split("L")
-    const [x, y] = [0, 1].map(
-      (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
-    )
-    await act(() =>
-      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }))
-    )
-    expect(host.textContent).toContain("A → B")
-    expect(host.textContent).toContain("2 kWh")
+    const text = await hoverFlow(chart([{ source: "a", target: "b", value: 2 }]))
+    expect(text).toContain("A → B")
+    expect(text).toContain("2 kWh")
+  })
 
-    await act(async () => root.unmount())
-    host.remove()
+  test("a node without a config entry shows its id in the muted color, and values show as they are", async () => {
+    const element = (
+      <ChartContainer3D config={{ a: { label: "A", color: "red" } }}>
+        <SankeyChart3D data={[{ source: "a", target: "x", value: 3 }]} />
+      </ChartContainer3D>
+    )
+    const html = renderToString(element)
+    expect(html).toContain(">x</text>")
+    expect(html).toContain("var(--muted-foreground)")
+
+    expect(await hoverFlow(element)).toContain("A → x3")
+  })
+
+  test("nodes without width keep their labels outside, by the side they sit on", () => {
+    // The left and the right face of such a node fall on one line, so they cannot tell the way out.
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <SankeyChart3D data={[{ source: "a", target: "b", value: 1 }]} nodeWidth={0} />
+      </ChartContainer3D>
+    )
+    const anchor = (label: string) =>
+      html.match(new RegExp(`<text[^>]*text-anchor="(\\w+)"[^>]*>${label}</text>`))?.[1]
+    expect([anchor("A"), anchor("B")]).toEqual(["end", "start"])
   })
 })
