@@ -50,9 +50,10 @@ npm run lint:fallow    # layering, dead code, test coverage, duplication, health
 health score of the registry drops below 98. With about 80 functions, a
 single function longer than 60 lines costs more than two points, so **no
 function in the registry is longer than 60 lines**. Split a long component
-along its seams, the way the charts do: a hook for behaviour (`useOrbit`), a
-component for one mark (`Bar`, `ScatterPoint`, `AxisEdge3D`), a function for a
-computation (`barBox`, `barCorners`).
+along its seams, the way the registry does: a hook for behaviour (`useOrbit`,
+`useCanvas`), a component for one part of the chart (`AxisEdge3D`,
+`ChartShortcuts3D`), a function for a computation (`barBox`, `barMarks`,
+`moved`).
 
 ### The layers
 
@@ -75,8 +76,9 @@ Two consequences worth remembering:
   installs with `chart-3d` alone, so a user who adds the bar chart gets two
   files, not the whole registry.
 - **The core knows nothing about the charts.** It holds the container, the
-  camera, the axes, the tooltip and the helpers (`axis`, `linear`,
-  `worldBox`, `shade`, `center`). A helper that two charts need moves here.
+  camera and its shortcuts, the axes, the marks and their renderers, the
+  tooltip and the helpers (`axis`, `linear`, `worldBox`, `shade`, `center`).
+  A helper that two charts need moves here.
 
 ### The chart template
 
@@ -88,7 +90,7 @@ named `<name>-chart-3d.tsx` owns exactly two exports:
 
 import { box, cubes3D, sort, type AxesSpec } from "d3-3d"
 
-import { Axes3D, axis, useChart3D, worldBox } from "@/registry/new-york/ui/chart-3d"
+import { Axes3D, Marks3D, axis, shade, useChart3D, worldBox } from "@/registry/new-york/ui/chart-3d"
 
 // The props, a named type: the docs generate the API table from it, and
 // every prop carries a comment and, if it has one, its @defaultValue.
@@ -98,10 +100,16 @@ export type BarChart3DProps<T extends Record<string, unknown> = Record<string, u
 }
 
 // The component: reads the camera from the container, projects the data
-// with d3-3d on every render and returns SVG elements.
+// with d3-3d on every render and hands its shapes to the core as marks.
 export function BarChart3D<T extends Record<string, unknown>>({ data }: BarChart3DProps<T>) {
-  const { config, camera, setTooltip } = useChart3D()
+  const { config, camera } = useChart3D()
   // ...
+  return (
+    <>
+      <Axes3D spec={spec} world={world} />
+      <Marks3D marks={marks} />
+    </>
+  )
 }
 ```
 
@@ -115,6 +123,8 @@ The rules that `scripts/check-template.mjs` enforces:
 - a chart imports only React, the npm packages that `chart-3d` declares in
   `registry.json`, and the core as `@/registry/new-york/ui/chart-3d`, which
   the shadcn CLI rewrites to the `ui` alias of the project;
+- a chart renders no SVG or HTML elements of its own: it draws through
+  `Axes3D` and `Marks3D`, so every renderer can draw it;
 - a chart depends on `niekes/charts-3d/chart-3d` in the registry and leaves
   the npm dependencies to the core. On `master` the dependency is unpinned;
   only the release commit, which the release workflow makes beside `master`,
@@ -125,14 +135,58 @@ The rules that `scripts/check-template.mjs` enforces:
 
 How the charts draw, so that a new one draws the same way:
 
-- **Depth by order.** SVG has no depth buffer. Sort the projected shapes with
-  d3-3d's `sort` and give them stable keys, so React moves the DOM nodes.
+- **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
+  a circle, a CSS fill and, if it has one, a tooltip - and hands them to
+  `Marks3D`. The core draws them and finds the one under the pointer, so a
+  chart has no pointer handlers.
+- **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
+  projected shapes with d3-3d's `sort` and give the marks stable keys, so
+  React moves the DOM nodes.
 - **Culling.** The faces of `cubes3D` point outwards: draw the ones that are
   `ccw`, the ones that face the camera.
-- **Shading in CSS.** `shade(face, color)` returns a `color-mix()`, so a face
-  follows the theme without a re-render. Never compute colors in JavaScript.
+- **Shading in CSS.** `shade(face, color)` returns a `color-mix()`. A chart
+  never computes a color, it hands CSS colors to the core: SVG leaves them to
+  the browser, so a face follows the theme without a re-render, and the
+  canvas resolves them in the core, through the DOM, and repaints when the
+  theme changes.
 - **The world box.** `worldBox(spec)` maps the axes into the box from -1 to 1,
   y up. Use it instead of building the scales by hand.
+
+### Renderers
+
+`ChartContainer3D` takes `renderer`: `"svg"`, the default, or `"canvas"`, for
+charts with many marks. Only the marks change hands: the box, its labels, the
+tooltip, the legend and the shortcut panel are SVG and HTML with every
+renderer, so text stays sharp and the theme stays in CSS.
+
+- **SVG first.** The server, the prerender and the first render on the client
+  draw SVG. An effect then switches to the requested renderer if the browser
+  has it, and stays on SVG where it has none, as in jsdom.
+- **One scene.** `Marks3D` writes its marks into the scene of the container;
+  the canvas paints the scene and the hover hit-tests it, whatever the
+  renderer.
+- **WebGL is the next link.** It joins the same chain: `"webgl"` probes
+  `getContext("webgl")` and falls back to `"canvas"`. Its paint function
+  triangulates the same marks - a fan per polygon, a fan of 12 segments per
+  circle - draws them in paint order without a depth test, and takes its
+  colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
+  only once the projection on the CPU is what is slow.
+
+### Interaction
+
+The camera moves through one table, `SHORTCUTS` in the core: the keys of a
+row move the camera, and the shortcut panel - the keyboard button and `?` -
+lists every row. A new gesture is a new row, so the panel never misses one.
+
+- **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
+  zoom stop at their limits there and nowhere else.
+- **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
+  pinches; the wheel alone scrolls the page. The listener is the core's own,
+  because React listens to the wheel passively and cannot keep the browser
+  from zooming the page.
+- **`orbiting` is true while the camera turns**, not while it pans or zooms,
+  which move the labels as they are. The axis labels read it from
+  `data-orbiting` on the svg.
 
 ### Code style
 

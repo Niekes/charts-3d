@@ -144,6 +144,20 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     }
   }
 
+  // The core draws the marks with the renderer of the container, so a chart
+  // that renders elements of its own would draw them with SVG only.
+  const element = source.match(
+    /<(svg|g|path|circle|rect|line|polyline|polygon|text|canvas|div|span)\b/
+  )
+  if (element) {
+    fail(
+      `${UI}/${file}: a chart draws through Axes3D and Marks3D, not with <${element[1]}> of its own, so every renderer can draw it`
+    )
+  }
+  if (!source.includes("<Marks3D")) {
+    fail(`${UI}/${file}: a chart hands its shapes to Marks3D`)
+  }
+
   const dependencies = items.get(name)?.registryDependencies ?? []
   if (
     dependencies.length !== 1 ||

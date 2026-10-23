@@ -5,7 +5,7 @@ description: The container, camera, axes and tooltip that every 3D chart builds 
 
 import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
-`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box and `shade` lights a face.
+`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box, `Marks3D` draws your shapes with every renderer and `shade` lights a face.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -36,7 +36,7 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
     Install the dependencies:
 
     ```package-install
-    npm install d3-3d d3-array
+    npm install d3-3d d3-array lucide-react
     ```
 
     Copy the code into `components/ui/chart-3d.tsx`:
@@ -47,6 +47,20 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
   </Tab>
 </Tabs>
+
+## Renderers
+
+The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks.
+
+```tsx
+<ChartContainer3D config={chartConfig} renderer="canvas">
+```
+
+The box, its labels, the tooltip and the legend stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none.
+
+## Shortcuts
+
+Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it. `shortcuts={false}` hides the button.
 
 ## API Reference
 
@@ -59,3 +73,9 @@ Takes the props of a `div` as well.
 ### View3D
 
 <auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="View3D" />
+
+### Mark3D
+
+One shape that `Marks3D` draws, in paint order.
+
+<auto-type-table path="../../../registry/new-york/ui/chart-3d.tsx" name="Mark3D" />
