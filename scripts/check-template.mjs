@@ -96,6 +96,9 @@ for (const file of files) {
   if (!source.startsWith('"use client"')) {
     fail(`${UI}/${file}: must start with the "use client" directive`)
   }
+  if (/(v8|c8|istanbul)\s+ignore/.test(source)) {
+    fail(`${UI}/${file}: no coverage ignore comments; test the code or delete it`)
+  }
   if (/^export\s+default\b/m.test(source)) {
     fail(`${UI}/${file}: the registry has no default exports`)
   }

@@ -50,17 +50,22 @@ export function BarChart3D<T extends Record<string, unknown>>({
 }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const series = keys ?? Object.keys(config)
-  const values = data.flatMap((d) => series.map((key) => Number(d[key]) || 0))
+  // A value that is not a number stands as no bar, one of height 0.
+  const cells = data.flatMap((d, i) =>
+    series.map((key, j) => ({ i, j, key, value: Number(d[key]) || 0 }))
+  )
 
-  const { spec, world, size } = barBox(data.length, series.length, values, barSize)
+  const { spec, world, size } = barBox(
+    data.length,
+    series.length,
+    cells.map((cell) => cell.value),
+    barSize
+  )
   const bars = cubes3D()
     .camera(camera)
     .data(
-      data.flatMap((d, i) =>
-        series.map((key, j) => {
-          const value = Number(d[key]) || 0
-          return Object.assign(barCorners(world, i, j, value, size), { i, key, value })
-        })
+      cells.map(({ i, j, key, value }) =>
+        Object.assign(barCorners(world, i, j, value, size), { i, key, value })
       )
     )
     .map((bar) => Object.assign(bar, { bottom: bar.faces.find((f) => f.face === "bottom")! }))
@@ -74,7 +79,8 @@ export function BarChart3D<T extends Record<string, unknown>>({
         world={world}
         titles={titles}
         format={{
-          x: (i) => (format.x ?? String)(String(data[i]?.[index] ?? "")),
+          // The ticks along x are the indices of the entries.
+          x: (i) => (format.x ?? String)(String(data[i][index] ?? "")),
           y: format.y,
           z: (j) => config[series[j]]?.label ?? series[j],
         }}

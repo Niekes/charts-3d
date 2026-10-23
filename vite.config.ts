@@ -83,6 +83,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "json-summary", "html"],
       include: ["registry/**/*.tsx"],
+      // The registry is the code that lands in other projects: `npm run coverage` fails below this.
+      thresholds: { statements: 98, branches: 98, functions: 98, lines: 98 },
     },
   },
 })

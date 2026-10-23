@@ -88,6 +88,25 @@ describe("ChartContainer3D", () => {
     expect(html).toContain("--color-b: black;")
   })
 
+  test("a theme without a color for one theme leaves the variable out there", () => {
+    const html = renderToString(
+      <ChartContainer3D id="t" config={{ b: { theme: { light: "white", dark: "" } } }}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(html).toContain("--color-b: white;")
+    expect(html.split(".dark [data-chart=chart-t]")[1]).not.toContain("--color-b")
+  })
+
+  test("legend shows the config below the chart", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{ a: { label: "Apples", color: "red" } }} legend>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(html).toContain("Apples")
+  })
+
   test("useChart3D outside a container throws", () => {
     function Orphan() {
       useChart3D()
@@ -146,23 +165,47 @@ describe("keyboard", () => {
   })
 })
 
-describe("shortcuts", () => {
-  function Camera() {
-    const { camera } = useChart3D()
-    return (
-      <text>
-        {JSON.stringify({ origin: camera.origin(), scale: camera.scale(), yaw: camera.rotateY() })}
-      </text>
-    )
-  }
+/** The view of the camera, written into the chart, where `view` reads it back. */
+function Camera() {
+  const { camera } = useChart3D()
+  return (
+    <text>
+      {JSON.stringify({ origin: camera.origin(), scale: camera.scale(), yaw: camera.rotateY() })}
+    </text>
+  )
+}
+const view = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
+const pointer = (type: string, clientX: number, clientY: number, relatedTarget?: EventTarget) =>
+  new MouseEvent(type, { bubbles: true, clientX, clientY, relatedTarget: relatedTarget ?? null })
+
+/** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
+function stubCanvas() {
+  const ctx = Object.fromEntries(
+    ["setTransform", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map((m) => [
+      m,
+      vi.fn(),
+    ])
+  )
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  return ctx
+}
+
+describe("shortcuts", () => {
   test("Shift and an arrow pan, + and - and Ctrl with the wheel zoom, 0 and a double click reset", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
         <Camera />
       </ChartContainer3D>
     )
-    const read = () => JSON.parse(chart.host.querySelector("text")!.textContent!)
+    const read = () => view(chart.host)
 
     await chart.send(key("ArrowRight", true))
     expect(read()).toEqual({ origin: { x: 340, y: 200 }, scale: 120, yaw: 0 })
@@ -222,6 +265,81 @@ describe("shortcuts", () => {
   })
 })
 
+describe("pointer", () => {
+  test("a press that wanders a few pixels stays a click, a drag turns the camera", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointermove", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.send(pointer("pointerdown", 150, 150))
+    await chart.send(pointer("pointermove", 152, 151))
+    expect(view(chart.host).yaw).toBe(0)
+    expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
+
+    await chart.send(pointer("pointermove", 196, 150))
+    expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
+    expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
+    // The drag takes the tooltip away and marks the chart as orbiting.
+    expect(chart.host.textContent).not.toContain("Square")
+    expect(chart.svg.dataset.orbiting).toBe("true")
+
+    await chart.send(pointer("pointermove", 200, 150))
+    expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
+    await chart.send(pointer("pointerup", 200, 150))
+    expect(chart.svg.dataset.orbiting).toBe("false")
+
+    await chart.unmount()
+  })
+
+  test("held Space turns a drag into a pan, until Space or the pointer is let go", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(key(" "))
+    await chart.send(pointer("pointerdown", 100, 100))
+    await chart.send(pointer("pointermove", 130, 110))
+    expect(view(chart.host)).toMatchObject({ origin: { x: 350, y: 210 }, yaw: 0 })
+    expect(chart.svg.dataset.orbiting).toBe("false")
+
+    await chart.send(pointer("pointercancel", 130, 110))
+    await chart.send(new KeyboardEvent("keyup", { key: " ", bubbles: true }))
+    await chart.send(pointer("pointerdown", 100, 100))
+    await chart.send(pointer("pointermove", 130, 100))
+    expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
+
+    await chart.unmount()
+  })
+
+  test("a move within a mark keeps its tooltip, leaving the chart takes it away", async () => {
+    const said = {
+      ...marks[0],
+      tooltip: { at: { x: 0, y: 0 }, items: [{ label: "Note", value: "n/a" }] },
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[said]} />
+      </ChartContainer3D>
+    )
+    await chart.send(pointer("pointermove", 150, 150))
+    await chart.send(pointer("pointermove", 160, 160))
+    // A value that is not a number shows as it is.
+    expect(chart.host.textContent).toContain("Noten/a")
+    await chart.send(pointer("pointerout", 160, 160, chart.host))
+    expect(chart.host.textContent).not.toContain("Note")
+
+    await chart.unmount()
+  })
+})
+
 describe("Marks3D", () => {
   test("draws a polygon as a path and a circle as a circle", () => {
     const html = renderToString(
@@ -231,6 +349,15 @@ describe("Marks3D", () => {
     )
     expect(html).toContain('d="M100,100L200,100L200,200L100,200Z" fill="red"')
     expect(html).toMatch(/<circle cx="400" cy="100" r="10" fill="blue" stroke="white"/)
+  })
+
+  test("a circle without a stroke has no outline", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[{ key: "c", points: [{ x: 1, y: 2 }], r: 3, fill: "red" }]} />
+      </ChartContainer3D>
+    )
+    expect(html).toContain('<circle cx="1" cy="2" r="3" fill="red">')
   })
 
   test("the mark under the pointer shows its tooltip, the one painted last on top", async () => {
@@ -286,20 +413,7 @@ describe("renderer", () => {
   })
 
   test("canvas paints the marks on a canvas over the chart, and the hover still finds them", async () => {
-    const ctx = Object.fromEntries(
-      ["setTransform", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map((m) => [
-        m,
-        vi.fn(),
-      ])
-    )
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        disconnect() {}
-      }
-    )
+    const ctx = stubCanvas()
     const chart = await mount(
       <ChartContainer3D config={{}} renderer="canvas">
         <Marks3D marks={marks} />
@@ -314,6 +428,28 @@ describe("renderer", () => {
     await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
     expect(chart.host.textContent).toContain("Square")
 
+    await chart.unmount()
+  })
+  test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {
+    const ctx = stubCanvas()
+    const bare = { key: "bare", points: [{ x: 300, y: 300 }], r: 5, fill: "green" }
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[bare]} />
+      </ChartContainer3D>
+    )
+    expect(ctx.arc).toHaveBeenCalledWith(300, 300, 5, 0, 2 * Math.PI)
+    expect(ctx.stroke).not.toHaveBeenCalled()
+
+    const painted = ctx.fill.mock.calls.length
+    await act(async () => {
+      document.documentElement.classList.add("dark")
+      // A MutationObserver reports after the change, not during it.
+      await new Promise((resolve) => setTimeout(resolve))
+    })
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
+
+    document.documentElement.classList.remove("dark")
     await chart.unmount()
   })
 })
@@ -394,6 +530,25 @@ describe("Axes3D", () => {
     expect(shown.filter((label) => label.startsWith("y"))).toEqual(["y0"])
     expect(shown.filter((label) => label.startsWith("x"))).toHaveLength(spec.x.ticks.length)
     await chart.unmount()
+  })
+
+  test("titles the axes, sets an axis on the right from its start, and labels with numbers and elements", () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    // Turned by π/4, one axis runs along the right side of the box.
+    const html = renderToString(
+      <ChartContainer3D config={{}} defaultView={{ yaw: Math.PI / 4, tilt: Math.PI / 6 }}>
+        <Axes3D
+          spec={spec}
+          world={worldBox(spec)}
+          titles={{ x: "Width", y: "Height", z: "Depth" }}
+          format={{ x: (v) => v * 10, z: (v) => <tspan>z{v}</tspan> }}
+        />
+      </ChartContainer3D>
+    )
+    for (const title of ["Width", "Height", "Depth"]) expect(html).toContain(`>${title}</text>`)
+    expect(html).toContain('text-anchor="start"')
+    expect(html).toContain(">100</text>")
+    expect(html).toContain("<tspan>z<!-- -->10</tspan>")
   })
 })
 

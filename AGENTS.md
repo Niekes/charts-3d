@@ -66,6 +66,24 @@ along its seams, the way the registry does: a hook for behaviour (`useOrbit`,
 `ChartShortcuts3D`), a function for a computation (`barBox`, `barMarks`,
 `moved`).
 
+### Test coverage
+
+`npm run coverage` fails when the registry drops below **98 % in each of
+statements, branches, functions and lines**, and CI runs it on every pull
+request. Three rules keep the number honest:
+
+- **New code comes with its tests.** A chart, a prop or a branch that no test
+  reaches does not merge.
+- **Unreachable code is deleted, not excluded.** Coverage ignore comments
+  (`v8 ignore`, `istanbul ignore`) fail the template check; a guard for a case
+  that cannot happen goes, with a comment that says why it cannot.
+- **A fix comes with the test that fails without it.**
+
+The tests drive the charts the way a user does: render them, send pointer and
+keyboard events, read what they draw. jsdom has no layout and no canvas, so the
+tests stub `getBoundingClientRect`, `setPointerCapture` and `getContext` where
+they need them, see `mount` and `stubCanvas` in `tests/chart-3d.test.tsx`.
+
 ### The layers
 
 Dependencies point inwards only. The zones are declared in `.fallowrc.jsonc`

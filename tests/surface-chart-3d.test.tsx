@@ -51,4 +51,16 @@ describe("SurfaceChart3D", () => {
     expect(quads(html)).toHaveLength(1)
     expect(html).not.toContain("NaN")
   })
+
+  test("an empty grid draws the box and no surface", () => {
+    for (const data of [[], [[]]]) {
+      const html = renderToString(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D data={data} />
+        </ChartContainer3D>
+      )
+      expect(quads(html)).toHaveLength(0)
+      expect(html).not.toContain("NaN")
+    }
+  })
 })
