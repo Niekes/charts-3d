@@ -183,6 +183,10 @@ How the charts draw, so that a new one draws the same way:
   theme changes.
 - **The world box.** `worldBox(spec)` maps the axes into the box from -1 to 1,
   y up. Use it instead of building the scales by hand.
+- **Transitions.** A chart glides into new data by tweening its numbers with
+  `useTween`, before it projects - never the projected marks: every frame
+  reprojects, so the axes scale along, and the camera answers at once. A new
+  key starts at `enter`, a gone one goes at once, reduced motion jumps.
 
 ### Renderers
 

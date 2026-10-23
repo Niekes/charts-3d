@@ -4,7 +4,14 @@ import * as React from "react"
 import { extent } from "d3-array"
 import { points3D, sort, type AxesSpec } from "d3-3d"
 
-import { Axes3D, Marks3D, axis, useChart3D, worldBox } from "@/registry/new-york/ui/chart-3d"
+import {
+  Axes3D,
+  Marks3D,
+  axis,
+  useChart3D,
+  useTween,
+  worldBox,
+} from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per point. */
@@ -47,10 +54,12 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
-  const read = (d: T, axis: keyof AxesSpec) => Number(d[fields[axis]])
+  // The positions glide entry by entry, so the points, the axes and the tooltips follow.
+  const values = useTween(pointValues(data, fields))
+  const read = (i: number, axis: keyof AxesSpec) => values[`${axis}${i}`]
 
   const range = (a: keyof AxesSpec) => {
-    const [lo = 0, hi = 0] = extent(data, (d) => read(d, a))
+    const [lo = 0, hi = 0] = extent(data, (_, i) => read(i, a))
     return axis(lo, hi)
   }
   const spec: AxesSpec = { x: range("x"), y: range("y"), z: range("z") }
@@ -58,9 +67,9 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
 
   const points = points3D<{ d: T; i: number }>()
     .camera(camera)
-    .x(({ d }) => world.x(read(d, "x")))
-    .y(({ d }) => world.y(read(d, "y")))
-    .z(({ d }) => world.z(read(d, "z")))
+    .x(({ i }) => world.x(read(i, "x")))
+    .y(({ i }) => world.y(read(i, "y")))
+    .z(({ i }) => world.z(read(i, "z")))
   const fallback = Object.keys(config)[0]
 
   const marks = points
@@ -80,7 +89,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
           title: series ? (config[key]?.label ?? key) : undefined,
           items: (["x", "y", "z"] as const).map((a) => ({
             label: titles?.[a] ?? fields[a],
-            value: read(p.d, a),
+            value: read(p.i, a),
           })),
         },
       }
@@ -91,5 +100,17 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       <Axes3D spec={spec} world={world} format={format} titles={titles} />
       <Marks3D marks={marks} />
     </>
+  )
+}
+
+/** The position of every entry, keyed by its axis and index, gliding into new data. */
+function pointValues<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Record<keyof AxesSpec, keyof T & string>
+) {
+  return Object.fromEntries(
+    data.flatMap((d, i) =>
+      (["x", "y", "z"] as const).map((a) => [`${a}${i}`, Number(d[fields[a]])])
+    )
   )
 }

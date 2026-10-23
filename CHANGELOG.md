@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `animationDuration` on `ChartContainer3D` and `useTween` in the core: a chart
+  tweens the numbers of its data before it projects, so new data glides in -
+  the axes, the domains and the shading follow - while the camera answers at
+  once. The bar, scatter, surface and sankey charts use it, and their docs
+  pages show an Update example that presses it.
 - `sankey-chart-3d`: flows from left to right, as bands between boxes. The core
   gains `Labels3D`, for text beside the marks, and `cubeMarks`, which the bar
   chart uses too.

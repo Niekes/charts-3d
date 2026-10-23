@@ -3,6 +3,7 @@ title: Sankey Chart 3D
 description: Flows from left to right, as bands between boxes.
 ---
 
+import SankeyChart3DUpdateDemo from "@/docs/examples/sankey-chart-3d-update-demo"
 import SankeyChart3DDemo from "@/docs/examples/sankey-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -43,6 +44,20 @@ import SankeyChart3DDemo from "@/docs/examples/sankey-chart-3d-demo"
 
     Update the import paths to match your project setup.
 
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the nodes and their bands glide to their new widths over the
+`animationDuration` of the container.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SankeyChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/sankey-chart-3d-update-demo.tsx</include>
   </Tab>
 </Tabs>
 

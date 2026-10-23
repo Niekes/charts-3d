@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { describe, expect, test } from "vite-plus/test"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D, type View3D } from "@/registry/new-york/ui/chart-3d"
 import { SankeyChart3D, type SankeyChart3DProps } from "@/registry/new-york/ui/sankey-chart-3d"
@@ -172,5 +172,43 @@ describe("SankeyChart3D", () => {
     const anchor = (label: string) =>
       html.match(new RegExp(`<text[^>]*text-anchor="(\\w+)"[^>]*>${label}</text>`))?.[1]
     expect([anchor("A"), anchor("B")]).toEqual(["end", "start"])
+  })
+})
+
+describe("SankeyChart3D transitions", () => {
+  afterEach(() => vi.useRealTimers())
+
+  test("new values glide in over the animationDuration of the container", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: SankeyChart3DProps["data"]) =>
+      act(async () => root.render(chart(data)))
+    const hover = async () => {
+      const svg = host.querySelector("svg")!
+      svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+      // Off the chart first, so the hover reads the tooltip of the slice as it is now.
+      await act(() =>
+        svg.dispatchEvent(new MouseEvent("pointerout", { bubbles: true, relatedTarget: host }))
+      )
+      const slices = [...host.querySelectorAll('path[fill^="color-mix(in oklch, color-mix"]')]
+      const corners = slices[slices.length >> 1].getAttribute("d")!.slice(1, -1).split("L")
+      const [x, y] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      await act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }))
+      )
+      return host.textContent
+    }
+
+    await render([{ source: "a", target: "b", value: 2 }])
+    await render([{ source: "a", target: "b", value: 7 }])
+    expect(await hover()).toContain("2 kWh")
+    await act(() => vi.advanceTimersByTime(700))
+    expect(await hover()).toContain("7 kWh")
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 })

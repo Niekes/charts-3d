@@ -3,6 +3,7 @@ title: Surface Chart 3D
 description: A shaded surface over a grid of heights.
 ---
 
+import SurfaceChart3DUpdateDemo from "@/docs/examples/surface-chart-3d-update-demo"
 import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -43,6 +44,20 @@ import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
 
     Update the import paths to match your project setup.
 
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the surface morphs into the new wave over the `animationDuration`
+of the container, and its color ramp follows the heights.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SurfaceChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/surface-chart-3d-update-demo.tsx</include>
   </Tab>
 </Tabs>
 

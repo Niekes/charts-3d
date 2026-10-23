@@ -2,7 +2,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
-import { describe, expect, test } from "vite-plus/test"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
@@ -93,5 +93,36 @@ describe("BarChart3D", () => {
     // `b` has no label in the config, the entry without a name has an empty one.
     expect(html).toMatch(/>b<\/text>/)
     expect(html).toMatch(/><\/text>/)
+  })
+})
+
+describe("BarChart3D transitions", () => {
+  afterEach(() => vi.useRealTimers())
+
+  test("new data glides in over the animationDuration of the container", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (values: { name: string; a: number; b: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={values} index="name" />
+          </ChartContainer3D>
+        )
+      )
+
+    await render(data)
+    await render([
+      { name: "x", a: 10, b: -20 },
+      { name: "y", a: 8, b: -15 },
+    ])
+    // The y axis still shows the ticks of the old values.
+    expect(host.textContent).not.toContain("-20")
+    await act(() => vi.advanceTimersByTime(700))
+    expect(host.textContent).toContain("-20")
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 })
