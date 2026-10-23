@@ -23,7 +23,7 @@
       "type": "registry:ui",
       "title": "Bar Chart 3D",
       "description": "Bars on a floor, one row per entry and one per series.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v0.2.0"],
       "files": [
         {
           "path": "registry/new-york/ui/bar-chart-3d.tsx",
@@ -37,7 +37,7 @@
       "type": "registry:ui",
       "title": "Scatter Chart 3D",
       "description": "Points in a box, colored by series.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v0.2.0"],
       "files": [
         {
           "path": "registry/new-york/ui/scatter-chart-3d.tsx",
@@ -51,7 +51,7 @@
       "type": "registry:ui",
       "title": "Surface Chart 3D",
       "description": "A shaded surface over a grid of heights.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v0.2.0"],
       "files": [
         {
           "path": "registry/new-york/ui/surface-chart-3d.tsx",
