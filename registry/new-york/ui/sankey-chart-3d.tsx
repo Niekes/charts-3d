@@ -36,8 +36,9 @@ const DEPTH = 0.4
 const RIBBON = 0.7
 // The slices of a flow from one column to the next: the more, the smoother it bends.
 const SEGMENTS = 16
-// The depth between the middles of two lanes, where flows that cross pass one another.
-const SPACING = 0.36
+// Where flows cross, they share the depth of a flow, each in a lane. The way into the lanes
+// turns a face at most this steeply; where it would turn one steeper, the lanes start at the node.
+const STEEPEST = 1.5
 // Closer than this on the screen, the two sides of a node lift its label over it.
 const SWING = 8
 
@@ -62,7 +63,8 @@ type Flow = { key: string; source: SankeyNode; target: SankeyNode; value: number
 /**
  * The part of a flow from one column to the next, from the middle of its slot
  * at the source, `y0`, to the one at the target, `y1`. A hop that crosses
- * others belongs to their `knot` and moves to the depth `z` while it passes them.
+ * others belongs to their `knot` and narrows into its lane, around the depth
+ * `z`, while it passes them.
  */
 type Hop = {
   flow: Flow
@@ -75,11 +77,11 @@ type Hop = {
 }
 
 /**
- * Hops of one gap that cross, directly or through one another. Their lanes
- * hold from the cross-section `from` to `to`, counted in slices, and `first`,
- * the topmost at the source, stands for the height of the knot.
+ * Hops of one gap that cross, directly or through one another. Their lanes,
+ * each `depth` deep, hold from the cross-section `from` to `to`, counted in
+ * slices, and `first`, the topmost at the source, stands for the height of the knot.
  */
-type Knot = { from: number; to: number; first: Hop }
+type Knot = { from: number; to: number; first: Hop; depth: number }
 
 /**
  * A part of the chart in the world: a node, or a slice of a flow that has come
@@ -229,14 +231,22 @@ function sankeyColumns(data: SankeyChart3DProps["data"]) {
     if (!nodes.has(id)) nodes.set(id, newNode(id, 0))
     return nodes.get(id)!
   }
+  // A flow is known by its ends, a second one between the same nodes by its count, so its
+  // key, and with it a focus on the flow, outlasts new data.
+  const seen = new Map<string, number>()
   const flows = data
     .filter((d) => d.value > 0)
-    .map((d, i) => ({
-      key: String(i),
-      source: node(d.source),
-      target: node(d.target),
-      value: d.value,
-    }))
+    .map((d) => {
+      const ends = JSON.stringify([d.source, d.target])
+      const count = seen.get(ends) ?? 0
+      seen.set(ends, count + 1)
+      return {
+        key: count ? `${ends}#${count}` : ends,
+        source: node(d.source),
+        target: node(d.target),
+        value: d.value,
+      }
+    })
 
   // Bellman-Ford for the longest paths: a pass more than there are nodes means a cycle.
   for (let pass = 0; flows.some((f) => f.target.column <= f.source.column); pass += 1) {
@@ -324,7 +334,7 @@ function stackHops(nodes: SankeyNode[], ky: number) {
 /**
  * Parts the hops that cross, gap by gap. The hops of a gap that cross, directly
  * or through one another, form a knot. The knots of a gap lie one above the
- * other across the whole gap; only the hops within a knot move apart in depth.
+ * other across the whole gap; only the hops within a knot share their depth in lanes.
  */
 function weaveHops(nodes: SankeyNode[], columns: number, ky: number) {
   for (let column = 0; column < columns - 1; column += 1) {
@@ -348,8 +358,10 @@ function weaveHops(nodes: SankeyNode[], columns: number, ky: number) {
 /**
  * The lanes of a knot. Every hop takes the lowest lane that no hop crossing it
  * holds, which needs the fewest, and the lightest lane goes to the front. The
- * hops hold their lanes over the slices where any two of them overlap, so
- * their depth is constant there, and leave the rest for the way in and out.
+ * lanes share the depth of a flow, a third of a lane apart, so nothing reaches
+ * out of it. The hops hold their lanes over the slices where any two of them
+ * overlap, so their depth is constant there, and leave the rest for the way in
+ * and out.
  */
 function knotHops(hops: Hop[], ky: number) {
   const lanes: number[] = []
@@ -367,9 +379,12 @@ function knotHops(hops: Hop[], ky: number) {
   const slices = hops.flatMap((a, i) =>
     hops.slice(i + 1).flatMap((b) => (a.y1 > b.y1 ? overlaps(a, b, ky) : []))
   )
-  const knot = { from: Math.min(...slices), to: Math.max(...slices) + 1, first: hops[0] }
+  // count lanes and count − 1 gaps of a third of a lane fill the depth of a flow.
+  const ribbon = RIBBON * DEPTH
+  const depth = (3 * ribbon) / (4 * count - 1)
+  const knot = { from: Math.min(...slices), to: Math.max(...slices) + 1, first: hops[0], depth }
   for (const [i, hop] of hops.entries()) {
-    hop.z = ((count - 1) / 2 - front.indexOf(lanes[i])) * SPACING
+    hop.z = (ribbon - depth) / 2 - (front.indexOf(lanes[i]) * 4 * depth) / 3
     hop.knot = knot
   }
 }
@@ -429,12 +444,11 @@ function sankeyPieces(nodes: SankeyNode[], columns: number, ky: number, nodeWidt
     const own = node.flow
       ? { key: `way:${node.id}`, band, flow: node.flow, t: share(node.flow, band) }
       : { key: `node:${node.id}`, band, node, t: 0 }
-    const depth = node.flow ? RIBBON * DEPTH : DEPTH
+    const d = node.flow ? RIBBON * DEPTH : DEPTH
     const box = slab(
-      { x: band - half, y, z: 0 },
-      { x: band + half, y, z: 0 },
-      node.y1 - node.y0,
-      depth
+      { x: band - half, y, z: 0, d },
+      { x: band + half, y, z: 0, d },
+      node.y1 - node.y0
     )
     return [
       Object.assign(box, own, { row: y, lane: 0, level: y }),
@@ -448,8 +462,8 @@ function sankeyPieces(nodes: SankeyNode[], columns: number, ky: number, nodeWidt
 /**
  * The slices of a hop from `x0` to `x1`, along an S-curve that leaves and
  * arrives level, so that the hops of a flow join without a kink. A hop of a
- * knot moves into its lane and back along the same curve. Every hop between
- * the same two columns has the same slices.
+ * knot narrows into its lane and widens back along the same curve. Every hop
+ * between the same two columns has the same slices.
  */
 function hopPieces(
   hop: Hop,
@@ -458,17 +472,30 @@ function hopPieces(
   ky: number,
   share: (flow: Flow, at: number) => number
 ): Piece[] {
-  const at = (of: Hop, k: number) => ({
-    x: x0 + ((x1 - x0) * k) / SEGMENTS,
-    y: of.y0 + (of.y1 - of.y0) * ease(k / SEGMENTS),
-    z: of.z * bump(k, of.knot),
-  })
-  const { knot } = hop
+  const ribbon = RIBBON * DEPTH
+  // The S-curve turns a face steepest in its middle, at 1.5 times its mean slope, so a way into
+  // the lanes over `slices` that would turn one steeper than STEEPEST starts in the lanes instead.
+  const gentle = (slices: number, depth: number) =>
+    ((ribbon - depth) * 1.5) / ((slices * (x1 - x0)) / SEGMENTS) <= STEEPEST
+  const knot = hop.knot && {
+    ...hop.knot,
+    from: gentle(hop.knot.from, hop.knot.depth) ? hop.knot.from : 0,
+    to: gentle(SEGMENTS - hop.knot.to, hop.knot.depth) ? hop.knot.to : SEGMENTS,
+  }
+  const at = (of: Hop, k: number) => {
+    const into = bump(k, knot)
+    return {
+      x: x0 + ((x1 - x0) * k) / SEGMENTS,
+      y: of.y0 + (of.y1 - of.y0) * ease(k / SEGMENTS),
+      z: of.z * into,
+      d: ribbon + ((knot?.depth ?? ribbon) - ribbon) * into,
+    }
+  }
   return Array.from({ length: SEGMENTS }, (_, k) => {
     const [from, to] = [at(hop, k), at(hop, k + 1)]
     const first = knot ? [at(knot.first, k), at(knot.first, k + 1)] : [from, to]
     const band = (from.x + to.x) / 2
-    return Object.assign(slab(from, to, hop.flow.value * ky, RIBBON * DEPTH), {
+    return Object.assign(slab(from, to, hop.flow.value * ky), {
       key: `hop:${hop.flow.key}:${hop.source.column}:${k}`,
       band,
       flow: hop.flow,
@@ -483,15 +510,15 @@ function hopPieces(
 
 /**
  * The corners of a slab from the cross-section around `from` to the one around
- * `to`, `height` high and `depth` deep, in the order of box(). The two are
- * equal rectangles, so the faces stay planar and the slab convex.
+ * `to`, `height` high and each `d` deep, in the order of box(). Two rectangles
+ * of one height keep the faces planar and the slab convex.
  */
-function slab(from: Point3D, to: Point3D, height: number, depth: number) {
-  return [depth / 2, -depth / 2].flatMap((dz) => [
-    { x: from.x, y: from.y - height / 2, z: from.z + dz },
-    { x: from.x, y: from.y + height / 2, z: from.z + dz },
-    { x: to.x, y: to.y + height / 2, z: to.z + dz },
-    { x: to.x, y: to.y - height / 2, z: to.z + dz },
+function slab(from: Point3D & { d: number }, to: Point3D & { d: number }, height: number) {
+  return [1, -1].flatMap((side) => [
+    { x: from.x, y: from.y - height / 2, z: from.z + (side * from.d) / 2 },
+    { x: from.x, y: from.y + height / 2, z: from.z + (side * from.d) / 2 },
+    { x: to.x, y: to.y + height / 2, z: to.z + (side * to.d) / 2 },
+    { x: to.x, y: to.y - height / 2, z: to.z + (side * to.d) / 2 },
   ])
 }
 

@@ -15,7 +15,7 @@ import SankeyChart3DDemo from "@/docs/examples/sankey-chart-3d-demo"
   </Tab>
 </Tabs>
 
-Flows that cross pass one another in depth, the lighter one in front, and meet the nodes level again, so a crossing reads the same from every side. Pointing at a flow lights it and its two nodes; pointing at a node lights its flows and the nodes at their other ends, and everything else fades.
+Flows that cross pass one another in depth, so a crossing reads the same from every side: they share the depth of a flow in lanes, one behind the other, and the lane that carries less passes in front. A flow narrows into its lane on its way to the crossing and is whole again at the next node; where that way would be too steep, it keeps to its lane from node to node. Pointing at a flow lights it and its two nodes, pointing at a node lights its flows and the nodes at their other ends, and everything else fades until the pointer leaves the chart.
 
 ## Installation
 

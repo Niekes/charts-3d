@@ -19,10 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corner, turned with the camera but neither panned nor zoomed. Another corner
   moves it, `gizmo={false}` hides it. It is `data-slot="chart-3d-gizmo"`, each
   of its axes `data-axis`, in `--muted-foreground`.
-- `groups` on `Mark3D` and `Label3D`: while the pointer is on a mark, every
-  mark and label that shares none of its groups fades, in place and with every
-  renderer. The sankey chart sets them: pointing at a flow lights it and its two
-  nodes, pointing at a node its flows and the nodes at their other ends.
+- `groups` on `Mark3D` and `Label3D`: pointing at a mark fades every mark and
+  label that shares none of its groups, in place and with every renderer, until
+  the pointer leaves the chart. The sankey chart sets them: pointing at a flow
+  lights it and its two nodes, pointing at a node its flows and the nodes at
+  their other ends.
 - `toward` on `Label3D`: a unit vector that lays the label on that side of its
   point and slides it round the point as the vector turns. The sankey chart
   lays its node labels with it.
@@ -38,10 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `sankey-chart-3d`: flows that cross pass one another in depth, the lighter
-  in front, and meet the nodes level again, so a crossing no longer flips
-  halfway and reads the same from every side.
-
+- `sankey-chart-3d`: flows that cross pass one another in depth, so a crossing
+  no longer flips halfway and reads the same from every side. They share the
+  depth of a flow in lanes, the lane that carries less in front, and nothing
+  reaches out of it; a flow narrows into its lane and is whole again at the
+  next node, or, where that way would be too steep, keeps to its lane.
 - The shortcut panel has a row per label, with the keys and the gesture of an
   action side by side: five rows instead of nine.
 - A key glides the camera to its next view in 200 ms instead of jumping

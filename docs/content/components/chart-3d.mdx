@@ -115,11 +115,11 @@ The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hid
 
 ## Focus
 
-A mark or a label can name the groups it belongs to in `groups`. While the pointer is on a mark, every mark and label that shares none of its groups fades to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
+A mark or a label can name the groups it belongs to in `groups`. Pointing at a mark fades every mark and label that shares none of its groups to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
 
 ```tsx
-// The faces of a flow share its key; the faces of a node carry the keys of all its flows.
-const marks = faces.map((face) => ({ ...face, groups: [flow.key] }))
+// The marks of a flow share its key; the marks of a node carry the keys of all its flows.
+const marks = cubeMarks(key, faces, color, tooltip).map((mark) => ({ ...mark, groups: [flow.key] }))
 ```
 
 ## Labels

@@ -74,8 +74,8 @@ export type Mark3D = {
   tooltip?: Tooltip3D
   /**
    * What the mark belongs to, such as a flow, or connects, such as a node.
-   * While the pointer is over a mark, every mark and label that shares none of
-   * its groups fades; one without groups never does.
+   * Pointing at a mark fades every mark and label that shares none of its
+   * groups, until the pointer leaves the chart; one without groups never fades.
    */
   groups?: string[]
 }
@@ -720,11 +720,12 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
 
 /**
  * The tooltip of the mark under the pointer, the one painted last, and the
- * focus on its groups. `hover` sets them only when the pointer moves onto
- * another mark, so a move within one does not render the chart again. Off
- * the marks and while a drag turns the chart, `hide` drops the tooltip but
- * keeps the focus, so a flow does not flash in the gaps beside it and can be
- * followed from every side; `leave` drops both.
+ * focus on its groups. `hover` sets the tooltip only when the pointer moves
+ * onto another mark, and the focus only when the groups change, so a move
+ * within a mark does not render the chart again. Off the marks and while a
+ * drag turns the chart, `hide` drops the tooltip but keeps the focus, so a
+ * flow does not flash in the gaps beside it and can be followed from every
+ * side; `leave` drops both.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -735,10 +736,11 @@ function useHover(
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
   const show = (mark?: Mark3D) => {
+    // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
+    if (mark?.groups) focus.set(mark.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
     setTooltip(mark?.tooltip ?? null)
-    if (mark?.groups) focus.set(mark.groups)
   }
 
   return {
