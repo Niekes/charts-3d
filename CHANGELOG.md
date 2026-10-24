@@ -39,9 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `sankey-chart-3d`: flows that cross pass one another in depth, the lane that
-  carries less in front, so a crossing no longer flips halfway and reads the
-  same from every side. Where the nodes leave room, the flows meet them level.
+- `sankey-chart-3d`: flows that cross pass one another in depth, so a crossing
+  no longer flips halfway and reads the same from every side. They share the
+  depth of a flow in lanes, the lane that carries less in front, and nothing
+  reaches out of it; a flow narrows into its lane and is whole again at the
+  next node, or, where that way would be too steep, keeps to its lane.
 - The shortcut panel has a row per label, with the keys and the gesture of an
   action side by side: five rows instead of nine.
 - A key glides the camera to its next view in 200 ms instead of jumping

@@ -54,6 +54,25 @@ function slices(html: string, source: string, target: string) {
 }
 
 /**
+ * The screen heights at the two node ends of the flow from `source` to `target`:
+ * of the corners of its first slice at its source and of its last at its target.
+ */
+function ends(html: string, source: string, target: string) {
+  const all = faces(html)
+  const bySlice = [...slices(html, source, target).entries()].sort(([a], [b]) => a - b)
+  const sides = [
+    [bySlice[0][1], Math.min],
+    [bySlice.at(-1)![1], Math.max],
+  ] as const
+  return sides.map(([ids, side]) => {
+    const corners = ids.flatMap((i) => all[i].corners)
+    const edge = side(...corners.map(([x]) => x))
+    const ys = corners.filter(([x]) => x === edge).map(([, y]) => y)
+    return [Math.min(...ys), Math.max(...ys)]
+  })
+}
+
+/**
  * Renders `element` into the document and points at the middle of the last
  * painted face whose fill `pick` takes. Returns, before and after, the corners
  * of the faces in paint order, their fills, and the class of every label.
@@ -337,12 +356,12 @@ describe("SankeyChart3D", () => {
         })
         return zs.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0)
       })
-    // Every hop that moves holds one of two lanes, ±SPACING/2.
+    // Every hop that narrows holds one of two lanes, around ±0.08.
     const lanes = new Set(deepest.filter((z) => Math.abs(z) > 0.01).map((z) => z.toFixed(2)))
-    expect(lanes).toEqual(new Set(["0.18", "-0.18"]))
+    expect(lanes).toEqual(new Set(["0.08", "-0.08"]))
   })
 
-  test("flows that cross part in depth by a lane where they pass, and meet the nodes level", () => {
+  test("flows that cross narrow into lanes within the depth of a flow, and meet the nodes whole", () => {
     // From straight above, the screen shows the depth: y = 200 + 120·z.
     const html = renderToString(chart(knot, { yaw: 0, tilt: Math.PI / 2 }))
     const all = faces(html)
@@ -354,24 +373,48 @@ describe("SankeyChart3D", () => {
           return ((Math.min(...ys) + Math.max(...ys)) / 2 - 200) / 120
         })
     const [ac, bd, ad] = [depths("a", "c"), depths("b", "d"), depths("a", "d")]
-    // The lighter b → d in front (+z), a → c behind, a lane apart where they cross.
-    expect(Math.max(...bd)).toBeCloseTo(0.18, 2)
-    expect(Math.min(...ac)).toBeCloseTo(-0.18, 2)
+    // The lighter b → d in the front lane, a → c in the back one, around ±0.08 where they cross.
+    expect(Math.max(...bd)).toBeCloseTo(0.08, 2)
+    expect(Math.min(...ac)).toBeCloseTo(-0.08, 2)
     // a → d crosses nothing and stays where it was.
     expect(ad.every((z) => Math.abs(z) < 0.01)).toBe(true)
-    // At the nodes both start and end level: the outer corners of their first and last slices sit at z = ±0.14.
-    for (const flow of [slices(html, "a", "c"), slices(html, "b", "d")]) {
-      const ends = [...flow.entries()].sort(([a], [b]) => a - b)
-      for (const [ids, side] of [
-        [ends[0][1], Math.min],
-        [ends.at(-1)![1], Math.max],
-      ] as const) {
-        const corners = ids.flatMap((i) => all[i].corners)
-        const edge = side(...corners.map(([x]) => x))
-        const ys = corners.filter(([x]) => x === edge).map(([, y]) => y)
-        expect([Math.min(...ys), Math.max(...ys)]).toEqual([183.2, 216.8])
-      }
-    }
+    // Nothing reaches out of the depth of a flow, z = ±0.14.
+    const ys = [...slices(html, "a", "c").values(), ...slices(html, "b", "d").values()]
+      .flat()
+      .flatMap((i) => all[i].corners.map(([, y]) => y))
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(183.2)
+    expect(Math.max(...ys)).toBeLessThanOrEqual(216.8)
+    // At the nodes both are whole: the outer corners of their first and last slices sit at z = ±0.14.
+    expect(ends(html, "a", "c")).toEqual([
+      [183.2, 216.8],
+      [183.2, 216.8],
+    ])
+    expect(ends(html, "b", "d")).toEqual([
+      [183.2, 216.8],
+      [183.2, 216.8],
+    ])
+  })
+
+  test("where the way into the lanes would be steep, the flows start in their lanes at the node", () => {
+    // Six columns leave slices a fifth as wide as two do: narrowing over a few of them would turn
+    // a face more steeply than STEEPEST, so the lanes reach from node to node.
+    const chain = [
+      { source: "c", target: "g", value: 8 },
+      { source: "d", target: "g", value: 6 },
+      { source: "g", target: "h", value: 14 },
+      { source: "h", target: "i", value: 14 },
+      { source: "i", target: "j", value: 14 },
+    ]
+    const html = renderToString(chart([...knot, ...chain], { yaw: 0, tilt: Math.PI / 2 }))
+    // From straight above, y = 200 + 120·z: b → d in the front lane, 0.02 to 0.14, a → c in the back one.
+    expect(ends(html, "b", "d")).toEqual([
+      [202.4, 216.8],
+      [202.4, 216.8],
+    ])
+    expect(ends(html, "a", "c")).toEqual([
+      [183.2, 197.6],
+      [183.2, 197.6],
+    ])
   })
 
   test("pointing at a flow fades the flows and nodes it does not connect, in place", async () => {
