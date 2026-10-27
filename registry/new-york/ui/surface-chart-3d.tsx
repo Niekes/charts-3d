@@ -9,7 +9,9 @@ import {
   Marks3D,
   axis,
   center,
+  intoWorld,
   linear,
+  pad,
   shade,
   useChart3D,
   useTween,
@@ -22,6 +24,8 @@ export type SurfaceChart3DProps = {
   data: number[][]
   /**
    * The data values the first and the last column (x) and row (z) stand for.
+   * The chart keeps half a cell between the grid and the walls of its box; a
+   * domain given here names the box exactly, without that room.
    * @defaultValue the indices of the columns and rows
    */
   domain?: { x?: [number, number]; z?: [number, number] }
@@ -52,22 +56,29 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
   const columns = data[0]?.length ?? 0
   const [x0, x1] = domain.x ?? [0, columns - 1]
   const [z0, z1] = domain.z ?? [0, rows - 1]
+  // A cell of the grid, along x and along z, in the values the data stands for.
+  const cell = {
+    x: (x1 - x0) / Math.max(1, columns - 1),
+    z: (z1 - z0) / Math.max(1, rows - 1),
+  }
   // The color ramp follows the heights on screen, the axes glide to those of the data.
   const [lo = 0, hi = 0] = extent(heights.flat())
   const [floor = 0, peak = 0] = extent(data.flat())
 
-  const spec = useTweenAxes({ x: axis(x0, x1), y: axis(floor, peak), z: axis(z0, z1) })
+  // The box keeps half a cell beyond the grid; a domain the reader hands the
+  // chart names the box exactly.
+  const spec = useTweenAxes({
+    x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), cell.x),
+    y: axis(floor, peak),
+    z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), cell.z),
+  })
   const world = worldBox(spec)
   const toX = linear([0, columns - 1], [x0, x1])
   const toZ = linear([0, rows - 1], [z0, z1])
 
-  const grid = gridPlanes3D<Point3D>()
-    .camera(camera)
+  const grid = intoWorld(gridPlanes3D<Point3D>().camera(camera), world)
     // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
     .rows(Math.max(1, columns))
-    .x((p) => world.x(p.x))
-    .y((p) => world.y(p.y))
-    .z((p) => world.z(p.z))
   const points = heights.flatMap((row, r) => row.map((y, c) => ({ x: toX(c), y, z: toZ(r) })))
 
   const marks = grid

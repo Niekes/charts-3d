@@ -9,6 +9,7 @@ import {
   axis,
   center,
   cubeMarks,
+  pad,
   useChart3D,
   useTween,
   useTweenAxes,
@@ -125,18 +126,23 @@ function barValues<T extends Record<string, unknown>>(data: T[], series: string[
 
 /**
  * The box of a bar chart: a row per entry along x, a row per series along z,
- * and the size of a bar, the share `barSize` of its cell.
+ * with half a cell of room between the outer rows and the walls, and the
+ * size of a bar, the share `barSize` of its cell.
  */
 function barBox(entries: number, series: number, values: number[], barSize: number) {
   const index = (length: number) => Array.from({ length }, (_, i) => i)
   const spec: AxesSpec = {
-    x: { domain: [-0.5, entries - 0.5], ticks: index(entries) },
+    x: pad({ domain: [-0.5, entries - 0.5], ticks: index(entries) }, 1),
     y: axis(Math.min(0, ...values), Math.max(0, ...values)),
-    z: { domain: [-0.5, series - 0.5], ticks: index(series) },
+    z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
   // A shallow box for few series, so the bars stay square.
   const depth = Math.min(1, Math.max(0.25, series / entries))
-  const size = { width: (2 / entries) * barSize, depth: ((2 * depth) / series) * barSize }
+  // A bar covers `barSize` of its cell, the share of the domain the cell spans.
+  const size = {
+    width: (2 / (spec.x.domain[1] - spec.x.domain[0])) * barSize,
+    depth: ((2 * depth) / (spec.z.domain[1] - spec.z.domain[0])) * barSize,
+  }
   return { spec, depth, size }
 }
 

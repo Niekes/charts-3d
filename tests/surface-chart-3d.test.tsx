@@ -66,6 +66,59 @@ describe("SurfaceChart3D", () => {
       expect(html).not.toContain("NaN")
     }
   })
+
+  /**
+   * How far the surface stays from the walls of the box along the screen, at
+   * a view where the screen follows the x of the box, so the room between
+   * the grid and the walls is there to read off.
+   */
+  async function room(data: number[][], domain?: { x?: [number, number]; z?: [number, number] }) {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
+          <SurfaceChart3D data={data} domain={domain} />
+        </ChartContainer3D>
+      )
+    )
+    const xs = (elements: Element[]) =>
+      elements.flatMap((el) =>
+        [...(el as SVGPathElement).getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) =>
+          Number(m[1])
+        )
+      )
+    const grid = Math.min(...xs([...host.querySelectorAll('path[fill^="color-mix"]')]))
+    const walls = Math.min(...xs([...host.querySelectorAll('[data-slot="chart-3d-axes"] > path')]))
+    await act(async () => root.unmount())
+    host.remove()
+    return grid - walls
+  }
+
+  test("the box keeps half a cell of room between the grid and its walls", async () => {
+    // Without the padding the grid fills the box exactly, half a cell with it.
+    expect(
+      await room([
+        [1, 2, 3],
+        [2, 3, 4],
+        [3, 4, 5],
+      ])
+    ).toBeGreaterThan(10)
+  })
+
+  test("a domain the reader hands the chart names the box, without room", async () => {
+    expect(
+      await room(
+        [
+          [1, 2, 3],
+          [2, 3, 4],
+          [3, 4, 5],
+        ],
+        { x: [0, 2], z: [0, 2] }
+      )
+    ).toBeLessThan(5)
+  })
 })
 
 describe("SurfaceChart3D transitions", () => {

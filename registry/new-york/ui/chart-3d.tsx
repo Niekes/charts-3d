@@ -14,6 +14,8 @@ import {
   type Camera3DInstance,
   type CubeFace,
   type Point2D,
+  type Point3D,
+  type ShapeInstance,
   type TransformedPoint,
 } from "d3-3d"
 import { KeyboardIcon } from "lucide-react"
@@ -1250,9 +1252,10 @@ function ChartLegend3D({ config }: { config: ChartConfig }) {
 
 /**
  * The walls of the chart box that face away from the camera, with their
- * gridlines, and the labels of every axis on each of its four edges. Only the
+ * gridlines, the line of every axis along its edge with the mark of each of
+ * its ticks, and the labels of every axis on each of its four edges. Only the
  * edge the axis sits on shows them, so when the axis moves to another edge,
- * its labels fade from one to the other.
+ * its line, its marks and its labels fade from one to the other.
  */
 function Axes3D({
   spec,
@@ -1266,11 +1269,8 @@ function Axes3D({
   titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
 }) {
   const { camera } = useChart3D()
-  const box = axes3D()
-    .camera(camera)
-    .x((p) => world.x(p.x))
-    .y((p) => world.y(p.y))
-    .z((p) => world.z(p.z))
+  const box = intoWorld(axes3D().camera(camera), world)
+  const { labels, lines, marks } = labelAxes(box.edges(spec), format, titles)
 
   return (
     <g data-slot="chart-3d-axes">
@@ -1285,7 +1285,13 @@ function Axes3D({
             strokeWidth={0.75}
           />
         ))}
-      {labelAxes(box.edges(spec), format, titles).map((label) => (
+      {lines.map((line) => (
+        <AxisLine3D key={line.key} line={line} ink="stroke-foreground" width={1.5} />
+      ))}
+      {marks.map((mark) => (
+        <AxisLine3D key={mark.key} line={mark} ink="stroke-foreground/60" width={1} />
+      ))}
+      {labels.map((label) => (
         <AxisLabel3D key={label.key} label={label} />
       ))}
     </g>
@@ -1294,11 +1300,25 @@ function Axes3D({
 
 // The space between a tick and its label, the least space between two
 // labels, and the space over which a label fades as it nears another.
-const GAP = 6
+const GAP = 10
 const PAD = 2
 const FADE = 4
 // How far a label may slide along its edge to make room, before the labels take two rows.
 const DODGE = 12
+// How far the mark of a tick reaches out from its edge.
+const MARK = 6
+
+/**
+ * A line of an axis: the line that carries its scale along the edge it sits
+ * on, or the mark of one of its ticks. Its place follows the camera at once;
+ * a change of edge fades it in a transition.
+ */
+type AxisLine = {
+  key: string
+  from: Point2D
+  to: Point2D
+  opacity: number
+}
 
 /**
  * A label of the chart box, a tick label or the title of an axis: its box
@@ -1318,10 +1338,11 @@ type AxisLabel = {
 }
 
 /**
- * The labels of the axes on all their edges, shown on the edges the axes sit
- * on. Every edge fits its own tick labels; then the labels of an axis give
- * way to those of an axis with fewer ticks, which say more each, and the
- * titles give way to the ticks.
+ * The labels of the axes on all their edges, the line of every axis along its
+ * edge and the mark of each of its ticks, shown on the edges the axes sit on.
+ * Every edge fits its own tick labels; then the labels of an axis give way to
+ * those of an axis with fewer ticks, which say more each, and the titles give
+ * way to the ticks.
  */
 function labelAxes(
   edges: AxisEdge[],
@@ -1338,7 +1359,13 @@ function labelAxes(
     label.opacity = shows(label, placed)
     placed.push(label)
   }
-  return axes.flatMap((axis) => [...axis.ticks, ...(axis.title ? [axis.title] : [])])
+  // The marks fade with their labels, also where a label of another axis takes its place.
+  for (const axis of axes) axis.marks.forEach((mark, i) => (mark.opacity = axis.ticks[i].opacity))
+  return {
+    labels: axes.flatMap((axis) => [...axis.ticks, ...(axis.title ? [axis.title] : [])]),
+    lines: axes.map((axis) => axis.line),
+    marks: axes.flatMap((axis) => axis.marks),
+  }
 }
 
 /**
@@ -1374,7 +1401,16 @@ function edgeLabels(
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
   if (!chosen) for (const l of [...ticks, ...(head ? [head] : [])]) l.opacity = 0
-  return { chosen, ticks, title: head }
+  // The axis line runs its edge between its outermost ticks; a mark points out from every
+  // tick, as far out as its label is clear of it, and hides where the label does.
+  const line: AxisLine = { key: id, from: start, to: end, opacity: chosen ? 1 : 0 }
+  const marks = edge.map((tick, i) => ({
+    key: ticks[i].key,
+    from: tick.projected,
+    to: { x: tick.projected.x + n.x * MARK, y: tick.projected.y + n.y * MARK },
+    opacity: ticks[i].opacity,
+  }))
+  return { chosen, ticks, title: head, line, marks }
 }
 
 /**
@@ -1501,6 +1537,33 @@ function textWidth(text: React.ReactNode, size: number) {
 }
 
 /**
+ * A line of the axes, in the ink of the kind it is: the line of an axis along
+ * its edge, or the mark of one of its ticks. Its place follows the camera at
+ * once; a change of edge fades it in a transition.
+ */
+function AxisLine3D({
+  line: { from, to, opacity },
+  ink,
+  width,
+}: {
+  line: AxisLine
+  ink: string
+  width: number
+}) {
+  return (
+    <line
+      x1={from.x}
+      y1={from.y}
+      x2={to.x}
+      y2={to.y}
+      strokeWidth={width}
+      style={{ opacity: Math.round(opacity * 100) / 100 }}
+      className={cn("transition-opacity duration-200 ease-out motion-reduce:transition-none", ink)}
+    />
+  )
+}
+
+/**
  * A label of the chart box. Its place follows the camera at once; a change
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
@@ -1528,6 +1591,15 @@ function axis(lo: number, hi: number, count = 5): AxisSpec {
   return { domain: [start, stop], ticks: ticks(start, stop, count) }
 }
 
+/**
+ * The axis `spec` with its domain widened by half a `cell` on each side, so
+ * the box keeps room between the outermost data and its walls. The ticks stay
+ * where they were, on the data.
+ */
+function pad(spec: AxisSpec, cell: number): AxisSpec {
+  return { domain: [spec.domain[0] - cell / 2, spec.domain[1] + cell / 2], ticks: spec.ticks }
+}
+
 /** The linear map from `domain` to `range`. */
 function linear([d0, d1]: number[], [r0, r1]: number[]) {
   return (value: number) => r0 + ((value - d0) / (d1 - d0 || 1)) * (r1 - r0)
@@ -1540,6 +1612,20 @@ function worldBox(spec: AxesSpec, depth = 1): World {
     y: linear(spec.y.domain, [1, -1]),
     z: linear(spec.z.domain, [-depth, depth]),
   }
+}
+
+/**
+ * Hands the projection its accessors into the world box, so every chart maps
+ * its shapes onto the screen the same way.
+ */
+function intoWorld<Datum extends Point3D, T extends ShapeInstance<Datum>>(
+  projection: T,
+  world: World
+): T {
+  return projection
+    .x((p) => world.x(p.x))
+    .y((p) => world.y(p.y))
+    .z((p) => world.z(p.z))
 }
 
 // From the upper left, towards the viewer, in view space where y points down.
@@ -1592,8 +1678,10 @@ export {
   Marks3D,
   Labels3D,
   axis,
+  pad,
   linear,
   worldBox,
+  intoWorld,
   shade,
   center,
   cubeMarks,

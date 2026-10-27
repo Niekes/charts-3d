@@ -49,6 +49,28 @@ describe("BarChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
+  test("the box keeps half a cell of room between the bars and its walls", async () => {
+    // Level with the front, the screen follows the x of the box, so the room
+    // between the bars and the walls is there to read off.
+    const bars = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
+        <BarChart3D data={data} index="name" />
+      </ChartContainer3D>
+    )
+    const xs = (elements: Element[]) =>
+      elements.flatMap((el) =>
+        [...(el as SVGPathElement).getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) =>
+          Number(m[1])
+        )
+      )
+    const barFaces = xs([...bars.host.querySelectorAll('path[fill^="color-mix"]')])
+    const walls = xs([...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    // Without the padding the bars stand a fifth of a cell from the walls, half
+    // a cell with it.
+    expect(Math.min(...barFaces) - Math.min(...walls)).toBeGreaterThan(40)
+    await bars.unmount()
+  })
+
   test("a bar under the pointer shows its entry and value in the tooltip", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)

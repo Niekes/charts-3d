@@ -3,7 +3,7 @@ import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
-import { box, cubes3D } from "d3-3d"
+import { box, cubes3D, points3D } from "d3-3d"
 
 import {
   Axes3D,
@@ -14,7 +14,9 @@ import {
   axis,
   center,
   cubeMarks,
+  intoWorld,
   linear,
+  pad,
   shade,
   useChart3D,
   useTween,
@@ -783,6 +785,13 @@ describe("helpers", () => {
     expect(axis(5, 5).domain[1]).toBeGreaterThan(5)
   })
 
+  test("pad widens the domain by half a cell and leaves the ticks where they are", () => {
+    expect(pad({ domain: [-0.5, 1.5], ticks: [0, 1] }, 1)).toEqual({
+      domain: [-1, 2],
+      ticks: [0, 1],
+    })
+  })
+
   test("linear maps a domain to a range and survives a domain of zero width", () => {
     expect(linear([0, 10], [-1, 1])(5)).toBe(0)
     expect(linear([2, 2], [-1, 1])(2)).toBe(-1)
@@ -834,7 +843,7 @@ describe("ChartLegend3D", () => {
 })
 
 describe("Axes3D", () => {
-  test("thins an axis seen end on to its first label, and a label gives way to an axis with fewer ticks", async () => {
+  test("thins an axis seen end on to its first label", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
     // From above, the y axis points at the camera and its ticks fall on one point.
     const chart = await mount(
@@ -851,8 +860,104 @@ describe("Axes3D", () => {
       .map((text) => text.textContent!)
 
     expect(shown.filter((label) => label.startsWith("y"))).toEqual(["y0"])
-    // x0 would cover y0, and y has three ticks to the six of x.
+    // The corner labels of two axes point out perpendicular sides, and with
+    // room for the marks between them they cover each other no more.
+    expect(shown.filter((label) => label.startsWith("x"))).toEqual([
+      "x0",
+      "x2",
+      "x4",
+      "x6",
+      "x8",
+      "x10",
+    ])
+    await chart.unmount()
+  })
+
+  test("a label that would cover the label of an axis with fewer ticks gives way to it", async () => {
+    // Level with the box, the z axis points at the camera and its first label
+    // sits where the x axis has its first tick, both pointing out below.
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10, 2) }
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Axes3D
+          spec={spec}
+          world={worldBox(spec)}
+          format={{ x: (v) => `x${v}`, z: (v) => `z${v}` }}
+        />
+      </ChartContainer3D>
+    )
+    const shown = [...chart.host.querySelectorAll("text")]
+      .filter((text) => Number(text.style.opacity) > 0.5)
+      .map((text) => text.textContent!)
+
+    expect(shown.filter((label) => label.startsWith("z"))).toEqual(["z0"])
+    // x has six ticks to the three of z, so its first label gives way to z0.
     expect(shown.filter((label) => label.startsWith("x"))).toEqual(["x2", "x4", "x6", "x8", "x10"])
+    // The mark of a label that gives way hides with it: of the five labels of
+    // x that show, the six of y and the one of z, twelve marks are left.
+    const marks = chart.host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="1"]')
+    expect(
+      [...marks].filter((mark) => Number((mark as SVGLineElement).style.opacity) > 0.5)
+    ).toHaveLength(12)
+    await chart.unmount()
+  })
+
+  test("marks every tick of the chosen edge out of the box, and thins the marks with the labels", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
+    // From above, the y axis thins to its first label; its marks thin with it.
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: Math.PI / 2 }}>
+        <Axes3D spec={spec} world={worldBox(spec)} format={{ y: (v) => `y${v}` }} />
+      </ChartContainer3D>
+    )
+    const marks = () => [
+      ...chart.host.querySelectorAll<SVGLineElement>(
+        '[data-slot="chart-3d-axes"] line[stroke-width="1"]'
+      ),
+    ]
+    const shown = () => marks().filter((mark) => Number(mark.style.opacity) > 0.5)
+    const of = (mark: SVGLineElement) => ({
+      from: { x: Number(mark.getAttribute("x1")), y: Number(mark.getAttribute("y1")) },
+      to: { x: Number(mark.getAttribute("x2")), y: Number(mark.getAttribute("y2")) },
+    })
+    const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.hypot(a.x - b.x, a.y - b.y)
+
+    // One mark per tick of every edge; the chosen edges show theirs, thinned like their labels.
+    expect(marks()).toHaveLength(60)
+    expect(shown()).toHaveLength(13)
+    for (const mark of shown()) {
+      expect(mark.getAttribute("class")).toContain("stroke-foreground/60")
+      expect(dist(of(mark).from, of(mark).to)).toBeCloseTo(6, 5)
+    }
+
+    // The marks point out of the box, and every label stands clear of them,
+    // as far out as the mark reaches and the space the label needs.
+    const walls = [
+      ...chart.host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] > path'),
+    ]
+    const xs = walls.flatMap((w) =>
+      [...w.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
+    )
+    const ys = walls.flatMap((w) =>
+      [...w.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[2]))
+    )
+    const center = {
+      x: (Math.min(...xs) + Math.max(...xs)) / 2,
+      y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    }
+    for (const mark of shown()) {
+      const { from, to } = of(mark)
+      expect(dist(to, center)).toBeGreaterThan(dist(from, center))
+    }
+    const labels = [
+      ...chart.host.querySelectorAll<SVGTextElement>('[data-slot="chart-3d-axes"] text'),
+    ]
+    for (const label of labels.filter((l) => Number(l.style.opacity) > 0.5)) {
+      const at = { x: Number(label.getAttribute("x")), y: Number(label.getAttribute("y")) }
+      for (const mark of shown()) expect(dist(at, of(mark).from)).toBeGreaterThan(10)
+      expect(Math.min(...shown().map((mark) => dist(at, of(mark).from)))).toBeLessThan(20)
+    }
     await chart.unmount()
   })
 
@@ -872,6 +977,37 @@ describe("Axes3D", () => {
     for (const title of ["Width", "Height", "Depth"]) expect(html).toContain(`>${title}</text>`)
     expect(html).toContain(">100</text>")
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
+  })
+
+  test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
+        <Axes3D spec={spec} world={worldBox(spec)} />
+      </ChartContainer3D>
+    )
+    const lines = () => [
+      ...chart.host.querySelectorAll<SVGLineElement>(
+        '[data-slot="chart-3d-axes"] line[stroke-width="1.5"]'
+      ),
+    ]
+    const shown = () => lines().filter((line) => Number(line.style.opacity) > 0.5)
+    // One line per edge of each axis, one edge of each axis chosen.
+    expect(lines()).toHaveLength(12)
+    expect(shown()).toHaveLength(3)
+    for (const line of shown()) {
+      expect(line.getAttribute("class")).toContain("stroke-foreground")
+      expect(line.getAttribute("class")).toContain("transition-opacity")
+    }
+
+    const before = shown()[0]!
+    for (let i = 0; i < 72 && Number(before.style.opacity) > 0.5; i += 1)
+      await chart.send(key("ArrowRight"))
+    // The line of the edge it left stays, unseen, so it fades out instead of vanishing.
+    expect(Number(before.style.opacity)).toBe(0)
+    expect(before.isConnected).toBe(true)
+    expect(shown()).toHaveLength(3)
+    await chart.unmount()
   })
 
   test("draws an axis on all four of its edges and fades it from one to the next as the camera turns", async () => {
@@ -908,6 +1044,17 @@ describe("worldBox", () => {
     expect([world.x(0), world.x(10)]).toEqual([-1, 1])
     expect([world.y(0), world.y(10)]).toEqual([1, -1])
     expect([world.z(0), world.z(10)]).toEqual([-0.5, 0.5])
+  })
+
+  test("intoWorld hands a projection its accessors into the world box", () => {
+    const spec = {
+      x: { domain: [0, 10], ticks: [] },
+      y: { domain: [0, 10], ticks: [] },
+      z: { domain: [0, 10], ticks: [] },
+    }
+    // A projection without a camera turns by nothing, so the world shows in the round.
+    const [point] = intoWorld(points3D(), worldBox(spec, 0.5)).data([{ x: 0, y: 10, z: 10 }])
+    expect(point.rotated).toEqual({ x: -1, y: -1, z: 0.5 })
   })
 })
 
