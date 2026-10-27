@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-27
+
 ### Added
 
 - `keymap` on `ChartContainer3D`: rebinds, renames or turns off every key and
@@ -36,9 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sankey charts use them, and their docs pages show an Update example that
   presses it. Where the reader asks for reduced motion, or the browser cannot
   say, the data jumps, as the camera does.
+- `pad` and `intoWorld` in the core: `pad` widens the domain of an axis by
+  half a cell and leaves its ticks as they are, `intoWorld` hands a d3-3d
+  projection its accessors into the world box.
 
 ### Changed
 
+- An axis draws its line along its edge of the box, between its outermost
+  ticks, and a mark at every tick that points out of the box. Both fade from
+  one edge to the next with the labels, and a mark hides where its label
+  hides. The tick labels stand clear of the marks.
+- The bar and surface charts keep half a cell of room between the data and
+  the walls of the box. A `domain` handed to the surface chart still names the
+  box exactly.
 - `sankey-chart-3d`: flows that cross pass one another in depth, so a crossing
   no longer flips halfway and reads the same from every side. They share the
   depth of a flow in lanes, the lane that carries less in front, and nothing
