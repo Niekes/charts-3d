@@ -86,6 +86,7 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("[data-chart=chart-t]")
+    expect(html).toContain("@starting-style")
     expect(html).toContain("--color-a: red;")
     expect(html).toContain("--color-b: white;")
     expect(html).toContain(".dark [data-chart=chart-t]")

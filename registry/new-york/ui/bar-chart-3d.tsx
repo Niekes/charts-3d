@@ -91,7 +91,6 @@ export function BarChart3D<T extends Record<string, unknown>>({
         marks={bars.flatMap((bar) =>
           barMarks({
             id: `${bar.i}-${bar.key}`,
-            series: bar.key,
             faces: bar.faces,
             color: `var(--color-${bar.key})`,
             title: String(data[bar.i][index]),
@@ -169,10 +168,9 @@ function barCorners(
   })
 }
 
-/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. Its groups are the bar and its series, so hovering it keeps the series lit. */
+/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
 function barMarks({
   id,
-  series,
   faces,
   color,
   title,
@@ -180,7 +178,6 @@ function barMarks({
   value,
 }: {
   id: string
-  series: string
   faces: CubeFace[]
   color: string
   title: string
@@ -192,5 +189,5 @@ function barMarks({
     title,
     items: [{ label, value, color }],
   }
-  return cubeMarks(id, faces, color, tooltip).map((mark) => ({ ...mark, groups: [id, series] }))
+  return cubeMarks(id, faces, color, tooltip).map((mark) => ({ ...mark, groups: [id] }))
 }

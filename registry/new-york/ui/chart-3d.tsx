@@ -789,12 +789,18 @@ function useFocus(): Focus3D {
  * the focus, while some item of `items` does, so a focus on groups that are
  * gone fades nothing.
  */
-function useFades(items: { groups?: string[] }[]) {
+function useFocusGroups(items: { groups?: string[] }[]) {
   const { focus } = useChart3D()
   const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
   const lit = (of?: string[]) => of?.some((group) => groups?.includes(group)) ?? false
   const on = items.some((item) => lit(item.groups))
-  return (item: { groups?: string[] }) => on && item.groups !== undefined && !lit(item.groups)
+  return {
+    // The items that share a group with the focus: the hover highlights them with an edge.
+    lit: (item: { groups?: string[] }) => lit(item.groups),
+    // Whether an item fades under the focus: it has groups and shares none with the
+    // focus, while some item of `items` does, so a focus on groups that are gone fades nothing.
+    fades: (item: { groups?: string[] }) => on && item.groups !== undefined && !lit(item.groups),
+  }
 }
 
 /** The topmost mark under `at`: the last one painted that holds it. */
@@ -932,7 +938,7 @@ function paint(
     ctx.fillStyle = color(fill)
     ctx.fill()
     // A polygon is outlined in its own color, which closes the seams to its neighbours.
-    const outline = r === undefined ? fill : stroke
+    const outline = r === undefined ? (stroke ?? fill) : stroke
     if (!outline) continue
     ctx.strokeStyle = color(outline)
     ctx.lineWidth = r === undefined ? 0.5 : 1
@@ -1083,6 +1089,8 @@ function ChartCanvas3D({
 
   return (
     <canvas
+      // A canvas that gave out one context cannot give another, so each renderer gets its own.
+      key={renderer}
       ref={canvas}
       className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
@@ -1165,9 +1173,16 @@ function ChartGizmo3D({
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
-  const fades = useFades(marks)
-  // Faded in place, so the order, and with it the depth, stays as the chart painted it.
-  const drawn = marks.map((mark) => (fades(mark) ? { ...mark, fill: fade(mark.fill) } : mark))
+  const { fades, lit } = useFocusGroups(marks)
+  // Faded in place, so the order, and with it the depth, stays as the chart painted it;
+  // the lit marks get an edge in the foreground color, which reads in both themes.
+  const drawn = marks.map((mark) =>
+    lit(mark)
+      ? { ...mark, stroke: "var(--foreground)" }
+      : fades(mark)
+        ? { ...mark, fill: fade(mark.fill) }
+        : mark
+  )
   React.useLayoutEffect(() => {
     scene.current = drawn
     repaint()
@@ -1180,8 +1195,8 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
         key={key}
         d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
         fill={fill}
-        stroke={fill}
-        strokeWidth={0.5}
+        stroke={stroke ?? fill}
+        strokeWidth={stroke === "var(--foreground)" ? 1.5 : 0.5}
         strokeLinejoin="round"
       />
     ) : (
@@ -1219,7 +1234,7 @@ export type Label3D = {
  * read on the marks. Like the labels of the box, they are SVG with every renderer.
  */
 function Labels3D({ labels }: { labels: Label3D[] }) {
-  const fades = useFades(labels)
+  const { fades } = useFocusGroups(labels)
   // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
@@ -1252,16 +1267,19 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
 
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
+  // A label or tick of the axes that just appeared fades in, instead of popping up.
+  const enter = `@starting-style { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { opacity: 0; } }`
 
   if (!colorConfig.length) {
-    return null
+    return <style dangerouslySetInnerHTML={{ __html: enter }} />
   }
 
   return (
     <style
       dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
+        __html: [
+          enter,
+          ...Object.entries(THEMES).map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
@@ -1272,8 +1290,8 @@ ${colorConfig
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
+          ),
+        ].join("\n"),
       }}
     />
   )

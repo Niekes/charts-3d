@@ -26,12 +26,14 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   the webgl renderer paint it and the hover hit-tests it, whatever the
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
-- **Hover comes from the core.** Give every mark a `tooltip` and `groups` -
-  its own key and its series, the way the bar chart does - so that in every
-  chart, while the pointer is on a mark, its tooltip shows and the marks and
-  labels that share none of its groups fade; when the pointer leaves the mark
-  or the chart, both clear. A chart never fades anything itself and has no
-  pointer handlers.
+- **Hover comes from the core.** Give every mark a `tooltip` and `groups`
+  naming what is highlighted together - the bar alone in the bar chart, the
+  point and its series in the scatter - so that in every chart, while the
+  pointer is on a mark, its tooltip shows, the marks of its groups get an edge
+  in `var(--foreground)` (their fill does not change) and the marks and labels
+  that share none of its groups fade; when the pointer leaves the mark or the
+  chart, both clear. A chart never fades anything itself and has no pointer
+  handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - a drag
