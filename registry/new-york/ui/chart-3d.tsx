@@ -49,7 +49,7 @@ export type View3D = {
 }
 
 /** How the marks of a chart are drawn. The box, its labels, the tooltip and the legend are always SVG and HTML. */
-export type Renderer3D = "svg" | "canvas"
+export type Renderer3D = "svg" | "canvas" | "webgl"
 
 /** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
 export type World = Record<keyof AxesSpec, (value: number) => number>
@@ -77,7 +77,7 @@ export type Mark3D = {
   /**
    * What the mark belongs to, such as a flow, or connects, such as a node.
    * Pointing at a mark fades every mark and label that shares none of its
-   * groups, until the pointer leaves the chart; one without groups never fades.
+   * groups, until the pointer leaves the mark; one without groups never fades.
    */
   groups?: string[]
 }
@@ -306,9 +306,9 @@ export type ChartContainer3DProps = {
    */
   legend?: boolean
   /**
-   * How the marks of the chart are drawn: "canvas" suits many marks. The
-   * chart draws as SVG until the browser shows it has a canvas, and where it
-   * has none.
+   * How the marks of the chart are drawn: "canvas" suits many marks, "webgl" more.
+   * The chart draws as SVG until the browser shows it has the requested renderer,
+   * "webgl" falling back to "canvas", and where it has none, as SVG.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D
@@ -349,7 +349,7 @@ function ChartContainer3D({
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus } = useScene(
+  const { scene, renderer, canvas, repaint, hover, hide, tooltip, focus } = useScene(
     requested,
     width,
     height
@@ -375,7 +375,7 @@ function ChartContainer3D({
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           {...keymapProps(keys, ariaLabel)}
-          onPointerLeave={leave}
+          onPointerLeave={hide}
           {...handlers}
         >
           <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
@@ -423,9 +423,9 @@ function useScene(requested: Renderer3D, width: number, height: number) {
   const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
   const focus = useFocus()
   const renderer = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width)
-  const { hover, hide, leave } = useHover(scene, width, height, setTooltip, focus)
-  return { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus }
+  const { canvas, repaint } = useCanvas(scene, width, height, renderer)
+  const { hover, hide } = useHover(scene, width, height, setTooltip, focus)
+  return { scene, renderer, canvas, repaint, hover, hide, tooltip, focus }
 }
 
 /** The camera of a view. The shapes of the chart hang on it, so a new view re-projects them all. */
@@ -722,12 +722,11 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
 
 /**
  * The tooltip of the mark under the pointer, the one painted last, and the
- * focus on its groups. `hover` sets the tooltip only when the pointer moves
- * onto another mark, and the focus only when the groups change, so a move
- * within a mark does not render the chart again. Off the marks and while a
- * drag turns the chart, `hide` drops the tooltip but keeps the focus, so a
- * flow does not flash in the gaps beside it and can be followed from every
- * side; `leave` drops both.
+ * focus on its groups. The highlight follows the mark: `hover` sets the
+ * tooltip only when the pointer moves onto another mark, and the focus only
+ * when the groups change, so a move within a mark does not render the chart
+ * again; `hide`, off the mark, while a drag turns the chart and when the
+ * pointer leaves the chart, drops both.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -739,7 +738,7 @@ function useHover(
   const hovered = React.useRef<Mark3D>(undefined)
   const show = (mark?: Mark3D) => {
     // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
-    if (mark?.groups) focus.set(mark.groups)
+    focus.set(mark?.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
     setTooltip(mark?.tooltip ?? null)
@@ -755,10 +754,6 @@ function useHover(
       show(hit(scene.current, at))
     },
     hide: () => show(undefined),
-    leave: () => {
-      show(undefined)
-      focus.set(undefined)
-    },
   }
 }
 
@@ -821,31 +816,46 @@ function inside(polygon: Point2D[], at: Point2D) {
 
 /**
  * The renderer the chart draws with: SVG on the server and in the first
- * render on the client, then the requested one if the browser has it.
+ * render on the client, then the requested one if the browser has it, with
+ * "webgl" falling back to "canvas" and "canvas" to SVG.
  */
 function useRenderer(requested: Renderer3D) {
   const [renderer, setRenderer] = React.useState<Renderer3D>("svg")
   React.useEffect(() => {
-    // A canvas of its own, as one that gave out a context cannot give another.
-    const canvas = requested === "canvas" && document.createElement("canvas").getContext("2d")
+    // A canvas of its own per probe, as one that gave out a context cannot give another.
+    if (requested === "webgl" && document.createElement("canvas").getContext("webgl")) {
+      return setRenderer("webgl")
+    }
+    const canvas = requested !== "svg" && document.createElement("canvas").getContext("2d")
     setRenderer(canvas ? "canvas" : "svg")
   }, [requested])
   return renderer
 }
 
+/** A resolved CSS color as bytes, which the webgl renderer draws with. */
+type RGBA = [number, number, number, number]
+
 /**
  * A ref for the canvas of the marks, and the repaint that paints them: on new
  * marks, when the canvas changes its size and when the theme changes. A color
- * resolves on the canvas itself, inside the chart, so the `--color-*` apply.
+ * resolves on the canvas itself, inside the chart, so the `--color-*` apply;
+ * webgl takes the resolved color as bytes from a 1×1 canvas.
  */
-function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
+function useCanvas(
+  scene: React.RefObject<Mark3D[]>,
+  width: number,
+  height: number,
+  renderer: Renderer3D
+) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
+  const bytes = React.useRef(new Map<string, RGBA>())
+  const pixel = React.useRef<CanvasRenderingContext2D | null>(null)
 
   const repaint = React.useCallback(() => {
     const canvas = element.current
     if (!canvas) return
-    paint(canvas, scene.current, width, (css) => {
+    const resolve = (css: string) => {
       let color = colors.current.get(css)
       if (color === undefined) {
         canvas.style.color = css
@@ -853,8 +863,16 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
         colors.current.set(css, color)
       }
       return color
-    })
-  }, [scene, width])
+    }
+    if (renderer === "webgl") {
+      pixel.current ??= onePixel()
+      paintGL(canvas, scene.current, width, height, (css) =>
+        colorBytes(resolve(css), pixel.current!, bytes.current)
+      )
+    } else {
+      paint(canvas, scene.current, width, resolve)
+    }
+  }, [scene, width, height, renderer])
 
   const canvas = React.useCallback(
     // A ref that returns its cleanup is never called with null.
@@ -866,6 +884,7 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
       // ponytail: watches the theme on <html> only, as the class `.dark` of THEMES does.
       const theme = new MutationObserver(() => {
         colors.current.clear()
+        bytes.current.clear()
         repaint()
       })
       theme.observe(document.documentElement, { attributeFilter: ["class", "style"] })
@@ -915,6 +934,133 @@ function paint(
   }
 }
 
+/** A 1×1 canvas whose 2D context resolves a color to bytes, for the webgl renderer. */
+function onePixel() {
+  const canvas = document.createElement("canvas")
+  canvas.width = 1
+  canvas.height = 1
+  // useRenderer draws with webgl only where the browser gives a canvas a context; a 2D one comes with it.
+  return canvas.getContext("2d")!
+}
+
+/** The resolved `color` as bytes, drawn on the 1×1 `pixel` and read back, cached per color. */
+function colorBytes(
+  color: string,
+  pixel: CanvasRenderingContext2D,
+  cache: Map<string, RGBA>
+): RGBA {
+  let rgba = cache.get(color)
+  if (rgba === undefined) {
+    pixel.clearRect(0, 0, 1, 1)
+    pixel.fillStyle = color
+    pixel.fillRect(0, 0, 1, 1)
+    rgba = [...pixel.getImageData(0, 0, 1, 1).data] as RGBA
+    cache.set(color, rgba)
+  }
+  return rgba
+}
+
+/**
+ * Paints `marks` on a webgl `canvas`, from the view box of `width`×`height` to
+ * the pixels of the canvas: a fan per polygon, a fan of 12 segments per
+ * circle, in paint order and without a depth test, the color of each as bytes.
+ */
+function paintGL(
+  canvas: HTMLCanvasElement,
+  marks: Mark3D[],
+  width: number,
+  height: number,
+  color: (css: string) => RGBA
+) {
+  canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
+  canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
+  // useRenderer draws with webgl only where the browser gives one a context.
+  const gl = canvas.getContext("webgl")!
+  gl.viewport(0, 0, canvas.width, canvas.height)
+  gl.disable(gl.DEPTH_TEST)
+  gl.enable(gl.BLEND)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+  const program = programOf(gl)
+  gl.useProgram(program)
+  gl.uniform2f(gl.getUniformLocation(program, "u_res"), 2 / width, 2 / height)
+  const where = gl.getAttribLocation(program, "a_pos")
+  gl.enableVertexAttribArray(where)
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufferOf(gl))
+  gl.vertexAttribPointer(where, 2, gl.FLOAT, false, 0, 0)
+  for (const mark of marks) {
+    const fan = trianglesOf(mark)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(fan.flatMap((p) => [p.x, p.y])),
+      gl.DYNAMIC_DRAW
+    )
+    const [r, g, b, a] = color(mark.fill)
+    gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
+    gl.drawArrays(gl.TRIANGLES, 0, fan.length)
+  }
+}
+
+/** The triangles of `mark` as view-box points: a fan per polygon, a fan of 12 segments per circle. */
+function trianglesOf(mark: Mark3D): Point2D[] {
+  const { points, r } = mark
+  if (r !== undefined) {
+    const c = points[0]
+    const at = (i: number) => ({
+      x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
+      y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
+    })
+    return Array.from({ length: 12 }, (_, i) => [c, at(i), at(i + 1)]).flat()
+  }
+  return points.slice(1, -1).flatMap((p, i) => [points[0], p, points[i + 2]])
+}
+
+// The paint program and the vertex buffer of a context, each made once.
+const programs = new WeakMap<WebGLRenderingContext, WebGLProgram>()
+const buffers = new WeakMap<WebGLRenderingContext, WebGLBuffer>()
+
+/** The paint program of `gl`, compiled once: view-box points in, clip space out, one color per draw. */
+function programOf(gl: WebGLRenderingContext) {
+  let program = programs.get(gl)
+  if (!program) {
+    program = gl.createProgram()!
+    gl.attachShader(
+      program,
+      shaderOf(
+        gl,
+        gl.VERTEX_SHADER,
+        "attribute vec2 a_pos; uniform vec2 u_res; void main() { gl_Position = vec4(a_pos.x * u_res.x - 1.0, 1.0 - a_pos.y * u_res.y, 0.0, 1.0); }"
+      )
+    )
+    gl.attachShader(
+      program,
+      shaderOf(
+        gl,
+        gl.FRAGMENT_SHADER,
+        "precision mediump float; uniform vec4 u_color; void main() { gl_FragColor = u_color; }"
+      )
+    )
+    gl.linkProgram(program)
+    programs.set(gl, program)
+  }
+  return program
+}
+
+function shaderOf(gl: WebGLRenderingContext, type: number, source: string) {
+  const shader = gl.createShader(type)!
+  gl.shaderSource(shader, source)
+  gl.compileShader(shader)
+  return shader
+}
+
+function bufferOf(gl: WebGLRenderingContext) {
+  let buffer = buffers.get(gl)
+  if (!buffer) {
+    buffer = gl.createBuffer()!
+    buffers.set(gl, buffer)
+  }
+  return buffer
+}
+
 /** The canvas over the chart box that the marks are painted on, if the chart draws on one. */
 function ChartCanvas3D({
   renderer,
@@ -927,7 +1073,7 @@ function ChartCanvas3D({
   width: number
   height: number
 }) {
-  if (renderer !== "canvas") return null
+  if (renderer === "svg") return null
 
   return (
     <canvas
@@ -1021,7 +1167,7 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
     repaint()
   })
 
-  if (renderer === "canvas") return null
+  if (renderer !== "svg") return null
   return drawn.map(({ key, points, r, fill, stroke }) =>
     r === undefined ? (
       <path

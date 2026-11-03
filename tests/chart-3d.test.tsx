@@ -202,6 +202,67 @@ function stubCanvas() {
   return ctx
 }
 
+/** A webgl context of spies, and a 2D context that reads colors back as bytes, on every canvas. */
+function stubGL() {
+  const gl = {
+    viewport: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
+    blendFunc: vi.fn(),
+    useProgram: vi.fn(),
+    uniform2f: vi.fn(),
+    uniform4f: vi.fn(),
+    getUniformLocation: vi.fn(() => ({})),
+    getAttribLocation: vi.fn(() => 0),
+    enableVertexAttribArray: vi.fn(),
+    bindBuffer: vi.fn(),
+    vertexAttribPointer: vi.fn(),
+    bufferData: vi.fn(),
+    drawArrays: vi.fn(),
+    createProgram: vi.fn(() => ({})),
+    attachShader: vi.fn(),
+    linkProgram: vi.fn(),
+    createShader: vi.fn(() => ({})),
+    shaderSource: vi.fn(),
+    compileShader: vi.fn(),
+    createBuffer: vi.fn(() => ({})),
+    DEPTH_TEST: 0x0b71,
+    BLEND: 0x0be2,
+    SRC_ALPHA: 0x0302,
+    ONE_MINUS_SRC_ALPHA: 0x0303,
+    ARRAY_BUFFER: 0x8892,
+    DYNAMIC_DRAW: 0x88e8,
+    FLOAT: 0x1406,
+    TRIANGLES: 0x0004,
+    VERTEX_SHADER: 0x8b31,
+    FRAGMENT_SHADER: 0x8b30,
+  }
+  const ctx = {
+    setTransform: vi.fn(),
+    beginPath: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    fillStyle: "",
+    getImageData: vi.fn(() => ({ data: [10, 20, 30, 255] })),
+  }
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    (type: string) => (type === "webgl" ? gl : ctx) as never
+  )
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  return { gl, ctx }
+}
+
 describe("shortcuts", () => {
   test("Shift and an arrow pan, + and - and Ctrl with the wheel zoom, 0 and a double click reset", async () => {
     const chart = await mount(
@@ -777,6 +838,104 @@ describe("renderer", () => {
     document.documentElement.classList.remove("dark")
     await chart.unmount()
   })
+
+  test("webgl draws as SVG where the browser has neither webgl nor a canvas", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null)
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).toBeNull()
+    expect(chart.svg.querySelector("path")).not.toBeNull()
+
+    await chart.unmount()
+  })
+
+  test("webgl falls back to canvas where the browser has no webgl but a 2D context", async () => {
+    const ctx = stubCanvas()
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      (type: string) => (type === "2d" ? ctx : null) as never
+    )
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(ctx.fill).toHaveBeenCalled()
+
+    await chart.unmount()
+  })
+
+  test("webgl paints the marks as fans, in paint order, without a depth test, and the hover still finds them", async () => {
+    const { gl, ctx } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
+    expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
+    // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+    expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
+      [0, 6],
+      [0, 36],
+    ])
+    // The color of a mark as bytes from the 1×1 canvas, over 255.
+    expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1, 1)
+    expect(gl.uniform4f).toHaveBeenCalledWith({}, 10 / 255, 20 / 255, 30 / 255, 1)
+
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("webgl reads a color once and serves later repaints from the cache", async () => {
+    const { ctx } = stubGL()
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = () =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}} renderer="webgl">
+            <Marks3D marks={marks} />
+          </ChartContainer3D>
+        )
+      )
+    await render()
+    const reads = ctx.getImageData.mock.calls.length
+    await render()
+    expect(ctx.getImageData.mock.calls.length).toBe(reads)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("webgl compiles its program and buffer once, and repaints when the theme changes", async () => {
+    const { gl } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const drawn = gl.drawArrays.mock.calls.length
+    await act(async () => {
+      document.documentElement.classList.add("dark")
+      // A MutationObserver reports after the change, not during it.
+      await new Promise((resolve) => setTimeout(resolve))
+    })
+    expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(drawn)
+    expect(gl.createProgram).toHaveBeenCalledTimes(1)
+    expect(gl.createBuffer).toHaveBeenCalledTimes(1)
+
+    document.documentElement.classList.remove("dark")
+    await chart.unmount()
+  })
 })
 
 describe("helpers", () => {
@@ -1107,13 +1266,15 @@ describe("focus", () => {
     expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
     expect(fadedLabels(chart.svg)).toEqual([false, true])
 
-    // Off the marks the tooltip goes and the focus stays; leaving the chart drops it.
+    // Off the mark the tooltip and the focus go with it; leaving the chart does the same.
     await chart.send(move(25, 350))
     expect(chart.host.textContent).not.toContain("tip-a")
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(fadedLabels(chart.svg)).toEqual([false, false])
+    await chart.send(move(25, 125))
     expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
     await chart.send(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }))
     expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
-    expect(fadedLabels(chart.svg)).toEqual([false, false])
 
     await chart.unmount()
   })
@@ -1135,7 +1296,7 @@ describe("focus", () => {
     await chart.unmount()
   })
 
-  test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
+  test("a drag that turns the chart drops the tooltip and the focus", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -1151,7 +1312,7 @@ describe("focus", () => {
     await chart.send(press("pointermove", 75))
     expect(chart.svg.setPointerCapture).toHaveBeenCalled()
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(fills(chart.svg)).toContain(faded)
+    expect(fills(chart.svg)).not.toContain(faded)
 
     await chart.unmount()
   })

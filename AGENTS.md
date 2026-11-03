@@ -178,7 +178,7 @@ How the charts draw, so that a new one draws the same way:
 - **Focus.** A mark or a label names what it belongs to in `groups`: a flow,
   say, or the flows a node connects. Pointing at a mark, the core fades every
   mark and label that shares none of its groups, in place and with every
-  renderer, until the pointer leaves the chart; a chart never fades anything
+  renderer, until the pointer leaves the mark; a chart never fades anything
   itself.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
   axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
@@ -226,7 +226,7 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **One scene.** `Marks3D` writes its marks into the scene of the container;
   the canvas paints the scene and the hover hit-tests it, whatever the
   renderer.
-- **WebGL is the next link.** It joins the same chain: `"webgl"` probes
+- **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
   triangulates the same marks - a fan per polygon, a fan of 12 segments per
   circle - draws them in paint order without a depth test, and takes its
