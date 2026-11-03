@@ -1,7 +1,6 @@
 import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
-import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { BarChart3D } from "@/components/ui/bar-chart-3d"
 
 // The same months every time, so the bars glide in place when the data updates.
@@ -20,7 +19,7 @@ export default function BarChart3DUpdateDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D keymap={inspectOnlyKeymap} config={chartConfig}>
+      <ChartContainer3D config={chartConfig}>
         <BarChart3D data={data} index="month" titles={{ y: "Sessions" }} />
       </ChartContainer3D>
       <button

@@ -1,5 +1,4 @@
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
-import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { SurfaceChart3D } from "@/components/ui/surface-chart-3d"
 
 // A ripple: the cosine of the distance from the middle of the grid.
@@ -14,11 +13,7 @@ export const chartConfig = {
 
 export default function SurfaceChart3DDemo() {
   return (
-    <ChartContainer3D
-      keymap={inspectOnlyKeymap}
-      config={chartConfig}
-      defaultView={{ yaw: Math.PI / 5, tilt: Math.PI / 5 }}
-    >
+    <ChartContainer3D config={chartConfig} defaultView={{ yaw: Math.PI / 5, tilt: Math.PI / 5 }}>
       <SurfaceChart3D data={chartData} domain={{ x: [-5, 5], z: [-5, 5] }} />
     </ChartContainer3D>
   )

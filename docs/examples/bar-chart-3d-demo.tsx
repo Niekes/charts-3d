@@ -1,5 +1,4 @@
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
-import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { BarChart3D } from "@/components/ui/bar-chart-3d"
 
 export const chartData = [
@@ -18,7 +17,7 @@ export const chartConfig = {
 
 export default function BarChart3DDemo() {
   return (
-    <ChartContainer3D keymap={inspectOnlyKeymap} config={chartConfig} legend>
+    <ChartContainer3D config={chartConfig} legend>
       <BarChart3D
         data={chartData}
         index="month"

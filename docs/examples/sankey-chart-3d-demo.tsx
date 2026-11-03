@@ -1,5 +1,4 @@
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
-import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { SankeyChart3D } from "@/components/ui/sankey-chart-3d"
 
 // The visitors of a month: where they came from, the page they landed on and
@@ -30,11 +29,7 @@ export const chartConfig = {
 
 export default function SankeyChart3DDemo() {
   return (
-    <ChartContainer3D
-      keymap={inspectOnlyKeymap}
-      config={chartConfig}
-      defaultView={{ yaw: -Math.PI / 6, tilt: Math.PI / 6 }}
-    >
+    <ChartContainer3D config={chartConfig} defaultView={{ yaw: -Math.PI / 6, tilt: Math.PI / 6 }}>
       <SankeyChart3D data={chartData} />
     </ChartContainer3D>
   )

@@ -82,3 +82,19 @@ _Avoid_: mouseover, highlight state
 The groups of the hovered mark, lit while the pointer is on it; every mark
 and label that shares none of them fades in place.
 _Avoid_: selection, highlight, active state
+
+## Navigation
+
+**Orbit**:
+Turning the camera around the chart, with a drag or an arrow key.
+_Avoid_: rotate the view, spin
+
+**Pan**:
+Moving the chart within the view, with Space and a drag or Shift and an
+arrow key.
+_Avoid_: Cmd and drag (the browser and the OS take it), scroll, move the camera
+
+**Zoom**:
+Moving the camera closer, with Ctrl or ⌘ and the wheel - a trackpad pinch
+arrives that way - or `+` and `-`. The wheel alone scrolls the page.
+_Avoid_: pinch without Ctrl, dolly, scale

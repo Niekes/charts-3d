@@ -33,10 +33,11 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
-  `ChartContainer3D`. In the demos, keys stay on (arrows rotate, Shift+arrows
-  pan, `+`/`-` zoom, `0` reset, `?` help) and the pointer gestures are off
-  unless the demo opts in: `keymap={inspectOnlyKeymap}` from
-  `docs/examples/inspect-only-keymap.ts`.
+  `ChartContainer3D`. In the demos the standard gestures stay on - a drag
+  rotates, Space and a drag pans, Ctrl or ⌘ with the wheel (a trackpad pinch)
+  zooms, a double click resets - and so do the keys (arrows rotate,
+  Shift+arrows pan, `+`/`-` zoom, `0` reset, `?` help). A demo turns a gesture
+  off only as an explicit opt-out, e.g. `keymap={{ wheelZoom: false }}`.
 - Sort projected shapes with d3-3d's `sort` and give marks stable keys;
   cull cube faces to the `ccw` ones; shade with `shade`, fade with the core,
   hand CSS colors to the core; build the world with `worldBox`; tween numbers

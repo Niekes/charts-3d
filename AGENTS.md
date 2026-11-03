@@ -251,6 +251,10 @@ gesture is a new action, so the panel never misses one.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
   zoom stop at their limits there and nowhere else.
+- **The gestures follow the 3D viewers of the browser:** a drag rotates, Space
+  and a drag pans - the hand of the design tools, and ⌘ and a drag is no pan,
+  the browser and the OS take it - and a double click resets. The panel shows
+  each gesture with its hint, so a chart needs no gesture of its own.
 - **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
   pinches; the wheel alone scrolls the page. The listener is the core's own,
   because React listens to the wheel passively and cannot keep the browser
