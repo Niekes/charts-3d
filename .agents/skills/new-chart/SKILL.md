@@ -36,11 +36,15 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   itself and has no pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
-  `ChartContainer3D`. In the demos the standard gestures stay on - a drag
-  rotates, Space and a drag pans, Ctrl or ⌘ with the wheel (a trackpad pinch)
-  zooms, a double click resets - and so do the keys (arrows rotate,
-  Shift+arrows pan, `+`/`-` zoom, `0` reset, `?` help). A demo turns a gesture
-  off only as an explicit opt-out, e.g. `keymap={{ wheelZoom: false }}`.
+  `ChartContainer3D`. In the demos the standard gestures stay on - the platform
+  modifier and a drag rotate (⌘ on a Mac, Ctrl elsewhere; a plain drag only
+  inspects, with the default cursor), Space and a drag pans, Ctrl or ⌘ with the
+  wheel (a trackpad pinch) zooms, a double click resets - and so do the keys
+  (arrows rotate, Shift+arrows pan, `+`/`-` zoom, `0` reset, `?` help). A demo
+  turns a gesture off only as an explicit opt-out, e.g.
+  `keymap={{ wheelZoom: false }}`. The decisions are recorded in
+  `docs/adr/0001-navigation.md` (navigation) and `docs/adr/0002-hover-highlight.md`
+  (hover highlight).
 - Sort projected shapes with d3-3d's `sort` and give marks stable keys;
   cull cube faces to the `ccw` ones; shade with `shade`, fade with the core,
   hand CSS colors to the core; build the world with `worldBox`; tween numbers

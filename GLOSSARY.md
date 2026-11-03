@@ -88,8 +88,9 @@ _Avoid_: selection, active state, fade
 ## Navigation
 
 **Orbit**:
-Turning the camera around the chart, with a drag or an arrow key.
-_Avoid_: rotate the view, spin
+Turning the camera around the chart, with the platform modifier and a drag -
+⌘ on a Mac, Ctrl elsewhere - or an arrow key; a plain drag only inspects.
+_Avoid_: rotate the view, spin, plain drag
 
 **Pan**:
 Moving the chart within the view, with Space and a drag or Shift and an

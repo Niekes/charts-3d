@@ -153,10 +153,16 @@ describe("SurfaceChart3D transitions", () => {
       [0, 5],
       [10, 15],
     ])
-    // The y axis still shows the ticks of the old heights.
-    expect(host.textContent).not.toContain("15")
+    // The opacity of every axis label with `text`: out-of-range ticks stay mounted but faded out.
+    const opacities = (text: string) =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')]
+        .filter((t) => t.textContent === text)
+        .map((t) => (t as SVGTextElement).style.opacity)
+    // Mid-glide, 15 is outside the gliding ends: present, but faded out.
+    expect(opacities("15").length).toBeGreaterThan(0)
+    expect(opacities("15").every((o) => o === "0")).toBe(true)
     await act(() => vi.advanceTimersByTime(700))
-    expect(host.textContent).toContain("15")
+    expect(opacities("15").some((o) => o === "1")).toBe(true)
 
     await act(async () => root.unmount())
     host.remove()

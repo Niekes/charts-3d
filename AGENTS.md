@@ -175,7 +175,7 @@ How the charts draw, so that a new one draws the same way:
   renderer, ringed by the background. Give a direction that turns with the
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
-- **Focus.** A mark names the marks of the same element in `groups`: the
+- **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md)). A mark names the marks of the same element in `groups`: the
   faces of a bar, the segments of a flow. Pointing at a mark, the core gives
   exactly those an edge in the foreground color - white in the dark theme,
   black in the light - until the pointer leaves the mark; the fill never
@@ -252,10 +252,11 @@ gesture is a new action, so the panel never misses one.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
   zoom stop at their limits there and nowhere else.
-- **The gestures follow the 3D viewers of the browser:** a drag rotates, Space
-  and a drag pans - the hand of the design tools, and ⌘ and a drag is no pan,
-  the browser and the OS take it - and a double click resets. The panel shows
-  each gesture with its hint, so a chart needs no gesture of its own.
+- **The gestures follow the 3D viewers of the browser, gated by the platform
+  modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
+  Windows and Linux, and a drag rotates; a plain drag only inspects, with the
+  default cursor. Space and a drag pans, and a double click resets. The panel
+  shows each gesture with its hint, so a chart needs no gesture of its own.
 - **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
   pinches; the wheel alone scrolls the page. The listener is the core's own,
   because React listens to the wheel passively and cannot keep the browser

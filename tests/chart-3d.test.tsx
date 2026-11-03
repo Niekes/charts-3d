@@ -181,8 +181,20 @@ function Camera() {
 }
 const view = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
-const pointer = (type: string, clientX: number, clientY: number, relatedTarget?: EventTarget) =>
-  new MouseEvent(type, { bubbles: true, clientX, clientY, relatedTarget: relatedTarget ?? null })
+const pointer = (
+  type: string,
+  clientX: number,
+  clientY: number,
+  relatedTarget?: EventTarget,
+  init: MouseEventInit = {}
+) =>
+  new MouseEvent(type, {
+    bubbles: true,
+    clientX,
+    clientY,
+    relatedTarget: relatedTarget ?? null,
+    ...init,
+  })
 
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
@@ -310,7 +322,7 @@ describe("shortcuts", () => {
     await chart.send(key("?"))
     expect(chart.host.textContent).toContain("Pan")
     expect(button.getAttribute("aria-expanded")).toBe("true")
-    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Drag")
+    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Ctrl")
     await chart.send(key("Escape"))
     expect(chart.host.textContent).not.toContain("Pan")
     act(() => button.click())
@@ -333,12 +345,12 @@ describe("shortcuts", () => {
   test("the panel lists an action by its label, its keys grouped by their modifiers", async () => {
     const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
     expect(chart.svg.getAttribute("aria-label")).toBe(
-      "3D chart. Drag to rotate it. Press ? for all shortcuts."
+      "3D chart. Ctrl and drag to rotate it. Press ? for all shortcuts."
     )
     await chart.send(key("?"))
 
     expect(rows(chart.host)).toEqual([
-      ["Rotate", "Drag", "←→↑↓"],
+      ["Rotate", "CtrlDrag", "←→↑↓"],
       ["Pan", "SpaceDrag", "Shift←→↑↓"],
       ["Zoom", "+−", "CtrlScroll"],
       ["Reset", "0", "Double-click"],
@@ -437,8 +449,8 @@ describe("shortcuts", () => {
     await chart.send(space)
     expect(space.defaultPrevented).toBe(false)
     // Without a drag, a press and a move hover the marks.
-    await chart.send(pointer("pointerdown", 150, 150))
-    await chart.send(pointer("pointermove", 196, 150))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(read().yaw).toBeCloseTo(Math.PI / 36)
     expect(chart.host.textContent).toContain("Square")
 
@@ -482,7 +494,7 @@ describe("shortcuts", () => {
     const button = chart.host.querySelector("button")!
     expect(button.getAttribute("aria-label")).toBe("Tastenkürzel")
     expect(chart.svg.getAttribute("aria-label")).toBe(
-      "3D chart. Drag to rotate it. Press h for all shortcuts."
+      "3D chart. Ctrl and drag to rotate it. Press h for all shortcuts."
     )
 
     await chart.send(key("?"))
@@ -494,7 +506,7 @@ describe("shortcuts", () => {
     expect(button.getAttribute("aria-controls")).toBe(panel.id)
 
     expect(rows(chart.host).slice(0, 2)).toEqual([
-      ["Rotate", "Drag", "→↑↓"],
+      ["Rotate", "CtrlDrag", "→↑↓"],
       ["Links drehen", "←"],
     ])
     expect(rows(chart.host).at(-1)).toEqual(["Tastenkürzel", "h"])
@@ -524,19 +536,19 @@ describe("pointer", () => {
     await chart.send(pointer("pointermove", 150, 150))
     expect(chart.host.textContent).toContain("Square")
 
-    await chart.send(pointer("pointerdown", 150, 150))
-    await chart.send(pointer("pointermove", 152, 151))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 152, 151, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBe(0)
     expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
 
-    await chart.send(pointer("pointermove", 196, 150))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
     expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
     // The drag takes the tooltip away and marks the chart as orbiting.
     expect(chart.host.textContent).not.toContain("Square")
     expect(chart.svg.dataset.orbiting).toBe("true")
 
-    await chart.send(pointer("pointermove", 200, 150))
+    await chart.send(pointer("pointermove", 200, 150, undefined, { ctrlKey: true }))
     expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
     await chart.send(pointer("pointerup", 200, 150))
     expect(chart.svg.dataset.orbiting).toBe("false")
@@ -559,10 +571,80 @@ describe("pointer", () => {
 
     await chart.send(pointer("pointercancel", 130, 110))
     await chart.send(new KeyboardEvent("keyup", { key: " ", bubbles: true }))
-    await chart.send(pointer("pointerdown", 100, 100))
-    await chart.send(pointer("pointermove", 130, 100))
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
 
+    await chart.unmount()
+  })
+
+  test("a plain drag does not rotate and keeps the default cursor; the platform modifier and a drag do", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    expect(chart.svg.getAttribute("class")).not.toContain("cursor-grab")
+
+    // Without the modifier, a press and a move only hover the marks.
+    await chart.send(pointer("pointermove", 150, 150))
+    await chart.send(pointer("pointerdown", 150, 150))
+    await chart.send(pointer("pointermove", 196, 150))
+    expect(view(chart.host).yaw).toBe(0)
+    expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
+    expect(chart.host.textContent).toContain("Square")
+
+    // With the platform modifier (Ctrl off Mac), the same drag rotates.
+    await chart.send(pointer("pointerup", 196, 150))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
+    expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
+
+    await chart.unmount()
+  })
+
+  test("a rotate drag stops when the platform modifier is released mid-drag", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
+    const turned = view(chart.host).yaw
+    expect(turned).toBeGreaterThan(0)
+
+    // Modifier released mid-drag: the drag ends, the camera stops.
+    await chart.send(pointer("pointermove", 160, 100))
+    expect(view(chart.host).yaw).toBe(turned)
+    expect(chart.svg.dataset.orbiting).toBe("false")
+
+    await chart.unmount()
+  })
+
+  test("on a Mac the platform modifier is ⌘: the hint and the label show it, and Meta+drag rotates", async () => {
+    Object.defineProperty(navigator, "userAgentData", {
+      value: { platform: "MacIntel" },
+      configurable: true,
+    })
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.getAttribute("aria-label")).toContain("⌘ and drag to rotate it")
+    await chart.send(key("?"))
+    expect(chart.host.textContent).toContain("⌘")
+
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { metaKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { metaKey: true }))
+    expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
+
+    delete (navigator as { userAgentData?: unknown }).userAgentData
     await chart.unmount()
   })
 
@@ -622,8 +704,8 @@ describe("glide", () => {
     await chart.send(key("ArrowRight"))
     await frames(50)
     chart.svg.setPointerCapture = vi.fn()
-    await chart.send(pointer("pointerdown", 100, 100))
-    await chart.send(pointer("pointermove", 123, 100))
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 123, 100, undefined, { ctrlKey: true }))
     const dragged = yaw()
     await frames(250)
     expect(yaw()).toBe(dragged)
@@ -1308,7 +1390,7 @@ describe("focus", () => {
     )
     chart.svg.setPointerCapture = vi.fn()
     const press = (type: string, clientX: number) =>
-      new MouseEvent(type, { bubbles: true, clientX, clientY: 125 })
+      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true })
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
@@ -1469,7 +1551,7 @@ describe("useTween", () => {
     await chart.unmount()
   })
 
-  test("useTweenAxes glides the ends of the axes, with the ticks of the new ones between them", async () => {
+  test("useTweenAxes glides the ends of the axes and keeps the ticks of the new spec", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     function Axes({ hi }: { hi: number }) {
       const spec = useTweenAxes({ x: axis(0, 1), y: axis(0, hi), z: axis(0, 1) })
@@ -1489,13 +1571,13 @@ describe("useTween", () => {
 
     await render(100)
     await render(200)
-    // Rounded, the end jumps from 100 to 200; the axis glides there and shows its ticks up to where it is.
+    // Rounded, the end jumps from 100 to 200; the axis glides there and keeps the ticks of the new spec.
     await act(() => vi.advanceTimersByTime(300))
     const [lo, hi] = y().domain
     expect(lo).toBe(0)
     expect(hi).toBeGreaterThan(100)
     expect(hi).toBeLessThan(200)
-    expect(y().ticks).toEqual(axis(0, 200).ticks.filter((t) => t <= hi))
+    expect(y().ticks).toEqual(axis(0, 200).ticks)
     await act(() => vi.advanceTimersByTime(400))
     expect(y()).toEqual(axis(0, 200))
 

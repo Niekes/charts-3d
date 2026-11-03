@@ -159,7 +159,7 @@ const SHORTCUTS: Record<
   Action3D,
   { label: string; keys?: string[]; hint?: string[]; move?: Move }
 > = {
-  dragRotate: { label: "Rotate", hint: ["Drag"] },
+  dragRotate: { label: "Rotate", hint: ["Mod", "Drag"] },
   rotateLeft: { label: "Rotate", keys: ["ArrowLeft"], move: { yaw: -KEY_STEP } },
   rotateRight: { label: "Rotate", keys: ["ArrowRight"], move: { yaw: KEY_STEP } },
   rotateUp: { label: "Rotate", keys: ["ArrowUp"], move: { tilt: -KEY_STEP } },
@@ -178,6 +178,24 @@ const SHORTCUTS: Record<
 }
 
 const MODIFIERS = ["Control", "Alt", "Meta", "Shift"]
+
+/** Whether the reader is on a Mac, where the platform modifier is ⌘; elsewhere it is Ctrl. */
+const mac = () =>
+  /mac/i.test(
+    (globalThis.navigator as Navigator & { userAgentData?: { platform?: string } })?.userAgentData
+      ?.platform ??
+      globalThis.navigator?.platform ??
+      ""
+  )
+
+/** The label of the platform modifier: ⌘ on a Mac, Ctrl elsewhere. */
+const modLabel = () => (mac() ? "⌘" : "Ctrl")
+
+/** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
+const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
+
+/** Whether `value` lies between the ends `lo` and `hi`. */
+const within = (lo: number, hi: number, value: number) => value >= lo && value <= hi
 // The keys that `aria-keyshortcuts` names, because `+` delimits and a space separates.
 const NAMED: Record<string, string> = { Plus: "+", Space: " " }
 const ARIA: Record<string, string> = { "+": "Plus", " ": "Space" }
@@ -246,7 +264,7 @@ type Shortcut = ReturnType<typeof shortcutsOf>[number]
 function rowsOf(shortcuts: Shortcut[]) {
   const rows = new Map<string, Map<string, string[]>>()
   for (const { action, label, keys, hint } of shortcuts) {
-    const parts = hint ?? split(keys[0]).map((k) => KBD[k] ?? k)
+    const parts = (hint ?? split(keys[0])).map((k) => (k === "Mod" ? modLabel() : (KBD[k] ?? k)))
     const group = hint ? action : parts.slice(0, -1).join("+")
     const groups = rows.get(label) ?? new Map<string, string[]>()
     const known = groups.get(group)
@@ -401,7 +419,7 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
   const help = keys.help[0]
   const said = [
     "3D chart.",
-    keys.on("dragRotate") && "Drag to rotate it.",
+    keys.on("dragRotate") && `${modLabel()} and drag to rotate it.`,
     help && `Press ${aria(help)} for all shortcuts.`,
   ]
   return {
@@ -410,7 +428,8 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
     tabIndex: keys.aria ? 0 : undefined,
     className: cn(
       "block h-auto w-full outline-hidden select-none mask-y-from-96%",
-      drag && "cursor-grab touch-none active:cursor-grabbing"
+      // The default cursor stays, so a plain drag only inspects; the modifier and a drag rotate.
+      drag && "touch-none"
     ),
   }
 }
@@ -523,7 +542,8 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
  * `spec` gliding into new data with the marks: the ends of every axis glide
  * as `useTween` glides the numbers, where ends rounded from the numbers on
  * screen would jump from one round number to the next, and the box with
- * them. The ticks are those of `spec` that lie between the ends.
+ * them. The ticks stay those of `spec`; labels of ticks outside the gliding
+ * ends fade out in `edgeLabels` instead of popping out of the range.
  */
 function useTweenAxes(spec: AxesSpec): AxesSpec {
   const axes = ["x", "y", "z"] as const
@@ -537,8 +557,9 @@ function useTweenAxes(spec: AxesSpec): AxesSpec {
   )
   const glided = (a: keyof AxesSpec): AxisSpec => {
     const [lo, hi] = [ends[`${a}0`], ends[`${a}1`]]
-    const inside = (t: number) => t >= Math.min(lo, hi) && t <= Math.max(lo, hi)
-    return { domain: [lo, hi], ticks: spec[a].ticks.filter(inside) }
+    // The ticks stay those of the target, so a label whose tick lies outside the
+    // gliding ends fades out instead of popping out of the range.
+    return { domain: [lo, hi], ticks: spec[a].ticks }
   }
   return { x: glided("x"), y: glided("y"), z: glided("z") }
 }
@@ -625,7 +646,7 @@ function useOrbit(
 ) {
   const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
-  const drag = React.useRef<Point2D & { moved: boolean }>(null)
+  const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const ref = useWheelZoom(jump, keys.on("wheelZoom"))
   // A drag follows the pointer at once, a key and a double click glide.
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
@@ -639,14 +660,16 @@ function useOrbit(
   const handlers: React.SVGProps<SVGSVGElement> & { "data-orbiting": boolean } = {
     ref,
     onPointerDown: (e) => {
-      // Space is held only while the drag pans; without it, the drag turns.
-      if (space.current || keys.on("dragRotate")) {
-        drag.current = { x: e.clientX, y: e.clientY, moved: false }
+      // Space is held only while the drag pans; the platform modifier held, the drag turns.
+      if (space.current || (keys.on("dragRotate") && platformMod(e))) {
+        drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !space.current }
       }
     },
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return onHover(e)
+      // A rotate drag turns only while the platform modifier is held.
+      if (d.rotate && !platformMod(e)) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
       // A press that wanders a few pixels is still a click on a bar.
@@ -655,7 +678,7 @@ function useOrbit(
         e.currentTarget.setPointerCapture(e.pointerId)
         onDragStart()
       }
-      drag.current = { x: e.clientX, y: e.clientY, moved: true }
+      drag.current = { x: e.clientX, y: e.clientY, moved: true, rotate: d.rotate }
       const k = width / e.currentTarget.getBoundingClientRect().width
       setOrbiting(!space.current)
       move(space.current ? { pan: { x: dx * k, y: dy * k } } : { yaw: dx * DRAG, tilt: dy * DRAG })
@@ -1418,7 +1441,7 @@ function Axes3D({
 }) {
   const { camera } = useChart3D()
   const box = intoWorld(axes3D().camera(camera), world)
-  const { labels, lines, marks } = labelAxes(box.edges(spec), format, titles)
+  const { labels, lines, marks } = labelAxes(box.edges(spec), spec, format, titles)
 
   return (
     <g data-slot="chart-3d-axes">
@@ -1476,6 +1499,8 @@ type AxisLine = {
 type AxisLabel = {
   key: string
   axis: keyof AxesSpec
+  /** The tick value; the axis title has none. */
+  value?: number
   at: Point2D
   w: number
   h: number
@@ -1494,16 +1519,21 @@ type AxisLabel = {
  */
 function labelAxes(
   edges: AxisEdge[],
+  spec: AxesSpec,
   format: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>,
   titles: Partial<Record<keyof AxesSpec, React.ReactNode>>
 ) {
   // An axis without ticks, such as the rows of an empty chart, has nothing to label.
   const axes = edges
     .filter((edge) => edge.length)
-    .map((edge) => edgeLabels(edge, format[edge.axis] ?? String, titles[edge.axis]))
+    .map((edge) =>
+      edgeLabels(edge, spec[edge.axis].domain, format[edge.axis] ?? String, titles[edge.axis])
+    )
   const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
   const placed: AxisLabel[] = []
   for (const label of [...shown.flatMap((a) => a.ticks), ...shown.flatMap((a) => a.title ?? [])]) {
+    // A tick outside the gliding ends stays faded out and does not take room from the others.
+    if (label.opacity === 0) continue
     label.opacity = shows(label, placed)
     placed.push(label)
   }
@@ -1521,25 +1551,52 @@ function labelAxes(
  * the rows that `fit` finds, and the title of the axis beyond them. The
  * labels of an edge the axis does not sit on are there, but do not show.
  */
+/** The ticks whose value lies in `domain`, with the ends of `domain`. */
+function inRange(ticks: AxisLabel[], domain: number[]) {
+  const range = { lo: Math.min(...domain), hi: Math.max(...domain) }
+  return {
+    ranged: ticks.filter((t) => t.value !== undefined && within(range.lo, range.hi, t.value)),
+    range,
+  }
+}
+
+/** An edge the axis does not sit on hides its labels; on a chosen one, the ticks outside the gliding ends fade out. */
+function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, chosen: boolean) {
+  if (!chosen) for (const l of labels) l.opacity = 0
+  else
+    for (const l of labels)
+      if (l.value !== undefined && !within(range.lo, range.hi, l.value)) l.opacity = 0
+}
+
 function edgeLabels(
   edge: AxisEdge,
+  domain: number[],
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
 ) {
   const { axis, normal: n, chosen } = edge
-  const label = (key: string, at: Point2D, text: React.ReactNode, h: number, gap: number) => {
+  const label = (
+    key: string,
+    at: Point2D,
+    text: React.ReactNode,
+    h: number,
+    gap: number,
+    value?: number
+  ) => {
     const w = textWidth(text, h)
-    return { key, axis, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
+    return { key, axis, value, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
   }
   const id = `${axis}${edge.sides.join("")}`
   // Keyed by value, so a tick that new data keeps glides on as the same label.
   const ticks = edge.map((tick) =>
-    label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP)
+    label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP, tick[axis])
   )
+  // Ticks outside the gliding ends fade out; only the ones inside take room.
+  const { ranged, range } = inRange(ticks, domain)
   // How far a row of labels reaches out from the edge.
-  const depth = Math.max(...ticks.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
+  const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
-  const rows = fit(ticks, n, row)
+  const rows = fit(ranged, n, row)
   const start = edge[0].projected
   const end = edge[edge.length - 1].projected
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
@@ -1548,7 +1605,7 @@ function edgeLabels(
     : undefined
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
-  if (!chosen) for (const l of [...ticks, ...(head ? [head] : [])]) l.opacity = 0
+  hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
   // tick, as far out as its label is clear of it, and hides where the label does.
   const line: AxisLine = { key: id, from: start, to: end, opacity: chosen ? 1 : 0 }
@@ -1706,7 +1763,7 @@ function AxisLine3D({
       y2={to.y}
       strokeWidth={width}
       style={{ opacity: Math.round(opacity * 100) / 100 }}
-      className={cn("transition-opacity duration-200 ease-out motion-reduce:transition-none", ink)}
+      className={cn("transition-opacity duration-300 ease-out motion-reduce:transition-none", ink)}
     />
   )
 }
@@ -1724,7 +1781,7 @@ function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: Ax
       dominantBaseline="central"
       style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
       className={cn(
-        "transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none",
+        "transition-[opacity,translate] duration-300 ease-out motion-reduce:transition-none",
         title ? "fill-foreground font-medium" : "fill-muted-foreground text-[10px]"
       )}
     >

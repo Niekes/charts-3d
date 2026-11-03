@@ -98,10 +98,16 @@ describe("ScatterChart3D transitions", () => {
       { x: 0, y: 0, z: 0 },
       { x: 20, y: 20, z: 20 },
     ])
-    // The axes still show the ticks of the old positions.
-    expect(host.textContent).not.toContain("20")
+    // The opacity of every axis label with `text`: out-of-range ticks stay mounted but faded out.
+    const opacities = (text: string) =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')]
+        .filter((t) => t.textContent === text)
+        .map((t) => (t as SVGTextElement).style.opacity)
+    // Mid-glide, 20 is outside the gliding ends: present, but faded out.
+    expect(opacities("20").length).toBeGreaterThan(0)
+    expect(opacities("20").every((o) => o === "0")).toBe(true)
     await act(() => vi.advanceTimersByTime(700))
-    expect(host.textContent).toContain("20")
+    expect(opacities("20").some((o) => o === "1")).toBe(true)
 
     await act(async () => root.unmount())
     host.remove()
