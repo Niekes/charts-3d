@@ -131,8 +131,7 @@ export function SankeyChart3D({
             key,
             faces,
             node.column < (columns - 1) / 2 ? "left" : "right",
-            style(config, node).label,
-            links(node)
+            style(config, node).label
           ),
         ]
       : []
@@ -155,17 +154,10 @@ function style(config: ChartConfig, node: SankeyNode) {
 }
 
 /**
- * The keys of the flows at a node. Its marks and its label carry them, so the
- * focus on the node lights its flows and the nodes at their other ends, and
- * the focus on a flow lights its two nodes.
- */
-function links(node: SankeyNode) {
-  return [...new Set([...node.incoming, ...node.outgoing].map((hop) => hop.flow.key))]
-}
-
-/**
- * The marks of a piece, each with its tooltip and its groups: the faces of a
+ * The marks of a piece, each with its tooltip and its group: the faces of a
  * node, or the faces of a slice of a flow, in the color it has turned to there.
+ * The group is the element alone, so hovering highlights one node, or one flow
+ * with all its segments.
  */
 function pieceMarks(
   { key, faces, node, flow, t }: Cube<Point3D, Piece>,
@@ -175,11 +167,10 @@ function pieceMarks(
   const at = center(faces.find((face) => face.face === "top")!)
   if (node) {
     const { label, color } = style(config, node)
-    const groups = links(node)
     return cubeMarks(key, faces, color, {
       at,
       items: [{ label, value: format(node.value), color }],
-    }).map((mark) => ({ ...mark, groups }))
+    }).map((mark) => ({ ...mark, groups: [key] }))
   }
   const source = style(config, flow!.source)
   const target = style(config, flow!.target)
@@ -556,15 +547,13 @@ function depthSort<
  * The label of a node beside its `outer` face, pushed away from the other side,
  * so that it stays outside whichever way the camera turns. Seen edge on, where
  * the two sides meet and away has no direction, the label lifts over the node,
- * so it swings round to the other side instead of jumping across. It carries
- * the groups of the node, so it fades with the node.
+ * so it swings round to the other side instead of jumping across.
  */
 function nodeLabel(
   key: string,
   faces: CubeFace[],
   outer: "left" | "right",
-  text: React.ReactNode,
-  groups: string[]
+  text: React.ReactNode
 ): Label3D {
   const side = (name: "left" | "right") => center(faces.find((face) => face.face === name)!)
   const at = side(outer)
@@ -572,5 +561,5 @@ function nodeLabel(
   const lift = Math.max(0, SWING - Math.abs(away))
   const length = Math.hypot(away, lift)
   const toward = { x: away / length, y: -lift / length }
-  return { key, at: { x: at.x + 8 * toward.x, y: at.y + 8 * toward.y }, text, toward, groups }
+  return { key, at: { x: at.x + 8 * toward.x, y: at.y + 8 * toward.y }, text, toward }
 }

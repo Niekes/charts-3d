@@ -109,9 +109,9 @@ describe("ScatterChart3D transitions", () => {
 })
 
 describe("ScatterChart3D focus", () => {
-  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+  const edge = "var(--foreground)"
 
-  test("hovering a point keeps its series lit and fades the rest; leaving the point clears it", async () => {
+  test("hovering a point highlights that point alone with an edge; the fill never changes; leaving clears it", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
@@ -133,42 +133,35 @@ describe("ScatterChart3D focus", () => {
     )
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
-    const fills = () => [...svg.querySelectorAll("circle")].map((c) => c.getAttribute("fill")!)
+    const circles = () => [...svg.querySelectorAll("circle")]
+    const fills = () => circles().map((c) => c.getAttribute("fill")!)
+    const edged = () => circles().filter((c) => c.getAttribute("stroke") === edge)
     const move = (clientX: number, clientY: number) =>
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
       )
-    const point = [...svg.querySelectorAll("circle")].find(
-      (c) => c.getAttribute("fill") === "var(--color-a)"
-    )!
+    const point = circles().find((c) => c.getAttribute("fill") === "var(--color-a)")!
     const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+    const before = fills()
 
     await move(clientX, clientY)
-    // The series of the point stays lit, the other series fades.
-    expect(
-      fills()
-        .filter((f) => f.includes("color-a"))
-        .every((f) => !faded(f))
-    ).toBe(true)
-    expect(
-      fills()
-        .filter((f) => f.includes("color-b"))
-        .every(faded)
-    ).toBe(true)
+    // The single point alone gets the edge - not its series - and no fill changes.
+    expect(edged()).toHaveLength(1)
+    expect(fills()).toEqual(before)
 
-    // Off the point, still inside the chart: nothing faded any more.
+    // Off the point, still inside the chart: no edge.
     await move(5, 5)
-    expect(fills().some(faded)).toBe(false)
+    expect(edged()).toHaveLength(0)
 
     // Hover again, then leave the chart.
     await move(clientX, clientY)
-    expect(fills().some(faded)).toBe(true)
+    expect(edged()).toHaveLength(1)
     await act(() =>
       svg.dispatchEvent(
         new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
       )
     )
-    expect(fills().some(faded)).toBe(false)
+    expect(edged()).toHaveLength(0)
 
     await act(async () => root.unmount())
     host.remove()

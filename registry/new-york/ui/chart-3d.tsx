@@ -75,9 +75,10 @@ export type Mark3D = {
   /** Shown while the pointer is over the mark. */
   tooltip?: Tooltip3D
   /**
-   * What the mark belongs to, such as a flow, or connects, such as a node.
-   * Pointing at a mark fades every mark and label that shares none of its
-   * groups, until the pointer leaves the mark; one without groups never fades.
+   * The marks of the same element as this one: the faces of a bar, the
+   * segments of a flow. Pointing at a mark gives them an edge in the
+   * foreground color, until the pointer leaves the mark; the fill never
+   * changes on hover.
    */
   groups?: string[]
 }
@@ -784,23 +785,12 @@ function useFocus(): Focus3D {
   return focus
 }
 
-/**
- * Whether an item fades under the focus: it has groups and shares none with
- * the focus, while some item of `items` does, so a focus on groups that are
- * gone fades nothing.
- */
-function useFocusGroups(items: { groups?: string[] }[]) {
+/** Whether an item shares a group with the focus: the hover highlights those items with an edge. */
+function useLit(items: { groups?: string[] }[]) {
   const { focus } = useChart3D()
   const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
-  const lit = (of?: string[]) => of?.some((group) => groups?.includes(group)) ?? false
-  const on = items.some((item) => lit(item.groups))
-  return {
-    // The items that share a group with the focus: the hover highlights them with an edge.
-    lit: (item: { groups?: string[] }) => lit(item.groups),
-    // Whether an item fades under the focus: it has groups and shares none with the
-    // focus, while some item of `items` does, so a focus on groups that are gone fades nothing.
-    fades: (item: { groups?: string[] }) => on && item.groups !== undefined && !lit(item.groups),
-  }
+  return (item: { groups?: string[] }) =>
+    item.groups !== undefined && (groups?.some((group) => item.groups!.includes(group)) ?? false)
 }
 
 /** The topmost mark under `at`: the last one painted that holds it. */
@@ -1173,16 +1163,10 @@ function ChartGizmo3D({
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
-  const { fades, lit } = useFocusGroups(marks)
-  // Faded in place, so the order, and with it the depth, stays as the chart painted it;
-  // the lit marks get an edge in the foreground color, which reads in both themes.
-  const drawn = marks.map((mark) =>
-    lit(mark)
-      ? { ...mark, stroke: "var(--foreground)" }
-      : fades(mark)
-        ? { ...mark, fill: fade(mark.fill) }
-        : mark
-  )
+  const lit = useLit(marks)
+  // The lit marks get an edge in the foreground color, which reads in both themes; the
+  // fill never changes on hover, and the order, and with it the depth, stays as painted.
+  const drawn = marks.map((mark) => (lit(mark) ? { ...mark, stroke: "var(--foreground)" } : mark))
   React.useLayoutEffect(() => {
     scene.current = drawn
     repaint()
@@ -1225,8 +1209,6 @@ export type Label3D = {
   text: React.ReactNode
   anchor?: "start" | "middle" | "end"
   toward?: Point2D
-  /** The groups of the mark it names, so it fades with the mark out of focus. */
-  groups?: string[]
 }
 
 /**
@@ -1234,7 +1216,6 @@ export type Label3D = {
  * read on the marks. Like the labels of the box, they are SVG with every renderer.
  */
 function Labels3D({ labels }: { labels: Label3D[] }) {
-  const { fades } = useFocusGroups(labels)
   // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
@@ -1252,10 +1233,7 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
             paintOrder="stroke"
             strokeWidth={3}
             strokeLinejoin="round"
-            className={cn(
-              "fill-foreground stroke-background text-[10px] font-medium",
-              fades(label) && "opacity-25"
-            )}
+            className="fill-foreground stroke-background text-[10px] font-medium"
           >
             {label.text}
           </text>
@@ -1812,11 +1790,6 @@ function shade(face: TransformedPoint<unknown>[], color: string) {
   const side = n.z < 0 ? -1 : 1
   const light = Math.max(0, side * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z))
   return `color-mix(in oklch, ${color} ${Math.round(65 + 35 * light)}%, black)`
-}
-
-/** `color` out of focus: a quarter of it over the background, opaque, so the seams between faces stay closed. */
-function fade(color: string) {
-  return `color-mix(in oklch, ${color} 25%, var(--background))`
 }
 
 /** The mean of the projected points, where a tooltip points at. */

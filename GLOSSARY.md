@@ -79,12 +79,11 @@ and both go when the pointer leaves the mark or the chart.
 _Avoid_: mouseover, highlight state
 
 **Focus**:
-The groups of the hovered mark, lit while the pointer is on it with an edge
-in the foreground color - white in the dark theme, black in the light; the
-fill does not change - while every mark and label that shares none of them
-fades in place. Every chart's marks carry their groups - the bar alone, the
-point and its series - so the highlight works in every chart.
-_Avoid_: selection, active state
+The element under the pointer, highlighted with an edge in the foreground
+color - white in the dark theme, black in the light; the fill never changes.
+Every chart's marks carry their `groups`, naming the marks of the same
+element: the faces of a bar, the segments of a flow.
+_Avoid_: selection, active state, fade
 
 ## Navigation
 

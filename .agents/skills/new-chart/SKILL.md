@@ -27,13 +27,13 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
 - **Hover comes from the core.** Give every mark a `tooltip` and `groups`
-  naming what is highlighted together - the bar alone in the bar chart, the
-  point and its series in the scatter - so that in every chart, while the
-  pointer is on a mark, its tooltip shows, the marks of its groups get an edge
-  in `var(--foreground)` (their fill does not change) and the marks and labels
-  that share none of its groups fade; when the pointer leaves the mark or the
-  chart, both clear. A chart never fades anything itself and has no pointer
-  handlers.
+  naming the marks of the same element - the bar alone in the bar chart, the
+  single point in the scatter, one flow with all its segments in the sankey -
+  so that in every chart, while the pointer is on a mark, its tooltip shows and
+  exactly those marks get an edge in `var(--foreground)` (white in the dark
+  theme, black in the light; the fill never changes); when the pointer leaves
+  the mark or the chart, the edge clears. A chart never highlights anything
+  itself and has no pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - a drag

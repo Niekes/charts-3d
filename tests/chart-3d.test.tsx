@@ -1239,20 +1239,18 @@ describe("focus", () => {
     square("none", 300),
   ]
   const labels = [
-    { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const, groups: ["a"] },
-    { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const, groups: ["b"] },
+    { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const },
+    { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const },
   ]
-  const faded = "color-mix(in oklch, red 25%, var(--background))"
+  const edge = "var(--foreground)"
   const fills = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].map((path) => path.getAttribute("fill"))
-  const fadedLabels = (svg: SVGSVGElement) =>
-    [...svg.querySelectorAll("[data-slot=chart-3d-labels] text")].map((text) =>
-      text.classList.contains("opacity-25")
-    )
+  const strokes = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("path")].map((path) => path.getAttribute("stroke"))
   const move = (clientX: number, clientY: number) =>
     new MouseEvent("pointermove", { bubbles: true, clientX, clientY })
 
-  test("the pointer on a mark fades the marks and labels that share none of its groups", async () => {
+  test("the pointer on a mark gives the marks that share its groups an edge; the fill never changes", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -1260,28 +1258,28 @@ describe("focus", () => {
       </ChartContainer3D>
     )
     expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
-    // b shares no group with a, ab shares one, and a mark without groups never fades.
-    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
-    expect(fadedLabels(chart.svg)).toEqual([false, true])
+    // a and ab share group "a" with the hovered mark and get the edge; b and the groupless one do not.
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
 
-    // Off the mark the tooltip and the focus go with it; leaving the chart does the same.
+    // Off the mark the tooltip and the edge go with it; leaving the chart does the same.
     await chart.send(move(25, 350))
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
-    expect(fadedLabels(chart.svg)).toEqual([false, false])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
     await chart.send(move(25, 125))
-    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
+    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
     await chart.send(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }))
-    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
 
     await chart.unmount()
   })
 
-  test("the scene, which the canvas paints and the hover reads, has the faded marks too", async () => {
-    let scene: { current: { fill: string }[] } = { current: [] }
+  test("the scene, which the canvas paints and the hover reads, has the edged marks too", async () => {
+    let scene: { current: { fill: string; stroke?: string }[] } = { current: [] }
     function Scene() {
       scene = useChart3D().scene
       return null
@@ -1293,11 +1291,16 @@ describe("focus", () => {
       </ChartContainer3D>
     )
     await chart.send(move(25, 125))
-    expect(scene.current.map((mark) => mark.fill)).toEqual(["red", faded, "red", "red"])
+    expect(scene.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
+      edge,
+      "red",
+      edge,
+      "red",
+    ])
     await chart.unmount()
   })
 
-  test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
+  test("a drag that turns the chart drops the tooltip and keeps the edge", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -1313,12 +1316,12 @@ describe("focus", () => {
     await chart.send(press("pointermove", 75))
     expect(chart.svg.setPointerCapture).toHaveBeenCalled()
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(fills(chart.svg)).toContain(faded)
+    expect(strokes(chart.svg)).toContain(edge)
 
     await chart.unmount()
   })
 
-  test("a focus on groups that no mark has any more fades nothing", async () => {
+  test("a focus on groups that no mark has any more highlights nothing", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     const render = (marks: typeof squares) =>
@@ -1333,10 +1336,10 @@ describe("focus", () => {
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     await act(() => svg.dispatchEvent(move(25, 125)))
-    expect(fills(svg)).toContain(faded)
+    expect(strokes(svg)).toContain(edge)
 
     await render([square("b", 100, ["b"]), square("c", 200, ["c"])])
-    expect(fills(svg)).toEqual(["red", "red"])
+    expect(strokes(svg)).toEqual(["red", "red"])
 
     await act(async () => root.unmount())
     host.remove()

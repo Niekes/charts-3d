@@ -356,16 +356,16 @@ describe("BarChart3D transitions", () => {
 })
 
 describe("BarChart3D focus", () => {
-  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+  const edge = "var(--foreground)"
   const barFaces = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].flatMap((p) => {
       const f = p.getAttribute("fill")
       return f?.startsWith("color-mix") ? [p] : []
     })
   const edged = (svg: SVGSVGElement) =>
-    barFaces(svg).filter((p) => p.getAttribute("stroke") === "var(--foreground)")
+    barFaces(svg).filter((p) => p.getAttribute("stroke") === edge)
 
-  test("hovering a bar highlights that bar alone with an edge; leaving clears it", async () => {
+  test("hovering a bar highlights that bar alone with an edge; the fill never changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <BarChart3D data={data} index="name" />
@@ -374,6 +374,7 @@ describe("BarChart3D focus", () => {
     const svg = chart.host.querySelector("svg")!
     const move = (clientX: number, clientY: number) =>
       chart.send("pointermove", { clientX, clientY })
+    const before = barFaces(svg).map((p) => p.getAttribute("fill"))
     // The centroid of a face of a bar of series a.
     const face = barFaces(svg).find((p) => p.getAttribute("fill")!.includes("var(--color-a)"))!
     const corners = face.getAttribute("d")!.slice(1, -1).split("L")
@@ -382,18 +383,12 @@ describe("BarChart3D focus", () => {
     )
 
     await move(x, y)
-    // One bar alone is highlighted, with an edge; its fill does not change, the rest fades.
-    const faces = barFaces(svg)
-    const lit = edged(svg)
-    expect(lit.length).toBeGreaterThan(0)
-    expect(lit.every((p) => !faded(p.getAttribute("fill")!))).toBe(true)
-    expect(faces.filter((p) => !lit.includes(p)).every((p) => faded(p.getAttribute("fill")!))).toBe(
-      true
-    )
+    // One bar alone is highlighted, with an edge; no fill changes.
+    expect(edged(svg).length).toBeGreaterThan(0)
+    expect(barFaces(svg).map((p) => p.getAttribute("fill"))).toEqual(before)
 
-    // Off the bar, still inside the chart: no edge, nothing faded.
+    // Off the bar, still inside the chart: no edge.
     await move(5, 5)
-    expect(barFaces(svg).some((p) => faded(p.getAttribute("fill")!))).toBe(false)
     expect(edged(svg)).toHaveLength(0)
 
     // Hover again, then leave the chart.
@@ -401,7 +396,6 @@ describe("BarChart3D focus", () => {
     expect(edged(svg).length).toBeGreaterThan(0)
     await chart.send("pointerout", { relatedTarget: document.body })
     expect(edged(svg)).toHaveLength(0)
-    expect(barFaces(svg).some((p) => faded(p.getAttribute("fill")!))).toBe(false)
 
     await chart.unmount()
   })

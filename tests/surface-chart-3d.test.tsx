@@ -164,9 +164,9 @@ describe("SurfaceChart3D transitions", () => {
 })
 
 describe("SurfaceChart3D focus", () => {
-  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+  const edge = "var(--foreground)"
 
-  test("hovering a cell lights it alone and fades the rest; leaving the cell clears it", async () => {
+  test("hovering a cell highlights that cell alone with an edge; the fill never changes; leaving clears it", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
@@ -184,41 +184,43 @@ describe("SurfaceChart3D focus", () => {
     )
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
-    const fills = () =>
+    const quads = () =>
       [...svg.querySelectorAll("path")].flatMap((p) => {
         const f = p.getAttribute("fill")
-        return f?.startsWith("color-mix") ? [f] : []
+        return f?.startsWith("color-mix") ? [p] : []
       })
+    const fills = () => quads().map((p) => p.getAttribute("fill")!)
+    const edged = () => quads().filter((p) => p.getAttribute("stroke") === edge)
     const move = (clientX: number, clientY: number) =>
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
       )
-    const quad = [...svg.querySelectorAll("path")].find((p) =>
-      p.getAttribute("fill")?.startsWith("color-mix")
-    )!
+    const quad = quads()[0]
     const corners = quad.getAttribute("d")!.slice(1, -1).split("L")
     const [x, y] = [0, 1].map(
       (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
     )
+    const before = fills()
 
     await move(x, y)
-    // Only the hovered cell stays lit.
-    expect(fills().length).toBeGreaterThan(1)
-    expect(fills().filter((f) => !faded(f))).toHaveLength(1)
+    // Only the hovered cell gets the edge; every fill stays as it was.
+    expect(quads().length).toBeGreaterThan(1)
+    expect(edged()).toHaveLength(1)
+    expect(fills()).toEqual(before)
 
-    // Off the cell, still inside the chart: nothing faded any more.
+    // Off the cell, still inside the chart: no edge.
     await move(5, 5)
-    expect(fills().some(faded)).toBe(false)
+    expect(edged()).toHaveLength(0)
 
     // Hover again, then leave the chart.
     await move(x, y)
-    expect(fills().some(faded)).toBe(true)
+    expect(edged()).toHaveLength(1)
     await act(() =>
       svg.dispatchEvent(
         new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
       )
     )
-    expect(fills().some(faded)).toBe(false)
+    expect(edged()).toHaveLength(0)
 
     await act(async () => root.unmount())
     host.remove()

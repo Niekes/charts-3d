@@ -88,6 +88,7 @@ async function pointAt(element: React.ReactElement, pick: (fill: string) => bool
   const read = () => ({
     corners: paths().map((path) => path.getAttribute("d")),
     fills: paths().map((path) => path.getAttribute("fill")!),
+    strokes: paths().map((path) => path.getAttribute("stroke")),
     labels: Object.fromEntries(
       [...host.querySelectorAll("[data-slot=chart-3d-labels] text")].map((text) => [
         text.textContent,
@@ -122,7 +123,7 @@ const flowFill = (from: string, to: string) => (fill: string) =>
 const nodeFill = (color: string) => (fill: string) =>
   new RegExp(`(^|, )color-mix\\(in oklch, ${escape(color)} \\d+%, black\\)`).test(fill)
 
-const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+const edge = "var(--foreground)"
 
 /**
  * Whether, in every slice where both have faces and that has come `within`
@@ -417,7 +418,7 @@ describe("SankeyChart3D", () => {
     ])
   })
 
-  test("pointing at a flow fades the flows and nodes it does not connect, in place", async () => {
+  test("pointing at a flow gives its segments an edge; no fill changes, in place", async () => {
     const [a, b, c] = ["var(--color-a)", "var(--color-b)", "var(--color-c)"]
     const { before, after } = await pointAt(
       chart(
@@ -429,20 +430,19 @@ describe("SankeyChart3D", () => {
       ),
       flowFill(a, b)
     )
-    expect(before.fills.some(faded)).toBe(false)
-    const fades = (is: (fill: string) => boolean) => after.fills.filter(is).map(faded)
-    expect(new Set(fades(flowFill(a, c)))).toEqual(new Set([true]))
-    expect(new Set(fades(nodeFill(c)))).toEqual(new Set([true]))
-    for (const lit of [flowFill(a, b), nodeFill(a), nodeFill(b)]) {
-      expect(new Set(fades(lit))).toEqual(new Set([false]))
+    const edged = (is: (fill: string) => boolean) =>
+      after.strokes.filter((_, i) => is(after.fills[i]))
+    // The segments of a → b alone get the edge; every fill stays as it was.
+    expect(new Set(edged(flowFill(a, b)))).toEqual(new Set([edge]))
+    for (const other of [flowFill(a, c), nodeFill(a), nodeFill(b), nodeFill(c)]) {
+      expect(new Set(edged(other))).not.toContain(edge)
     }
-    expect(after.labels.C).toContain("opacity-25")
-    expect([after.labels.A, after.labels.B].join(" ")).not.toContain("opacity-25")
-    // Faded in place: the depth order stays as it was.
+    expect(after.fills).toEqual(before.fills)
+    // Highlighted in place: the depth order stays as it was.
     expect(after.corners).toEqual(before.corners)
   })
 
-  test("pointing at a node keeps its flows and the nodes at their other ends", async () => {
+  test("pointing at a node gives the node alone an edge, not its flows", async () => {
     const [a, b, c, x] = [
       "var(--color-a)",
       "var(--color-b)",
@@ -460,17 +460,22 @@ describe("SankeyChart3D", () => {
       ),
       nodeFill(b)
     )
-    const fades = (is: (fill: string) => boolean) => new Set(after.fills.filter(is).map(faded))
-    for (const lit of [flowFill(a, b), flowFill(b, c), nodeFill(a), nodeFill(b), nodeFill(c)]) {
-      expect(fades(lit)).toEqual(new Set([false]))
+    const edged = (is: (fill: string) => boolean) =>
+      new Set(after.strokes.filter((_, i) => is(after.fills[i])))
+    expect(edged(nodeFill(b))).toEqual(new Set([edge]))
+    for (const other of [
+      flowFill(a, b),
+      flowFill(b, c),
+      flowFill(x, c),
+      nodeFill(a),
+      nodeFill(c),
+      nodeFill(x),
+    ]) {
+      expect(edged(other)).not.toContain(edge)
     }
-    // x → c, its waypoint included, and x fade.
-    expect(fades(flowFill(x, c))).toEqual(new Set([true]))
-    expect(fades(nodeFill(x))).toEqual(new Set([true]))
-    expect(after.labels.x).toContain("opacity-25")
   })
 
-  test("leaving the flow or the chart clears the hover: no tooltip, nothing faded", async () => {
+  test("leaving the flow or the chart clears the hover: no tooltip, no edge", async () => {
     const [a, b] = ["var(--color-a)", "var(--color-b)"]
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
@@ -487,7 +492,7 @@ describe("SankeyChart3D", () => {
     )
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
-    const fills = () => [...svg.querySelectorAll("path")].map((p) => p.getAttribute("fill")!)
+    const strokes = () => [...svg.querySelectorAll("path")].map((p) => p.getAttribute("stroke"))
     const face = [...svg.querySelectorAll("path")]
       .filter((p) => flowFill(a, b)(p.getAttribute("fill")!))
       .at(-1)!
@@ -502,15 +507,15 @@ describe("SankeyChart3D", () => {
 
     await move(x, y)
     expect(host.textContent).toContain("2 kWh")
-    expect(fills().some(faded)).toBe(true)
+    expect(strokes().some((s) => s === edge)).toBe(true)
 
     // Off the flow, still inside the chart: the hover goes with the mark.
     await move(5, 5)
     expect(host.textContent).not.toContain("2 kWh")
-    expect(fills().some(faded)).toBe(false)
+    expect(strokes().some((s) => s === edge)).toBe(false)
 
     await move(x, y)
-    expect(fills().some(faded)).toBe(true)
+    expect(strokes().some((s) => s === edge)).toBe(true)
     // Leaving the chart clears it as well.
     await act(() =>
       svg.dispatchEvent(
@@ -518,7 +523,7 @@ describe("SankeyChart3D", () => {
       )
     )
     expect(host.textContent).not.toContain("2 kWh")
-    expect(fills().some(faded)).toBe(false)
+    expect(strokes().some((s) => s === edge)).toBe(false)
 
     await act(async () => root.unmount())
     host.remove()
@@ -550,7 +555,10 @@ describe("SankeyChart3D", () => {
         )
       )
     }
-    const fade = (is: (fill: string) => boolean) => new Set(fills().filter(is).map(faded))
+    const strokes = () =>
+      [...host.querySelector("svg")!.querySelectorAll("path")].map((p) => p.getAttribute("stroke"))
+    const edged = (is: (fill: string) => boolean) =>
+      new Set(strokes().filter((_, i) => is(fills()[i])))
 
     // A flow that comes before the one in focus does not take its place.
     await render([
@@ -563,17 +571,18 @@ describe("SankeyChart3D", () => {
       { source: "a", target: "b", value: 2 },
       { source: "a", target: "c", value: 1 },
     ])
-    expect(fade(flowFill(a, c))).toEqual(new Set([false]))
-    expect(fade(flowFill(a, b))).toEqual(new Set([true]))
+    expect(edged(flowFill(a, c))).toEqual(new Set([edge]))
+    expect(edged(flowFill(a, b))).not.toContain(edge)
 
-    // A node in focus that gains a flow lights it on the next move of the pointer.
+    // A node in focus that gains a flow highlights the node alone on the next move of the pointer.
     await point(nodeFill(b))
     await render([
       { source: "a", target: "b", value: 2 },
       { source: "b", target: "d", value: 2 },
     ])
     await point(nodeFill(b))
-    expect(fade(flowFill(b, d))).toEqual(new Set([false]))
+    expect(edged(nodeFill(b))).toEqual(new Set([edge]))
+    expect(edged(flowFill(b, d))).not.toContain(edge)
 
     await act(async () => root.unmount())
     host.remove()
