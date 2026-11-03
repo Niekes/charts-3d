@@ -190,6 +190,9 @@ function pieceMarks(
   return cubeMarks(key, sides, gradient, { at, items: [item] }).map((mark) => ({
     ...mark,
     groups: [flow!.key],
+    // The faces across the flow keep their own color as their edge, so the highlight
+    // outlines the flow without seams between its segments.
+    ...(mark.key.endsWith("-front") || mark.key.endsWith("-back") ? { stroke: gradient } : {}),
   }))
 }
 

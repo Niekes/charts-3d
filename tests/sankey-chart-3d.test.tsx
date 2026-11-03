@@ -426,16 +426,20 @@ describe("SankeyChart3D", () => {
           { source: "a", target: "b", value: 2 },
           { source: "a", target: "c", value: 1 },
         ],
-        { yaw: 0, tilt: 0 }
+        { yaw: 0, tilt: Math.PI / 6 }
       ),
       flowFill(a, b)
     )
     const edged = (is: (fill: string) => boolean) =>
       after.strokes.filter((_, i) => is(after.fills[i]))
-    // The segments of a → b alone get the edge; every fill stays as it was.
-    expect(new Set(edged(flowFill(a, b)))).toEqual(new Set([edge]))
+    // The outline of a → b alone gets the edge; the faces across the flow keep their
+    // color, so the highlight shows no seams between the segments.
+    expect(edged(flowFill(a, b))).toContain(edge)
+    expect(edged(flowFill(a, b)).filter((s) => s === edge).length).toBeLessThan(
+      edged(flowFill(a, b)).length
+    )
     for (const other of [flowFill(a, c), nodeFill(a), nodeFill(b), nodeFill(c)]) {
-      expect(new Set(edged(other))).not.toContain(edge)
+      expect(edged(other)).not.toContain(edge)
     }
     expect(after.fills).toEqual(before.fills)
     // Highlighted in place: the depth order stays as it was.
@@ -462,7 +466,7 @@ describe("SankeyChart3D", () => {
     )
     const edged = (is: (fill: string) => boolean) =>
       new Set(after.strokes.filter((_, i) => is(after.fills[i])))
-    expect(edged(nodeFill(b))).toEqual(new Set([edge]))
+    expect(edged(nodeFill(b))).toContain(edge)
     for (const other of [
       flowFill(a, b),
       flowFill(b, c),
@@ -486,7 +490,7 @@ describe("SankeyChart3D", () => {
             { source: "a", target: "b", value: 2 },
             { source: "a", target: "c", value: 1 },
           ],
-          { yaw: 0, tilt: 0 }
+          { yaw: 0, tilt: Math.PI / 6 }
         )
       )
     )
@@ -534,7 +538,7 @@ describe("SankeyChart3D", () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     const render = (data: SankeyChart3DProps["data"]) =>
-      act(async () => root.render(chart(data, { yaw: 0, tilt: 0 })))
+      act(async () => root.render(chart(data, { yaw: 0, tilt: Math.PI / 6 })))
     const fills = () =>
       [...host.querySelector("svg")!.querySelectorAll("path")].map((p) => p.getAttribute("fill")!)
     const point = (pick: (fill: string) => boolean) => {
@@ -565,14 +569,14 @@ describe("SankeyChart3D", () => {
       { source: "a", target: "b", value: 2 },
       { source: "a", target: "c", value: 1 },
     ])
-    await point(flowFill(a, c))
+    await point(flowFill(a, b))
     await render([
       { source: "a", target: "d", value: 1 },
       { source: "a", target: "b", value: 2 },
       { source: "a", target: "c", value: 1 },
     ])
-    expect(edged(flowFill(a, c))).toEqual(new Set([edge]))
-    expect(edged(flowFill(a, b))).not.toContain(edge)
+    expect(edged(flowFill(a, b))).toContain(edge)
+    expect(edged(flowFill(a, c))).not.toContain(edge)
 
     // A node in focus that gains a flow highlights the node alone on the next move of the pointer.
     await point(nodeFill(b))

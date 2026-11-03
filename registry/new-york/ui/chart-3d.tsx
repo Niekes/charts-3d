@@ -646,6 +646,19 @@ function useOrbit(
 ) {
   const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
+  // Whether the platform modifier is held, so the cursor shows a hand before the drag rotates.
+  const [modHeld, setModHeld] = React.useState(false)
+  React.useEffect(() => {
+    const modKey = mac() ? "Meta" : "Control"
+    const down = (e: KeyboardEvent) => e.key === modKey && setModHeld(true)
+    const up = (e: KeyboardEvent) => e.key === modKey && setModHeld(false)
+    window.addEventListener("keydown", down)
+    window.addEventListener("keyup", up)
+    return () => {
+      window.removeEventListener("keydown", down)
+      window.removeEventListener("keyup", up)
+    }
+  }, [])
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const ref = useWheelZoom(jump, keys.on("wheelZoom"))
   // A drag follows the pointer at once, a key and a double click glide.
@@ -657,7 +670,10 @@ function useOrbit(
     setOrbiting(false)
   }
 
-  const handlers: React.SVGProps<SVGSVGElement> & { "data-orbiting": boolean } = {
+  const handlers: React.SVGProps<SVGSVGElement> & {
+    "data-orbiting": boolean
+    "data-mod"?: string
+  } = {
     ref,
     onPointerDown: (e) => {
       // Space is held only while the drag pans; the platform modifier held, the drag turns.
@@ -688,6 +704,7 @@ function useOrbit(
     onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
     "data-orbiting": orbiting,
+    "data-mod": keys.on("dragRotate") && modHeld ? "true" : undefined,
   }
 
   return { view, handlers }
@@ -1189,7 +1206,17 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   const lit = useLit(marks)
   // The lit marks get an edge in the foreground color, which reads in both themes; the
   // fill never changes on hover, and the order, and with it the depth, stays as painted.
-  const drawn = marks.map((mark) => (lit(mark) ? { ...mark, stroke: "var(--foreground)" } : mark))
+  // A lit mark gets an edge in the foreground color - unless it carries its own stroke
+  // (a background ring turns into the edge; a flow's inner faces keep their color, so no seams).
+  const drawn = marks.map((mark) =>
+    lit(mark)
+      ? {
+          ...mark,
+          stroke:
+            mark.stroke && mark.stroke !== "var(--background)" ? mark.stroke : "var(--foreground)",
+        }
+      : mark
+  )
   React.useLayoutEffect(() => {
     scene.current = drawn
     repaint()
@@ -1269,7 +1296,12 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // A label or tick of the axes that just appeared fades in, instead of popping up.
-  const enter = `@starting-style { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { opacity: 0; } }`
+  // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
+  const enter = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
+[data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: chart-3d-axes-in 300ms ease-out; }
+@media (prefers-reduced-motion: reduce) { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: none; } }
+[data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
+[data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
   if (!colorConfig.length) {
     return <style dangerouslySetInnerHTML={{ __html: enter }} />

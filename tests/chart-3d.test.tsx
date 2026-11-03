@@ -86,7 +86,8 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("[data-chart=chart-t]")
-    expect(html).toContain("@starting-style")
+    expect(html).toContain("chart-3d-axes-in")
+    expect(html).toContain("cursor: grab")
     expect(html).toContain("--color-a: red;")
     expect(html).toContain("--color-b: white;")
     expect(html).toContain(".dark [data-chart=chart-t]")
@@ -601,6 +602,27 @@ describe("pointer", () => {
     await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
     await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
+
+    await chart.unmount()
+  })
+
+  test("holding the platform modifier shows the hand, a rotate drag shows grabbing", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.dataset.mod).toBeUndefined()
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control" })))
+    expect(chart.svg.dataset.mod).toBe("true")
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" })))
+    expect(chart.svg.dataset.mod).toBeUndefined()
+
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
+    expect(chart.svg.dataset.orbiting).toBe("true")
+    expect(view(chart.host).yaw).toBeGreaterThan(0)
 
     await chart.unmount()
   })

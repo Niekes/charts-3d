@@ -21,4 +21,6 @@ platform ("⌘ Drag" on a Mac, "Ctrl Drag" elsewhere), and `keymap` can turn the
 gesture off like any other action. The modifier is re-checked on every pointer
 move, so releasing it mid-drag stops the rotation. On touch there is no
 modifier, so a touch drag only inspects; rotation there is arrow keys (or an
-opt-in `keymap` rebinding).
+opt-in `keymap` rebinding). The cursor is the default pointer until the
+modifier is held (then a hand, `grab`), and `grabbing` while a rotate drag
+turns.

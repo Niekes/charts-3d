@@ -16,4 +16,7 @@ membership highlighted more than the element), brightening the hovered fill
 and canvas; there the hover still shows the tooltip.
 
 Consequences: every chart gives its marks `groups` naming the marks of the same
-element; `new-chart` and `evaluate-chart` encode this as a checklist row.
+element; `new-chart` and `evaluate-chart` encode this as a checklist row. A mark
+that carries its own stroke (a scatter point's background ring, a sankey flow's
+inner faces) keeps it, so a multi-face element is outlined without seams between
+its parts; a background ring turns into the foreground edge on hover.
