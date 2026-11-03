@@ -66,6 +66,11 @@ triangulated on webgl; the box, its labels, the tooltip and the legend
 stay SVG and HTML with every renderer.
 _Avoid_: painter, backend, layer
 
+**Renderer demo**:
+The docs section that shows one chart on every renderer, with a switch
+between `"svg"`, `"canvas"` and `"webgl"`.
+_Avoid_: renderer example, playground
+
 ## The pointer
 
 **Hover**:
