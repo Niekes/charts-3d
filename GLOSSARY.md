@@ -80,7 +80,8 @@ _Avoid_: mouseover, highlight state
 
 **Focus**:
 The groups of the hovered mark, lit while the pointer is on it; every mark
-and label that shares none of them fades in place.
+and label that shares none of them fades in place. Every chart's marks carry
+their groups - their key and their series - so the fade works in every chart.
 _Avoid_: selection, highlight, active state
 
 ## Navigation

@@ -26,11 +26,12 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   the webgl renderer paint it and the hover hit-tests it, whatever the
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
-- **Hover comes from the core.** Give marks a `tooltip` and `groups`; while
-  the pointer is on a mark its tooltip shows and the marks and labels that
-  share none of its groups fade; when the pointer leaves the mark or the
-  chart, both clear. A chart never fades anything itself and has no pointer
-  handlers.
+- **Hover comes from the core.** Give every mark a `tooltip` and `groups` -
+  its own key and its series, the way the bar chart does - so that in every
+  chart, while the pointer is on a mark, its tooltip shows and the marks and
+  labels that share none of its groups fade; when the pointer leaves the mark
+  or the chart, both clear. A chart never fades anything itself and has no
+  pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - a drag
@@ -70,8 +71,9 @@ comes with its tests - the coverage gate is 98% in each metric.
 - `docs/examples/<name>-chart-3d-update-demo.tsx` - a button that swaps the
   data, so the chart glides.
 - `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same chart with a
-  SVG / Canvas / WebGL switch (`renderer` prop), showing one scene on every
-  renderer. See `docs/examples/bar-chart-3d-renderers-demo.tsx`.
+  `<select>` over SVG / Canvas / WebGL (`renderer` prop, `RendererSelect` from
+  `docs/examples/renderer-select.tsx`), showing one scene on every renderer.
+  See `docs/examples/bar-chart-3d-renderers-demo.tsx`.
 - `docs/content/components/<name>-chart-3d.mdx` - sections Preview,
   Installation, Update, Renderers, API Reference; add the page to
   `docs/content/components/meta.json`.

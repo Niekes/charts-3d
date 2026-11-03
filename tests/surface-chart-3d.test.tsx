@@ -162,3 +162,65 @@ describe("SurfaceChart3D transitions", () => {
     host.remove()
   })
 })
+
+describe("SurfaceChart3D focus", () => {
+  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+
+  test("hovering a cell lights it alone and fades the rest; leaving the cell clears it", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D
+            data={[
+              [1, 2, 3],
+              [2, 3, 4],
+              [3, 4, 5],
+            ]}
+          />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const fills = () =>
+      [...svg.querySelectorAll("path")].flatMap((p) => {
+        const f = p.getAttribute("fill")
+        return f?.startsWith("color-mix") ? [f] : []
+      })
+    const move = (clientX: number, clientY: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    const quad = [...svg.querySelectorAll("path")].find((p) =>
+      p.getAttribute("fill")?.startsWith("color-mix")
+    )!
+    const corners = quad.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+    )
+
+    await move(x, y)
+    // Only the hovered cell stays lit.
+    expect(fills().length).toBeGreaterThan(1)
+    expect(fills().filter((f) => !faded(f))).toHaveLength(1)
+
+    // Off the cell, still inside the chart: nothing faded any more.
+    await move(5, 5)
+    expect(fills().some(faded)).toBe(false)
+
+    // Hover again, then leave the chart.
+    await move(x, y)
+    expect(fills().some(faded)).toBe(true)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+      )
+    )
+    expect(fills().some(faded)).toBe(false)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})

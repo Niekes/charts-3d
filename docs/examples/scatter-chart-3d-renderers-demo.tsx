@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { ScatterChart3D } from "@/components/ui/scatter-chart-3d"
 import { chartConfig, chartData } from "@/docs/examples/scatter-chart-3d-demo"
-import { RendererSwitch } from "@/docs/examples/renderer-switch"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same marks on every renderer: the chart hands them to the container as data.
 export default function ScatterChart3DRenderersDemo() {
@@ -14,7 +14,7 @@ export default function ScatterChart3DRenderersDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer} legend>
         <ScatterChart3D data={chartData} x="x" y="y" z="z" series="cluster" />
       </ChartContainer3D>
-      <RendererSwitch renderer={renderer} onChange={setRenderer} />
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

@@ -107,3 +107,70 @@ describe("ScatterChart3D transitions", () => {
     host.remove()
   })
 })
+
+describe("ScatterChart3D focus", () => {
+  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+
+  test("hovering a point keeps its series lit and fades the rest; leaving the point clears it", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <ScatterChart3D
+            data={[
+              { x: 1, y: 1, z: 1, cluster: "a" },
+              { x: 2, y: 2, z: 2, cluster: "b" },
+              { x: 3, y: 3, z: 3, cluster: "a" },
+            ]}
+            x="x"
+            y="y"
+            z="z"
+            series="cluster"
+          />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const fills = () => [...svg.querySelectorAll("circle")].map((c) => c.getAttribute("fill")!)
+    const move = (clientX: number, clientY: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    const point = [...svg.querySelectorAll("circle")].find(
+      (c) => c.getAttribute("fill") === "var(--color-a)"
+    )!
+    const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+
+    await move(clientX, clientY)
+    // The series of the point stays lit, the other series fades.
+    expect(
+      fills()
+        .filter((f) => f.includes("color-a"))
+        .every((f) => !faded(f))
+    ).toBe(true)
+    expect(
+      fills()
+        .filter((f) => f.includes("color-b"))
+        .every(faded)
+    ).toBe(true)
+
+    // Off the point, still inside the chart: nothing faded any more.
+    await move(5, 5)
+    expect(fills().some(faded)).toBe(false)
+
+    // Hover again, then leave the chart.
+    await move(clientX, clientY)
+    expect(fills().some(faded)).toBe(true)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+      )
+    )
+    expect(fills().some(faded)).toBe(false)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})

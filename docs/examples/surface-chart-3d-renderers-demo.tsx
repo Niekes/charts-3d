@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { SurfaceChart3D } from "@/components/ui/surface-chart-3d"
 import { chartConfig, chartData } from "@/docs/examples/surface-chart-3d-demo"
-import { RendererSwitch } from "@/docs/examples/renderer-switch"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same marks on every renderer: the chart hands them to the container as data.
 export default function SurfaceChart3DRenderersDemo() {
@@ -18,7 +18,7 @@ export default function SurfaceChart3DRenderersDemo() {
       >
         <SurfaceChart3D data={chartData} domain={{ x: [-5, 5], z: [-5, 5] }} />
       </ChartContainer3D>
-      <RendererSwitch renderer={renderer} onChange={setRenderer} />
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

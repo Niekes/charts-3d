@@ -176,10 +176,11 @@ How the charts draw, so that a new one draws the same way:
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
 - **Focus.** A mark or a label names what it belongs to in `groups`: a flow,
-  say, or the flows a node connects. Pointing at a mark, the core fades every
-  mark and label that shares none of its groups, in place and with every
-  renderer, until the pointer leaves the mark; a chart never fades anything
-  itself.
+  say, or the flows a node connects. Every chart gives its marks their groups -
+  their own key and their series - so the fade works in every chart. Pointing
+  at a mark, the core fades every mark and label that shares none of its
+  groups, in place and with every renderer, until the pointer leaves the mark;
+  a chart never fades anything itself.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
   axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
   axis fades from one edge to the next. `fit` gives the tick labels of an

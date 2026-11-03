@@ -80,6 +80,8 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
         points: [p.projected],
         r: radius,
         fill: `var(--color-${key})`,
+        // Its groups are the point and its series, so hovering it keeps the series lit.
+        groups: [String(p.i), key],
         // Ringed by the background, so that points in front stand out.
         stroke: "var(--background)",
         tooltip: {

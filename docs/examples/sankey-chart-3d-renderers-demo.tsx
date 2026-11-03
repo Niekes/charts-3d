@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { SankeyChart3D } from "@/components/ui/sankey-chart-3d"
 import { chartConfig, chartData } from "@/docs/examples/sankey-chart-3d-demo"
-import { RendererSwitch } from "@/docs/examples/renderer-switch"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same marks on every renderer: the chart hands them to the container as data.
 export default function SankeyChart3DRenderersDemo() {
@@ -18,7 +18,7 @@ export default function SankeyChart3DRenderersDemo() {
       >
         <SankeyChart3D data={chartData} />
       </ChartContainer3D>
-      <RendererSwitch renderer={renderer} onChange={setRenderer} />
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

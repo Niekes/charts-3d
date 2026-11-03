@@ -354,3 +354,56 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 })
+
+describe("BarChart3D focus", () => {
+  const faded = (fill: string) => fill.endsWith(" 25%, var(--background))")
+  const faces = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("path")].flatMap((p) => {
+      const f = p.getAttribute("fill")
+      return f?.startsWith("color-mix") ? [f] : []
+    })
+
+  test("hovering a bar keeps its series lit and fades the rest; leaving the bar clears it", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={data} index="name" />
+      </ChartContainer3D>
+    )
+    const svg = chart.host.querySelector("svg")!
+    const move = (clientX: number, clientY: number) =>
+      chart.send("pointermove", { clientX, clientY })
+    // The centroid of a face of a bar of series a.
+    const face = [...svg.querySelectorAll("path")].find((p) =>
+      p.getAttribute("fill")?.includes("var(--color-a)")
+    )!
+    const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+    )
+
+    await move(x, y)
+    // The series of the bar stays lit, the other series fades.
+    expect(
+      faces(svg)
+        .filter((f) => f.includes("var(--color-a)"))
+        .some(faded)
+    ).toBe(false)
+    expect(
+      faces(svg)
+        .filter((f) => f.includes("var(--color-b)"))
+        .every(faded)
+    ).toBe(true)
+
+    // Off the bar, still inside the chart: nothing faded any more.
+    await move(5, 5)
+    expect(faces(svg).some(faded)).toBe(false)
+
+    // Hover again, then leave the chart.
+    await move(x, y)
+    expect(faces(svg).some(faded)).toBe(true)
+    await chart.send("pointerout", { relatedTarget: document.body })
+    expect(faces(svg).some(faded)).toBe(false)
+
+    await chart.unmount()
+  })
+})
