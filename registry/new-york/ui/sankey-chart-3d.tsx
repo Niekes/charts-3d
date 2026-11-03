@@ -156,6 +156,15 @@ export function SankeyChart3D({
   )
 }
 
+/**
+ * The keys of the flows at a node. Its marks carry them, so the focus on the
+ * node highlights its flows and the nodes at their other ends, and the focus
+ * on a flow highlights its two nodes - the sankey reads as one connected graph.
+ */
+function links(node: SankeyNode) {
+  return [...new Set([...node.incoming, ...node.outgoing].map((hop) => hop.flow.key))]
+}
+
 /** The label and the color of a node, from the chart config. */
 function style(config: ChartConfig, node: SankeyNode) {
   return {
@@ -165,10 +174,10 @@ function style(config: ChartConfig, node: SankeyNode) {
 }
 
 /**
- * The marks of a piece, each with its tooltip and its group: the faces of a
- * node, or the faces of a slice of a flow, in the color it has turned to there.
- * The group is the element alone, so hovering highlights one node, or one flow
- * with all its segments.
+ * The marks of a piece, each with its tooltip and its groups: the faces of a
+ * node carry the keys of its flows, the faces of a slice of a flow its key, so
+ * hovering a node highlights the node with its flows and their other ends, and
+ * hovering a flow highlights the flow with its two nodes.
  */
 function pieceMarks(
   { key, faces, node, flow, t }: Cube<Point3D, Piece>,
@@ -182,7 +191,7 @@ function pieceMarks(
     return cubeMarks(key, faces, color, {
       at,
       items: [{ label, value: format(node.value), color }],
-    }).map((mark) => ({ ...mark, groups: [key] }))
+    }).map((mark) => ({ ...mark, groups: links(node) }))
   }
   const source = style(config, flow!.source)
   const target = style(config, flow!.target)

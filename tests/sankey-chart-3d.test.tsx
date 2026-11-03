@@ -432,13 +432,15 @@ describe("SankeyChart3D", () => {
     )
     const edged = (is: (fill: string) => boolean) =>
       after.strokes.filter((_, i) => is(after.fills[i]))
-    // The outline of a → b alone gets the edge; the faces across the flow keep their
-    // color, so the highlight shows no seams between the segments.
+    // The outline of a → b gets the edge, and so do its two nodes; the faces across the
+    // flow keep their color, so the highlight shows no seams between the segments.
     expect(edged(flowFill(a, b))).toContain(edge)
     expect(edged(flowFill(a, b)).filter((s) => s === edge).length).toBeLessThan(
       edged(flowFill(a, b)).length
     )
-    for (const other of [flowFill(a, c), nodeFill(a), nodeFill(b), nodeFill(c)]) {
+    expect(edged(nodeFill(a))).toContain(edge)
+    expect(edged(nodeFill(b))).toContain(edge)
+    for (const other of [flowFill(a, c), nodeFill(c)]) {
       expect(edged(other)).not.toContain(edge)
     }
     expect(after.fills).toEqual(before.fills)
@@ -446,7 +448,7 @@ describe("SankeyChart3D", () => {
     expect(after.corners).toEqual(before.corners)
   })
 
-  test("pointing at a node gives the node alone an edge, not its flows", async () => {
+  test("pointing at a node highlights the node, its flows and the nodes at their other ends", async () => {
     const [a, b, c, x] = [
       "var(--color-a)",
       "var(--color-b)",
@@ -467,16 +469,12 @@ describe("SankeyChart3D", () => {
     const edged = (is: (fill: string) => boolean) =>
       new Set(after.strokes.filter((_, i) => is(after.fills[i])))
     expect(edged(nodeFill(b))).toContain(edge)
-    for (const other of [
-      flowFill(a, b),
-      flowFill(b, c),
-      flowFill(x, c),
-      nodeFill(a),
-      nodeFill(c),
-      nodeFill(x),
-    ]) {
-      expect(edged(other)).not.toContain(edge)
+    for (const lit of [flowFill(a, b), flowFill(b, c), nodeFill(a), nodeFill(c)]) {
+      expect(edged(lit)).toContain(edge)
     }
+    // x → c and x stay out.
+    expect(edged(flowFill(x, c))).not.toContain(edge)
+    expect(edged(nodeFill(x))).not.toContain(edge)
   })
 
   test("leaving the flow or the chart clears the hover: no tooltip, no edge", async () => {
@@ -578,15 +576,15 @@ describe("SankeyChart3D", () => {
     expect(edged(flowFill(a, b))).toContain(edge)
     expect(edged(flowFill(a, c))).not.toContain(edge)
 
-    // A node in focus that gains a flow highlights the node alone on the next move of the pointer.
+    // A node in focus that gains a flow highlights the new flow on the next move of the pointer.
     await point(nodeFill(b))
     await render([
       { source: "a", target: "b", value: 2 },
       { source: "b", target: "d", value: 2 },
     ])
     await point(nodeFill(b))
-    expect(edged(nodeFill(b))).toEqual(new Set([edge]))
-    expect(edged(flowFill(b, d))).not.toContain(edge)
+    expect(edged(nodeFill(b))).toContain(edge)
+    expect(edged(flowFill(b, d))).toContain(edge)
 
     await act(async () => root.unmount())
     host.remove()

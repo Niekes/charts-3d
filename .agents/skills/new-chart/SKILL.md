@@ -27,8 +27,9 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
 - **Hover comes from the core.** Give every mark a `tooltip` and `groups`
-  naming the marks of the same element - the bar alone in the bar chart, the
-  single point in the scatter, one flow with all its segments in the sankey -
+  naming what is highlighted together - the bar alone in the bar chart, the
+  single point in the scatter, and in the sankey the node with its flows and
+  their other ends (relational, as the sankey has always read) -
   so that in every chart, while the pointer is on a mark, its tooltip shows and
   exactly those marks get an edge in `var(--foreground)` (white in the dark
   theme, black in the light; the fill never changes); when the pointer leaves

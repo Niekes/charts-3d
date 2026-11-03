@@ -81,8 +81,9 @@ _Avoid_: mouseover, highlight state
 **Focus**:
 The element under the pointer, highlighted with an edge in the foreground
 color - white in the dark theme, black in the light; the fill never changes.
-Every chart's marks carry their `groups`, naming the marks of the same
-element: the faces of a bar, the segments of a flow.
+Every chart's marks carry their `groups`, naming the marks highlighted
+together: one bar, one point, one cell - and in the sankey the node with its
+flows and their other ends.
 _Avoid_: selection, active state, fade
 
 ## Navigation

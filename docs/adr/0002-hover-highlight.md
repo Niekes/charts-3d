@@ -5,9 +5,13 @@ everything else darker; that was a fill change and read as brightness, not as a
 highlight, and groups made whole series or whole node neighborhoods light up.
 
 Decision: the fill never changes on hover, with any renderer. The core gives
-exactly the marks of the hovered element - named in its `groups`, the faces of a
-bar, a single point, a single cell, one flow with all its segments - an edge in
-`var(--foreground)`, white in the dark theme and black in the light. The edge
+exactly the marks of the hovered element - named in its `groups` - an edge in
+`var(--foreground)`, white in the dark theme and black in the light. In the bar,
+scatter and surface charts the element is single: one bar, one point, one cell.
+The sankey relates instead, as it did when the registry started: a node's marks
+carry the keys of its flows, so hovering a node highlights the node, its flows
+and the nodes at their other ends, and hovering a flow highlights the flow and
+its two nodes. The edge
 clears when the pointer leaves the mark or the chart; through a drag it stays.
 
 Considered options: fading the rest darker (rejected: a color change, and group
