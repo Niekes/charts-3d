@@ -349,7 +349,7 @@ function ChartContainer3D({
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const { scene, renderer, canvas, repaint, hover, hide, tooltip, focus } = useScene(
+  const { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus } = useScene(
     requested,
     width,
     height
@@ -375,7 +375,7 @@ function ChartContainer3D({
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           {...keymapProps(keys, ariaLabel)}
-          onPointerLeave={hide}
+          onPointerLeave={leave}
           {...handlers}
         >
           <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
@@ -424,8 +424,8 @@ function useScene(requested: Renderer3D, width: number, height: number) {
   const focus = useFocus()
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width, height, renderer)
-  const { hover, hide } = useHover(scene, width, height, setTooltip, focus)
-  return { scene, renderer, canvas, repaint, hover, hide, tooltip, focus }
+  const { hover, hide, leave } = useHover(scene, width, height, setTooltip, focus)
+  return { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus }
 }
 
 /** The camera of a view. The shapes of the chart hang on it, so a new view re-projects them all. */
@@ -725,8 +725,10 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
  * focus on its groups. The highlight follows the mark: `hover` sets the
  * tooltip only when the pointer moves onto another mark, and the focus only
  * when the groups change, so a move within a mark does not render the chart
- * again; `hide`, off the mark, while a drag turns the chart and when the
- * pointer leaves the chart, drops both.
+ * again; off the mark and when the pointer leaves the chart, `leave` drops
+ * both. While a drag turns the chart under the captured pointer, `hide`
+ * drops the tooltip and keeps the focus, so a flow does not flash away and
+ * can be followed from every side.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -753,7 +755,11 @@ function useHover(
       }
       show(hit(scene.current, at))
     },
-    hide: () => show(undefined),
+    hide: () => {
+      hovered.current = undefined
+      setTooltip(null)
+    },
+    leave: () => show(undefined),
   }
 }
 

@@ -470,6 +470,60 @@ describe("SankeyChart3D", () => {
     expect(after.labels.x).toContain("opacity-25")
   })
 
+  test("leaving the flow or the chart clears the hover: no tooltip, nothing faded", async () => {
+    const [a, b] = ["var(--color-a)", "var(--color-b)"]
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        chart(
+          [
+            { source: "a", target: "b", value: 2 },
+            { source: "a", target: "c", value: 1 },
+          ],
+          { yaw: 0, tilt: 0 }
+        )
+      )
+    )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const fills = () => [...svg.querySelectorAll("path")].map((p) => p.getAttribute("fill")!)
+    const face = [...svg.querySelectorAll("path")]
+      .filter((p) => flowFill(a, b)(p.getAttribute("fill")!))
+      .at(-1)!
+    const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+    )
+    const move = (clientX: number, clientY: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+
+    await move(x, y)
+    expect(host.textContent).toContain("2 kWh")
+    expect(fills().some(faded)).toBe(true)
+
+    // Off the flow, still inside the chart: the hover goes with the mark.
+    await move(5, 5)
+    expect(host.textContent).not.toContain("2 kWh")
+    expect(fills().some(faded)).toBe(false)
+
+    await move(x, y)
+    expect(fills().some(faded)).toBe(true)
+    // Leaving the chart clears it as well.
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+      )
+    )
+    expect(host.textContent).not.toContain("2 kWh")
+    expect(fills().some(faded)).toBe(false)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("the focus stays on its flows while the data changes under the pointer", async () => {
     const [a, b, c, d] = ["var(--color-a)", "var(--color-b)", "var(--color-c)", "var(--color-d)"]
     const host = document.body.appendChild(document.createElement("div"))
