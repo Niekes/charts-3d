@@ -8,6 +8,7 @@ import {
   useChart3D,
   type ChartConfig,
 } from "@/components/ui/chart-3d"
+import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 
 const chartConfig = { cube: { label: "Cube", color: "var(--chart-1)" } } satisfies ChartConfig
 
@@ -42,7 +43,7 @@ function Cube() {
 
 export default function Chart3DDemo() {
   return (
-    <ChartContainer3D config={chartConfig}>
+    <ChartContainer3D keymap={inspectOnlyKeymap} config={chartConfig}>
       <Axes3D spec={spec} world={world} />
       <Cube />
     </ChartContainer3D>

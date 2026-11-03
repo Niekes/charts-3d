@@ -4,6 +4,7 @@ description: Flows from left to right, as bands between boxes.
 ---
 
 import SankeyChart3DUpdateDemo from "@/docs/examples/sankey-chart-3d-update-demo"
+import SankeyChart3DRenderersDemo from "@/docs/examples/sankey-chart-3d-renderers-demo"
 import SankeyChart3DDemo from "@/docs/examples/sankey-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -60,6 +61,19 @@ Press Update: the nodes and their bands glide to their new widths over the
   </Tab>
   <Tab value="Code">
     <include>../../examples/sankey-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SankeyChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/sankey-chart-3d-renderers-demo.tsx</include>
   </Tab>
 </Tabs>
 

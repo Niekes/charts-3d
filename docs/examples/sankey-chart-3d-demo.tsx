@@ -1,9 +1,10 @@
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { SankeyChart3D } from "@/components/ui/sankey-chart-3d"
 
 // The visitors of a month: where they came from, the page they landed on and
 // what they did. Returning visitors go straight to the sign-up.
-const chartData = [
+export const chartData = [
   { source: "search", target: "home", value: 1200 },
   { source: "search", target: "pricing", value: 500 },
   { source: "social", target: "home", value: 800 },
@@ -17,7 +18,7 @@ const chartData = [
   { source: "pricing", target: "bounce", value: 400 },
 ]
 
-const chartConfig = {
+export const chartConfig = {
   search: { label: "Search", color: "var(--chart-1)" },
   social: { label: "Social", color: "var(--chart-2)" },
   direct: { label: "Direct", color: "var(--chart-3)" },
@@ -29,7 +30,11 @@ const chartConfig = {
 
 export default function SankeyChart3DDemo() {
   return (
-    <ChartContainer3D config={chartConfig} defaultView={{ yaw: -Math.PI / 6, tilt: Math.PI / 6 }}>
+    <ChartContainer3D
+      keymap={inspectOnlyKeymap}
+      config={chartConfig}
+      defaultView={{ yaw: -Math.PI / 6, tilt: Math.PI / 6 }}
+    >
       <SankeyChart3D data={chartData} />
     </ChartContainer3D>
   )

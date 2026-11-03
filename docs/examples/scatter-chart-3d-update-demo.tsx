@@ -1,6 +1,7 @@
 import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { ScatterChart3D } from "@/components/ui/scatter-chart-3d"
 
 // Three clusters around deterministic centers, so the page looks the same on every load.
@@ -26,7 +27,7 @@ export default function ScatterChart3DUpdateDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={chartConfig} renderer="canvas" legend>
+      <ChartContainer3D keymap={inspectOnlyKeymap} config={chartConfig} renderer="canvas" legend>
         <ScatterChart3D data={data} x="x" y="y" z="z" series="cluster" />
       </ChartContainer3D>
       <button

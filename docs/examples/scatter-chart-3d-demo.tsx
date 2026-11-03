@@ -1,8 +1,9 @@
 import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { inspectOnlyKeymap } from "@/docs/examples/inspect-only-keymap"
 import { ScatterChart3D } from "@/components/ui/scatter-chart-3d"
 
 // Three clusters, deterministic so the page looks the same on every load.
-const chartData = ["a", "b", "c"].flatMap((cluster, k) =>
+export const chartData = ["a", "b", "c"].flatMap((cluster, k) =>
   Array.from({ length: 40 }, (_, i) => ({
     cluster,
     x: 20 * k + 8 * Math.sin(i * 1.3 + k),
@@ -11,7 +12,7 @@ const chartData = ["a", "b", "c"].flatMap((cluster, k) =>
   }))
 )
 
-const chartConfig = {
+export const chartConfig = {
   a: { label: "Cluster A", color: "var(--chart-1)" },
   b: { label: "Cluster B", color: "var(--chart-2)" },
   c: { label: "Cluster C", color: "var(--chart-4)" },
@@ -19,7 +20,7 @@ const chartConfig = {
 
 export default function ScatterChart3DDemo() {
   return (
-    <ChartContainer3D config={chartConfig} renderer="canvas" legend>
+    <ChartContainer3D keymap={inspectOnlyKeymap} config={chartConfig} renderer="canvas" legend>
       <ScatterChart3D data={chartData} x="x" y="y" z="z" series="cluster" />
     </ChartContainer3D>
   )
