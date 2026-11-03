@@ -650,13 +650,16 @@ function useOrbit(
   const [modHeld, setModHeld] = React.useState(false)
   React.useEffect(() => {
     const modKey = mac() ? "Meta" : "Control"
-    const down = (e: KeyboardEvent) => e.key === modKey && setModHeld(true)
-    const up = (e: KeyboardEvent) => e.key === modKey && setModHeld(false)
-    window.addEventListener("keydown", down)
-    window.addEventListener("keyup", up)
+    const onKey = (e: KeyboardEvent) => e.key === modKey && setModHeld(e.type === "keydown")
+    // A missed keyup (window blur while held) must not stick the hand cursor.
+    const onBlur = () => setModHeld(false)
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("keyup", onKey)
+    window.addEventListener("blur", onBlur)
     return () => {
-      window.removeEventListener("keydown", down)
-      window.removeEventListener("keyup", up)
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("keyup", onKey)
+      window.removeEventListener("blur", onBlur)
     }
   }, [])
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -672,7 +675,7 @@ function useOrbit(
 
   const handlers: React.SVGProps<SVGSVGElement> & {
     "data-orbiting": boolean
-    "data-mod"?: string
+    "data-mod"?: boolean
   } = {
     ref,
     onPointerDown: (e) => {
@@ -704,7 +707,7 @@ function useOrbit(
     onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
     "data-orbiting": orbiting,
-    "data-mod": keys.on("dragRotate") && modHeld ? "true" : undefined,
+    "data-mod": keys.on("dragRotate") && modHeld ? true : undefined,
   }
 
   return { view, handlers }
@@ -1204,10 +1207,10 @@ function ChartGizmo3D({
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
   const lit = useLit(marks)
-  // The lit marks get an edge in the foreground color, which reads in both themes; the
-  // fill never changes on hover, and the order, and with it the depth, stays as painted.
-  // A lit mark gets an edge in the foreground color - unless it carries its own stroke
-  // (a background ring turns into the edge; a flow's inner faces keep their color, so no seams).
+  // The lit marks get an edge in the foreground color, which reads in both themes - unless
+  // they carry their own stroke: a background ring turns into the edge, a flow's inner faces
+  // keep their color, so no seams. The fill never changes on hover, and the order, and with
+  // it the depth, stays as painted.
   const drawn = marks.map((mark) =>
     lit(mark)
       ? {
@@ -1297,21 +1300,21 @@ function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // A label or tick of the axes that just appeared fades in, instead of popping up.
   // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
-  const enter = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
+  const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
 [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: chart-3d-axes-in 300ms ease-out; }
 @media (prefers-reduced-motion: reduce) { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: none; } }
 [data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
 [data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
   if (!colorConfig.length) {
-    return <style dangerouslySetInnerHTML={{ __html: enter }} />
+    return <style dangerouslySetInnerHTML={{ __html: base }} />
   }
 
   return (
     <style
       dangerouslySetInnerHTML={{
         __html: [
-          enter,
+          base,
           ...Object.entries(THEMES).map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {

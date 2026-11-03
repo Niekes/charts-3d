@@ -617,6 +617,10 @@ describe("pointer", () => {
     expect(chart.svg.dataset.mod).toBe("true")
     act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" })))
     expect(chart.svg.dataset.mod).toBeUndefined()
+    // A missed keyup (window blur while held) must not stick the hand.
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control" })))
+    act(() => window.dispatchEvent(new Event("blur")))
+    expect(chart.svg.dataset.mod).toBeUndefined()
 
     chart.svg.setPointerCapture = vi.fn()
     await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))

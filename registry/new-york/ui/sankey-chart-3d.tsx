@@ -137,9 +137,20 @@ export function SankeyChart3D({
       : []
   )
 
+  // The end segments of every flow take the highlight edge, the middle ones keep their color.
+  const endKeys = new Set(
+    pieces.flatMap((piece) => {
+      if (!piece.flow) return []
+      const ts = pieces.filter((q) => q.flow === piece.flow).map((q) => q.t)
+      return piece.t === Math.min(...ts) || piece.t === Math.max(...ts) ? [piece.key] : []
+    })
+  )
+
   return (
     <>
-      <Marks3D marks={pieces.flatMap((piece) => pieceMarks(piece, config, format))} />
+      <Marks3D
+        marks={pieces.flatMap((piece) => pieceMarks(piece, config, format, endKeys.has(piece.key)))}
+      />
       <Labels3D labels={labels} />
     </>
   )
@@ -162,7 +173,8 @@ function style(config: ChartConfig, node: SankeyNode) {
 function pieceMarks(
   { key, faces, node, flow, t }: Cube<Point3D, Piece>,
   config: ChartConfig,
-  format: (value: number) => React.ReactNode
+  format: (value: number) => React.ReactNode,
+  end: boolean
 ) {
   const at = center(faces.find((face) => face.face === "top")!)
   if (node) {
@@ -190,9 +202,9 @@ function pieceMarks(
   return cubeMarks(key, sides, gradient, { at, items: [item] }).map((mark) => ({
     ...mark,
     groups: [flow!.key],
-    // The faces across the flow keep their own color as their edge, so the highlight
-    // outlines the flow without seams between its segments.
-    ...(mark.key.endsWith("-front") || mark.key.endsWith("-back") ? { stroke: gradient } : {}),
+    // Only the end segments of a flow take the highlight edge; the faces of the middle
+    // segments keep their own color, so the flow reads as one band without seams.
+    ...(end ? {} : { stroke: gradient }),
   }))
 }
 
