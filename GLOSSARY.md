@@ -46,3 +46,34 @@ _Avoid_: step, slot
 The room the box keeps between the outermost data and its walls: half a
 cell, on the axes of arrangement, never below the floor the data stands on.
 _Avoid_: margin, gap
+
+## The marks
+
+**Mark**:
+One shape of a chart - a bar, a point, a face of a flow - projected into
+the chart box, in paint order.
+_Avoid_: shape, element, datum
+
+**Scene**:
+The marks of a chart as plain data, in paint order: every renderer draws
+the scene and the hover hit-tests it, so a chart is data-driven on every
+renderer and never keeps a copy of its own.
+_Avoid_: data binding, virtual DOM, custom elements
+
+**Renderer**:
+How the marks are drawn: as SVG elements, painted on a canvas, or
+triangulated on webgl; the box, its labels, the tooltip and the legend
+stay SVG and HTML with every renderer.
+_Avoid_: painter, backend, layer
+
+## The pointer
+
+**Hover**:
+The pointer over a mark: its tooltip shows and its groups come into focus,
+and both go when the pointer leaves the mark or the chart.
+_Avoid_: mouseover, highlight state
+
+**Focus**:
+The groups of the hovered mark, lit while the pointer is on it; every mark
+and label that shares none of them fades in place.
+_Avoid_: selection, highlight, active state
