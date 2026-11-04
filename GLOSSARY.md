@@ -82,8 +82,7 @@ _Avoid_: mouseover, highlight state
 The element under the pointer, highlighted with an edge in the foreground
 color - white in the dark theme, black in the light; the fill never changes.
 Every chart's marks carry their `groups`, naming the marks highlighted
-together: one bar, one point, one cell - and in the sankey the node with its
-flows and their other ends.
+together: one bar, one point, one cell.
 _Avoid_: selection, active state, fade
 
 ## Navigation

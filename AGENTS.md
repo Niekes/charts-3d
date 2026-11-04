@@ -176,7 +176,7 @@ How the charts draw, so that a new one draws the same way:
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
 - **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md)). A mark names the marks of the same element in `groups`: the
-  faces of a bar, the segments of a flow. Pointing at a mark, the core gives
+  faces of a bar. Pointing at a mark, the core gives
   exactly those an edge in the foreground color - white in the dark theme,
   black in the light - until the pointer leaves the mark; the fill never
   changes on hover, with every renderer, and a chart never highlights anything
