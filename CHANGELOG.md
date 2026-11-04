@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
+### Added
+
+- `"webgl"` for `renderer` on `ChartContainer3D`, for more marks than the
+  canvas paints smoothly. It draws the same scene - every mark, the hover, the
+  tooltip and the focus edge - and falls back to `"canvas"`, then to SVG,
+  where the browser has no webgl.
+- `id` on `ScatterChart3D`: the field that names a point, so it follows its
+  name through updates - a new one grows, a gone one shrinks away where it
+  stands, and one that moves glides.
+- Data that comes and goes animates on every chart: a bar follows the name of
+  its entry, so an added month grows out of the floor, a removed one shrinks
+  back into it and the rows around it glide to their new cells; a scatter
+  point grows and shrinks; the surface fades the cells it gains or loses in
+  place. A mark fades in as it grows and out as it shrinks, so nothing flat
+  pops in or out at the end of a glide.
+- `faded(color, opacity)` in the core: a color mixed with transparent, which
+  every renderer draws, to fade the marks of a chart of your own.
+- `--chart-3d-focus`: the color of the focus edge. Without it, a mark's edge
+  is its own fill, lightened.
+- Cursors that name the gesture: a hand while the platform modifier is held
+  and `grabbing` while the camera turns, the four arrows while Alt is held,
+  `zoom-in` or `zoom-out` while the wheel zooms.
+- A `data-slot` on every visible part - the tooltip, the legend, the marks and
+  the canvas among them - listed on the theming page as the way to restyle,
+  move or hide a part with CSS (ADR-0004).
+- The docs: every demo has a renderer select, and every chart page an
+  enter-and-leave, a renderers and a many-marks example.
+
+### Changed
+
+- **Breaking:** a plain drag only inspects the chart, with the default
+  cursor. ⌘ on a Mac, Ctrl on Windows and Linux, and a drag rotates it, as in
+  the 3D viewers of the browser (ADR-0001). `keymap` turns the gesture off as
+  before, but cannot rebind it to a plain drag.
+- **Breaking:** Alt - ⌥ on a Mac - and a drag pans, instead of Space and a
+  drag, and Space scrolls the page again. The wheel zooms with the platform
+  modifier; a trackpad pinch zooms on every platform, as before.
+- **Breaking:** `groups` on `Mark3D` names the marks of the same element, such
+  as the faces of a bar. Pointing at a mark gives exactly those an edge in the
+  focus color until the pointer leaves the mark; nothing fades and no fill
+  changes on hover any more (ADR-0002).
+- **Breaking:** `data-slot="chart-3d-shortcuts"` is the corner that holds the
+  keyboard button and its panel; the list of shortcuts is
+  `chart-3d-shortcuts-panel`.
+- `useTween` keeps a key the data drops until the glide is done, gliding it
+  back to the enter value, the mirror of its entering - or, without one,
+  standing where it is.
+- The shortcut panel names each action first, then its keys and - past a thin
+  rule - its gestures. It closes on a click outside, and its button carries
+  the page background, so it reads over the marks.
+- Every part of the axes that enters fades in - a tick label, a tick mark, a
+  gridline, a wall - and a tick the data drops fades out, in place or as the
+  gliding end sweeps past it. The line of an axis grows to a new outermost
+  tick and shrinks from a dropped one.
+
+### Removed
+
+- **Breaking:** the sankey chart, `sankey-chart-3d` and `SankeyChart3D`.
+- **Breaking:** `groups` on `Label3D`: a label no longer fades with its mark.
+
+### Fixed
+
+- The line of an axis no longer runs past the box while the axis grows.
+- The hover clears when the pointer leaves the mark, not only the chart, and
+  stays through a drag.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added
