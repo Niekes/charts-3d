@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { extent } from "d3-array"
-import { points3D, sort, type AxesSpec } from "d3-3d"
+import { points3D, sort, type AxesSpec, type Point3D } from "d3-3d"
 
 import {
   Axes3D,
@@ -12,6 +12,8 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  type ChartConfig,
+  type World,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -23,6 +25,13 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
   y: keyof T & string
   /** The field of the position along z. */
   z: keyof T & string
+  /**
+   * The field that names an entry, so a point follows its name through
+   * updates: a new one grows, a gone one shrinks away, one that moves glides.
+   * The names should be unique.
+   * @defaultValue the position of the entry
+   */
+  id?: keyof T & string
   /**
    * The field whose value is the config key of the color of a point.
    * @defaultValue the first key of the chart config for every point
@@ -48,6 +57,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   x,
   y,
   z,
+  id,
   series,
   radius = 4,
   format,
@@ -55,45 +65,41 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
-  // The positions glide entry by entry, so the points, the axes and the tooltips follow.
-  const values = useTween(pointValues(data, fields))
-  const read = (i: number, axis: keyof AxesSpec) => values[`${axis}${i}`]
+  const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
+  const { radii, read, key } = usePointTweens(names, data, fields, series, config, radius)
 
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(pointAxes(data, fields))
   const world = worldBox(spec)
+  const placed = usePointPlaces(names, radii, read, world)
 
-  const points = points3D<{ d: T; i: number }>()
+  const points = points3D<{ name: string } & Point3D>()
     .camera(camera)
-    .x(({ i }) => world.x(read(i, "x")))
-    .y(({ i }) => world.y(read(i, "y")))
-    .z(({ i }) => world.z(read(i, "z")))
-  const fallback = Object.keys(config)[0]
+    .x((p) => p.x)
+    .y((p) => p.y)
+    .z((p) => p.z)
 
   const marks = points
-    .data(data.map((d, i) => ({ d, i })))
+    .data(placed)
     .sort(sort)
-    .map((p) => {
-      const key = series ? String(p.d[series]) : fallback
-      return {
-        key: String(p.i),
-        points: [p.projected],
-        r: radius,
-        fill: `var(--color-${key})`,
-        // Its group is the point alone, so hovering highlights that point only.
-        groups: [String(p.i)],
-        // Ringed by the background, so that points in front stand out.
-        stroke: "var(--background)",
-        tooltip: {
-          at: p.projected,
-          title: series ? (config[key]?.label ?? key) : undefined,
-          items: (["x", "y", "z"] as const).map((a) => ({
-            label: titles?.[a] ?? fields[a],
-            value: read(p.i, a),
-          })),
-        },
-      }
-    })
+    .map((p) => ({
+      key: p.name,
+      points: [p.projected],
+      r: radii[p.name],
+      fill: `var(--color-${key(p.name)})`,
+      // Its group is the point alone, so hovering highlights that point only.
+      groups: [p.name],
+      // Ringed by the background, so that points in front stand out.
+      stroke: "var(--background)",
+      tooltip: {
+        at: p.projected,
+        title: series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
+        items: (["x", "y", "z"] as const).map((a) => ({
+          label: titles?.[a] ?? fields[a],
+          value: read(p.name, a),
+        })),
+      },
+    }))
 
   return (
     <>
@@ -115,14 +121,91 @@ function pointAxes<T extends Record<string, unknown>>(
   return { x: range("x"), y: range("y"), z: range("z") }
 }
 
-/** The position of every entry, keyed by its axis and index, gliding into new data. */
+/**
+ * The tweened numbers of the chart, by the name of each entry: the positions
+ * glide entry by entry - a gone point stands in place - and the radius enters
+ * from 0, so a new point grows and a gone one shrinks away. `read` and `key`
+ * look them up, also for a point still leaving.
+ */
+function usePointTweens<T extends Record<string, unknown>>(
+  names: string[],
+  data: T[],
+  fields: Record<keyof AxesSpec, keyof T & string>,
+  series: (keyof T & string) | undefined,
+  config: ChartConfig,
+  radius: number
+) {
+  const values = useTween(pointValues(names, data, fields))
+  const radii = useTween(Object.fromEntries(names.map((name) => [name, radius])), 0)
+  const fallback = Object.keys(config)[0]
+  return {
+    radii,
+    read: (name: string, axis: keyof AxesSpec) => values[`${axis}${name}`],
+    key: usePointKeys(names, data, series, fallback, radii),
+  }
+}
+
+/**
+ * The place of every point in the world box, by name. A living point follows
+ * its gliding numbers through the gliding axes; a gone one stays frozen where
+ * it was, so it shrinks away in place instead of riding the rescaling axes
+ * out of the box. A point only one of the tweens still knows stays unseen.
+ */
+function usePointPlaces(
+  names: string[],
+  alive: Record<string, number>,
+  read: (name: string, axis: keyof AxesSpec) => number,
+  world: World
+) {
+  const places = React.useRef(new Map<string, Point3D>())
+  const live = new Set(names)
+  const placed = Object.keys(alive).flatMap((name) => {
+    if (!live.has(name)) {
+      const held = places.current.get(name)
+      return held ? [{ name, ...held }] : []
+    }
+    const p = {
+      x: world.x(read(name, "x")),
+      y: world.y(read(name, "y")),
+      z: world.z(read(name, "z")),
+    }
+    places.current.set(name, p)
+    return [{ name, ...p }]
+  })
+  // Forgotten with the point, so the memory stays the size of the chart.
+  for (const name of places.current.keys()) if (!(name in alive)) places.current.delete(name)
+  return placed
+}
+
+/** The position of every entry, keyed by its axis and name, gliding into new data. */
 function pointValues<T extends Record<string, unknown>>(
+  names: string[],
   data: T[],
   fields: Record<keyof AxesSpec, keyof T & string>
 ) {
   return Object.fromEntries(
     data.flatMap((d, i) =>
-      (["x", "y", "z"] as const).map((a) => [`${a}${i}`, Number(d[fields[a]])])
+      (["x", "y", "z"] as const).map((a) => [`${a}${names[i]}`, Number(d[fields[a]])])
     )
   )
+}
+
+/**
+ * The config key of every point's color, by name - remembered while a gone
+ * point shrinks away, since its entry has already left the data - and
+ * forgotten with the point, so the memory stays the size of the chart.
+ */
+function usePointKeys<T extends Record<string, unknown>>(
+  names: string[],
+  data: T[],
+  series: (keyof T & string) | undefined,
+  fallback: string,
+  alive: Record<string, number>
+) {
+  const known = React.useRef(new Map<string, string>())
+  data.forEach((d, i) => known.current.set(names[i], series ? String(d[series]) : fallback))
+  for (const name of known.current.keys()) {
+    if (!(name in alive) && !names.includes(name)) known.current.delete(name)
+  }
+  return (name: string) => known.current.get(name) ?? fallback
 }

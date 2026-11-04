@@ -60,7 +60,7 @@ The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML wit
 
 ## Shortcuts
 
-Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it. The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Space and a drag pans, Ctrl or ⌘ with the wheel - a trackpad pinch arrives that way - zooms, and a double click resets; the wheel alone scrolls the page. See [ADR-0001](../adr/0001-navigation). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts"`.
+Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it; Escape or a click outside closes the panel again. Each row lists its keys, then - past a thin rule - its pointer gestures, with the drag drawn as a grab icon that screen readers hear as "Drag". The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Alt (⌥ on a Mac) and a drag pans, Ctrl or ⌘ with the wheel - a trackpad pinch arrives that way - zooms, and a double click resets; the wheel alone scrolls the page. See [ADR-0001](../adr/0001-navigation). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts"`.
 
 ### Keymap
 
@@ -87,7 +87,7 @@ const keymap: Keymap3D = {
 | `rotateRight`      | `ArrowRight`            | Rotate             |
 | `rotateUp`         | `ArrowUp`               | Rotate             |
 | `rotateDown`       | `ArrowDown`             | Rotate             |
-| `dragPan`          | Space and drag          | Pan                |
+| `dragPan`          | Alt/⌥ and drag          | Pan                |
 | `panLeft`          | `Shift+ArrowLeft`       | Pan                |
 | `panRight`         | `Shift+ArrowRight`      | Pan                |
 | `panUp`            | `Shift+ArrowUp`         | Pan                |
@@ -127,6 +127,16 @@ const marks = cubeMarks(key, faces, color, tooltip).map((mark) => ({ ...mark, gr
 The labels of the box sit beside their ticks, away from the box, and slide round them as the camera turns. Where two would touch, they slide apart along their axis, and where that is not enough, every other one moves to a second row; only an axis seen nearly end on shows every second, fourth… label. A label gives way to one of an axis with fewer ticks, whose labels say more each. When an axis moves to another edge of the box, its labels fade from one edge to the other.
 
 The arrow keys glide the camera to its next view instead of jumping there. Where the reader asks for reduced motion, the camera jumps and the labels move without a transition.
+
+## Transitions
+
+A chart glides into new data over the `animationDuration` of its container; 0 makes it jump, and so does a reader who asks for reduced motion. The glide happens in the numbers, before the projection - `useTween` eases them from the ones on screen - so the camera answers at once, mid-glide too. Every key moves as its own mark ([Enter](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md) in the glossary):
+
+- A key the data **brings** starts at its enter value: a new bar grows out of the floor, at its place.
+- A key that **stays** glides from where it stands to its new number - also to a new place, when the data reorders.
+- A key the data **drops** glides back to its enter value, the mirror of its entering, and leaves when the glide is done: a removed bar shrinks back into the floor.
+
+The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
 
 ## API Reference
 

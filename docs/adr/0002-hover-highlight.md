@@ -21,3 +21,13 @@ element; `new-chart` and `evaluate-chart` encode this as a checklist row. A mark
 that carries its own stroke (a scatter point's background ring, a flow's
 inner faces) keeps it, so a multi-face element is outlined without seams between
 its parts; a background ring turns into the foreground edge on hover.
+
+Amended 2026-11-04: the edge draws in `--chart-3d-focus` where that is set,
+and otherwise in the mark's own fill lightened with `color-mix` - the
+highlight carries the color of what it highlights. `var(--foreground)` read
+starker than a highlight needs, and a neutral gray sat dull on the fills. The
+custom property makes the color a CSS knob - looks are CSS (ADR-0004) - and
+the core still resolves the color for the canvas and webgl, so every renderer
+follows the theme as before. Webgl, which drew fans only, now draws a stroke
+as a line loop over the outline, so the edge shows on every renderer; only
+its width may differ, where the platform caps the width of a line.

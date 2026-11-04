@@ -19,7 +19,7 @@ import {
   type ShapeInstance,
   type TransformedPoint,
 } from "d3-3d"
-import { KeyboardIcon } from "lucide-react"
+import { HandGrabIcon, KeyboardIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -77,9 +77,9 @@ export type Mark3D = {
   tooltip?: Tooltip3D
   /**
    * The marks of the same element as this one: the faces of a bar, the
-   * segments of a flow. Pointing at a mark gives them an edge in the
-   * foreground color, until the pointer leaves the mark; the fill never
-   * changes on hover.
+   * segments of a flow. Pointing at a mark gives them an edge in the focus
+   * color - `--chart-3d-focus`, or their own fill lightened - until the
+   * pointer leaves the mark; the fill never changes on hover.
    */
   groups?: string[]
 }
@@ -137,7 +137,7 @@ export type KeyAction3D =
   | "reset"
   | "help"
 
-/** The gestures of the pointer: a drag turns the camera, with Space held it pans, Ctrl or ⌘ with the wheel zooms, a double click resets. */
+/** The gestures of the pointer: a drag turns the camera, with Alt (⌥ on a Mac) held it pans, Ctrl or ⌘ with the wheel zooms, a double click resets. */
 export type Gesture3D = "dragRotate" | "dragPan" | "wheelZoom" | "doubleClickReset"
 
 /**
@@ -165,7 +165,7 @@ const SHORTCUTS: Record<
   rotateRight: { label: "Rotate", keys: ["ArrowRight"], move: { yaw: KEY_STEP } },
   rotateUp: { label: "Rotate", keys: ["ArrowUp"], move: { tilt: -KEY_STEP } },
   rotateDown: { label: "Rotate", keys: ["ArrowDown"], move: { tilt: KEY_STEP } },
-  dragPan: { label: "Pan", hint: ["Space", "Drag"] },
+  dragPan: { label: "Pan", hint: ["Alt", "Drag"] },
   panLeft: { label: "Pan", keys: ["Shift+ArrowLeft"], move: { pan: { x: -PAN_STEP, y: 0 } } },
   panRight: { label: "Pan", keys: ["Shift+ArrowRight"], move: { pan: { x: PAN_STEP, y: 0 } } },
   panUp: { label: "Pan", keys: ["Shift+ArrowUp"], move: { pan: { x: 0, y: -PAN_STEP } } },
@@ -191,6 +191,9 @@ const mac = () =>
 
 /** The label of the platform modifier: ⌘ on a Mac, Ctrl elsewhere. */
 const modLabel = () => (mac() ? "⌘" : "Ctrl")
+
+/** The label of the Alt key: ⌥ on a Mac, Alt elsewhere. */
+const altLabel = () => (mac() ? "⌥" : "Alt")
 
 /** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
 const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
@@ -260,18 +263,28 @@ type Shortcut = ReturnType<typeof shortcutsOf>[number]
 
 /**
  * The rows of the shortcut panel: the actions by label, the keys of a row in
- * groups of the same modifiers, a gesture in a group of its own.
+ * groups of the same modifiers, left of its gestures, each a group of its own.
  */
 function rowsOf(shortcuts: Shortcut[]) {
-  const rows = new Map<string, Map<string, string[]>>()
-  for (const { action, label, keys, hint } of shortcuts) {
-    const parts = (hint ?? split(keys[0])).map((k) => (k === "Mod" ? modLabel() : (KBD[k] ?? k)))
-    const group = hint ? action : parts.slice(0, -1).join("+")
-    const groups = rows.get(label) ?? new Map<string, string[]>()
-    const known = groups.get(group)
-    rows.set(label, groups.set(group, known ? [...known, parts.at(-1)!] : parts))
+  const rows = new Map<string, { keys: Map<string, string[]>; gestures: string[][] }>()
+  for (const { label, keys, hint } of shortcuts) {
+    const parts = (hint ?? split(keys[0])).map((k) =>
+      k === "Mod" ? modLabel() : k === "Alt" ? altLabel() : (KBD[k] ?? k)
+    )
+    const row = rows.get(label) ?? { keys: new Map<string, string[]>(), gestures: [] }
+    if (hint) row.gestures.push(parts)
+    else {
+      const group = parts.slice(0, -1).join("+")
+      const known = row.keys.get(group)
+      row.keys.set(group, known ? [...known, parts.at(-1)!] : parts)
+    }
+    rows.set(label, row)
   }
-  return [...rows].map(([label, groups]) => ({ label, groups: [...groups.values()] }))
+  return [...rows].map(([label, row]) => ({
+    label,
+    keys: [...row.keys.values()],
+    gestures: row.gestures,
+  }))
 }
 
 /**
@@ -428,7 +441,7 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
     "aria-keyshortcuts": keys.aria || undefined,
     tabIndex: keys.aria ? 0 : undefined,
     className: cn(
-      "block h-auto w-full outline-hidden select-none mask-y-from-96%",
+      "block h-auto w-full outline-hidden select-none mask-x-from-96% mask-y-from-96%",
       // The default cursor stays, so a plain drag only inspects; the modifier and a drag rotate.
       drag && "touch-none"
     ),
@@ -495,8 +508,10 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
 /**
  * Eases a chart into new data: the numbers of `values` glide from the ones
  * on screen to these over the animationDuration of the container. A key
- * that is new starts at `enter`, or where it ends; a key that is gone goes
- * at once. Without time, or with reduced motion, the numbers jump.
+ * that is new starts at `enter`, or where it ends; a key that is gone glides
+ * back to `enter`, the mirror of its entering - without one it stands where
+ * it is - and leaves when the glide is done. Without time, or with reduced
+ * motion, the numbers jump.
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
   const { animationDuration: duration = 600 } = useChart3D()
@@ -527,17 +542,24 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
   return shown
 }
 
-/** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends. */
+/** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends, a gone one gliding back to `enter` until the glide is done. */
 function tweenNumbers({ from, to, t }: Tween, enter?: number) {
   const s = t * t * (3 - 2 * t)
-  return Object.fromEntries(
-    Object.entries(to).map(([k, end]) => {
+  const gone = t >= 1 ? [] : Object.entries(from).filter(([k]) => !(k in to))
+  return Object.fromEntries([
+    ...Object.entries(to).map(([k, end]) => {
       const start = from[k] ?? enter ?? end
       // At the end the number itself, so no float drift stays in the data.
       return [k, t >= 1 ? end : start + (end - start) * s]
-    })
-  )
+    }),
+    // A gone key glides back to `enter`, the mirror of its entering - without
+    // one it stands where it is - and leaves when the glide is done.
+    ...gone.map(([k, start]) => [k, start + ((enter ?? start) - start) * s]),
+  ])
 }
+
+/** An axis gliding into new data: its spec and, beside it, the ticks the data dropped, fading out in place. */
+type GlidingAxis = AxisSpec & { leaving?: number[] }
 
 /**
  * `spec` gliding into new data with the marks: the ends of every axis glide
@@ -569,18 +591,20 @@ function useTweenAxes(spec: AxesSpec): AxesSpec {
   if (memory.current.key !== key) {
     memory.current = { key, target: spec, from: memory.current.target }
   }
-  const glided = (a: keyof AxesSpec): AxisSpec => {
+  const glided = (a: keyof AxesSpec): GlidingAxis => {
     const [lo, hi] = [ends[`${a}0`], ends[`${a}1`]]
     // The ticks stay those of the target, so a label whose tick lies outside the
-    // gliding ends fades out instead of popping out of the range - and a tick
-    // the new data drops beyond its ends stays until the glide is done, fading
-    // out as the gliding end sweeps past it.
+    // gliding ends fades out instead of popping out of the range. Every tick the
+    // new data drops stays until the glide is done: one beyond the new ends
+    // fades out as the gliding end sweeps past it, one within them fades out in
+    // place, named in `leaving`.
     const [d0, d1] = [spec[a].domain[0], last(spec[a].domain)]
     const gone = gliding
-      ? memory.current.from[a].ticks.filter((t) => t < Math.min(d0, d1) || t > Math.max(d0, d1))
+      ? memory.current.from[a].ticks.filter((t) => !spec[a].ticks.includes(t))
       : []
     const ticks = gone.length ? [...spec[a].ticks, ...gone].sort((t, u) => t - u) : spec[a].ticks
-    return { domain: [lo, hi], ticks }
+    const leaving = gone.filter((t) => within(Math.min(d0, d1), Math.max(d0, d1), t))
+    return { domain: [lo, hi], ticks, ...(leaving.length ? { leaving } : {}) }
   }
   return { x: glided("x"), y: glided("y"), z: glided("z") }
 }
@@ -653,8 +677,8 @@ function between(from: View3D, to: View3D, k: number): View3D {
 
 /**
  * The view of the camera, and the handlers that move it, as far as `keys`
- * has them on: a drag turns it, or pans it while Space is held, the keys
- * step it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
+ * has them on: a drag turns it, or pans it while Alt is held, the keys step
+ * it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one.
  */
@@ -667,49 +691,33 @@ function useOrbit(
 ) {
   const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
-  // Whether the platform modifier is held, so the cursor shows a hand before the drag rotates.
-  const [modHeld, setModHeld] = React.useState(false)
-  React.useEffect(() => {
-    const modKey = mac() ? "Meta" : "Control"
-    const onKey = (e: KeyboardEvent) => e.key === modKey && setModHeld(e.type === "keydown")
-    // A missed keyup (window blur while held) must not stick the hand cursor.
-    const onBlur = () => setModHeld(false)
-    window.addEventListener("keydown", onKey)
-    window.addEventListener("keyup", onKey)
-    window.addEventListener("blur", onBlur)
-    return () => {
-      window.removeEventListener("keydown", onKey)
-      window.removeEventListener("keyup", onKey)
-      window.removeEventListener("blur", onBlur)
-    }
-  }, [])
+  const modHeld = useModHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const ref = useWheelZoom(jump, keys.on("wheelZoom"))
   // A drag follows the pointer at once, a key and a double click glide.
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
-  const { space, ...keyHandlers } = useKeys(keys, step, setOrbiting)
+  const keyHandlers = useKeys(keys, step, setOrbiting)
   const release = () => {
     drag.current = null
     setOrbiting(false)
   }
 
-  const handlers: React.SVGProps<SVGSVGElement> & {
-    "data-orbiting": boolean
-    "data-mod"?: boolean
-  } = {
+  const handlers: OrbitHandlers = {
     ref,
     onPointerDown: (e) => {
-      // Space is held only while the drag pans; the platform modifier held, the drag turns.
-      if (space.current || (keys.on("dragRotate") && platformMod(e))) {
-        drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !space.current }
+      // Alt held, the drag pans; the platform modifier held, it turns.
+      const pans = keys.on("dragPan") && e.altKey
+      if (pans || (keys.on("dragRotate") && platformMod(e))) {
+        drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !pans }
       }
     },
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return onHover(e)
-      // A rotate drag turns only while the platform modifier is held.
-      if (d.rotate && !platformMod(e)) return release()
+      // A drag moves only while its modifier is held: the platform modifier
+      // turning, Alt panning.
+      if (d.rotate ? !platformMod(e) : !e.altKey) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
       // A press that wanders a few pixels is still a click on a bar.
@@ -720,8 +728,8 @@ function useOrbit(
       }
       drag.current = { x: e.clientX, y: e.clientY, moved: true, rotate: d.rotate }
       const k = width / e.currentTarget.getBoundingClientRect().width
-      setOrbiting(!space.current)
-      move(space.current ? { pan: { x: dx * k, y: dy * k } } : { yaw: dx * DRAG, tilt: dy * DRAG })
+      setOrbiting(d.rotate)
+      move(d.rotate ? { yaw: dx * DRAG, tilt: dy * DRAG } : { pan: { x: dx * k, y: dy * k } })
     },
     onPointerUp: release,
     onPointerCancel: release,
@@ -734,33 +742,52 @@ function useOrbit(
   return { view, handlers }
 }
 
+type OrbitHandlers = React.SVGProps<SVGSVGElement> & {
+  "data-orbiting": boolean
+  "data-mod"?: boolean
+}
+
 /**
- * The handlers that step the camera with the keys of `keys`, and `space`,
- * which is true while Space is held for a drag to pan. A key that turns the
- * camera marks it as orbiting until it is let go.
+ * Whether the platform modifier is held, so the cursor shows a hand before
+ * the drag rotates. A missed keyup (window blur while held) must not stick
+ * the hand cursor.
+ */
+function useModHeld() {
+  const [held, setHeld] = React.useState(false)
+  React.useEffect(() => {
+    const modKey = mac() ? "Meta" : "Control"
+    const onKey = (e: KeyboardEvent) => e.key === modKey && setHeld(e.type === "keydown")
+    const onBlur = () => setHeld(false)
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("keyup", onKey)
+    window.addEventListener("blur", onBlur)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("keyup", onKey)
+      window.removeEventListener("blur", onBlur)
+    }
+  }, [])
+  return held
+}
+
+/**
+ * The handlers that step the camera with the keys of `keys`. A key that
+ * turns the camera marks it as orbiting until it is let go.
  */
 function useKeys(
   keys: Keymap,
   move: (step: Move) => void,
   setOrbiting: (orbiting: boolean) => void
 ) {
-  const space = React.useRef(false)
   const onKeyDown = (e: React.KeyboardEvent<SVGSVGElement>) => {
-    // Held on the chart, Space pans a drag instead of scrolling the page.
-    const pan = e.key === " " && keys.on("dragPan")
-    if (pan) space.current = true
     const step = keys.moves[pressed(e)]
-    if (!step && !pan) return
-    e.preventDefault()
     if (!step) return
+    e.preventDefault()
     setOrbiting(Boolean(step.yaw || step.tilt))
     move(step)
   }
-  const onKeyUp = (e: React.KeyboardEvent<SVGSVGElement>) => {
-    if (e.key === " ") space.current = false
-    setOrbiting(false)
-  }
-  return { space, onKeyDown, onKeyUp }
+  const onKeyUp = () => setOrbiting(false)
+  return { onKeyDown, onKeyUp }
 }
 
 /**
@@ -1053,32 +1080,52 @@ function paintGL(
   gl.enableVertexAttribArray(where)
   gl.bindBuffer(gl.ARRAY_BUFFER, bufferOf(gl))
   gl.vertexAttribPointer(where, 2, gl.FLOAT, false, 0, 0)
-  for (const mark of marks) {
-    const fan = trianglesOf(mark)
+  const tint = (css: string) => {
+    const [r, g, b, a] = color(css)
+    gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
+  }
+  const draw = (mode: number, points: Point2D[]) => {
     gl.bufferData(
       gl.ARRAY_BUFFER,
-      new Float32Array(fan.flatMap((p) => [p.x, p.y])),
+      new Float32Array(points.flatMap((p) => [p.x, p.y])),
       gl.DYNAMIC_DRAW
     )
-    const [r, g, b, a] = color(mark.fill)
-    gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
-    gl.drawArrays(gl.TRIANGLES, 0, fan.length)
+    gl.drawArrays(mode, 0, points.length)
+  }
+  // A stroke - the focus edge, a ring - draws as a line loop over the outline,
+  // as wide as the platform gives a line.
+  const [, widest] = (gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) as Float32Array | null) ?? [1, 1]
+  gl.lineWidth(Math.min(1.5 * devicePixelRatio, widest))
+  for (const mark of marks) {
+    tint(mark.fill)
+    draw(gl.TRIANGLES, trianglesOf(mark))
+    if (mark.stroke) {
+      tint(mark.stroke)
+      draw(gl.LINE_LOOP, outlineOf(mark))
+    }
   }
 }
+
+/** The 12 points of the circle around `c` of radius `r`. */
+const ringOf = (c: Point2D, r: number) =>
+  Array.from({ length: 12 }, (_, i) => ({
+    x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
+    y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
+  }))
 
 /** The triangles of `mark` as view-box points: a fan per polygon, a fan of 12 segments per circle. */
 function trianglesOf(mark: Mark3D): Point2D[] {
   const { points, r } = mark
   if (r !== undefined) {
-    const c = points[0]
-    const at = (i: number) => ({
-      x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
-      y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
-    })
-    return Array.from({ length: 12 }, (_, i) => [c, at(i), at(i + 1)]).flat()
+    const ring = ringOf(points[0], r)
+    return ring.flatMap((p, i) => [points[0], p, ring[(i + 1) % 12]])
   }
   return points.slice(1, -1).flatMap((p, i) => [points[0], p, points[i + 2]])
 }
+
+/** The outline of `mark` as view-box points: its polygon, or the ring of its circle. */
+const outlineOf = (mark: Mark3D) =>
+  mark.r === undefined ? mark.points : ringOf(mark.points[0], mark.r)
 
 // The paint program and the vertex buffer of a context, each made once.
 const programs = new WeakMap<WebGLRenderingContext, WebGLProgram>()
@@ -1147,7 +1194,7 @@ function ChartCanvas3D({
       key={renderer}
       data-slot="chart-3d-canvas"
       ref={canvas}
-      className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
+      className="pointer-events-none absolute top-0 left-0 w-full mask-x-from-96% mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
     />
   )
@@ -1223,22 +1270,28 @@ function ChartGizmo3D({
 }
 
 /**
+ * The focus edge of a fill: `--chart-3d-focus`, or the fill itself lightened,
+ * so the highlight carries the color of what it highlights.
+ */
+const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+
+/**
  * The marks of a chart, drawn by the renderer of the container: as SVG
  * elements, or on the canvas over the chart box. The hover reads them too.
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
   const lit = useLit(marks)
-  // The lit marks get an edge in the foreground color, which reads in both themes - unless
-  // they carry their own stroke: a background ring turns into the edge, a flow's inner faces
-  // keep their color, so no seams. The fill never changes on hover, and the order, and with
-  // it the depth, stays as painted.
+  // The lit marks get an edge in the focus color - `--chart-3d-focus`, their own fill
+  // lightened unless set - unless they carry their own stroke: a background ring turns
+  // into the edge, a flow's inner faces keep their color, so no seams. The fill never changes
+  // on hover, and the order, and with it the depth, stays as painted.
   const drawn = marks.map((mark) =>
     lit(mark)
       ? {
           ...mark,
           stroke:
-            mark.stroke && mark.stroke !== "var(--background)" ? mark.stroke : "var(--foreground)",
+            mark.stroke && mark.stroke !== "var(--background)" ? mark.stroke : focusOf(mark.fill),
         }
       : mark
   )
@@ -1257,7 +1310,7 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
             d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
             fill={fill}
             stroke={stroke ?? fill}
-            strokeWidth={stroke === "var(--foreground)" ? 1.5 : 0.5}
+            strokeWidth={stroke === focusOf(fill) ? 1.5 : 0.5}
             strokeLinejoin="round"
           />
         ) : (
@@ -1417,6 +1470,16 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
     return () => chart?.removeEventListener("keydown", onKeyDown)
   }, [keys])
 
+  // A pointer down outside the corner closes the list; the press still lands.
+  React.useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: Event) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    return () => document.removeEventListener("pointerdown", onPointerDown)
+  }, [open])
+
   // Without a key or a panel, there is nothing to list.
   if (!rows.length) return null
   return (
@@ -1432,7 +1495,7 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
+        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
       >
         <KeyboardIcon />
       </button>
@@ -1441,7 +1504,26 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
   )
 }
 
-/** The list of the shortcut panel: per row, its groups of keys and its label. */
+/** One group of keys as chips; the word Drag draws as the grab icon, named for screen readers. */
+function KbdGroup3D({ group }: { group: string[] }) {
+  return (
+    <span data-slot="kbd-group" className="flex gap-1">
+      {group.map((key, j) => (
+        <kbd
+          key={j}
+          data-slot="kbd"
+          title={key === "Drag" ? key : undefined}
+          className="pointer-events-none inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none"
+        >
+          {key === "Drag" ? <HandGrabIcon className="size-3.5" aria-hidden /> : key}
+          {key === "Drag" && <span className="sr-only">{key}</span>}
+        </kbd>
+      ))}
+    </span>
+  )
+}
+
+/** The list of the shortcut panel: per row its keys, a rule, its gestures, and its label. */
 function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] }) {
   return (
     <dl
@@ -1449,24 +1531,22 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
       data-slot="chart-3d-shortcuts-panel"
       className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl"
     >
-      {rows.map(({ label, groups }) => (
+      {rows.map(({ label, keys, gestures }) => (
         <React.Fragment key={label}>
-          <dt className="flex flex-wrap gap-x-2 gap-y-1">
-            {groups.map((group, i) => (
-              <span key={i} data-slot="kbd-group" className="flex gap-1">
-                {group.map((key, j) => (
-                  <kbd
-                    key={j}
-                    data-slot="kbd"
-                    className="pointer-events-none inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none"
-                  >
-                    {key}
-                  </kbd>
-                ))}
-              </span>
+          <dt className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {keys.map((group, i) => (
+              <KbdGroup3D key={i} group={group} />
+            ))}
+            {keys.length > 0 && gestures.length > 0 && (
+              <span data-slot="chart-3d-shortcuts-rule" className="h-4 w-px bg-border" />
+            )}
+            {gestures.map((group, i) => (
+              <KbdGroup3D key={i} group={group} />
             ))}
           </dt>
-          <dd className="text-muted-foreground">{label}</dd>
+          <dd data-slot="chart-3d-shortcuts-label" className="text-muted-foreground">
+            {label}
+          </dd>
         </React.Fragment>
       ))}
     </dl>
@@ -1511,6 +1591,12 @@ function Axes3D({
   const { camera } = useChart3D()
   const box = intoWorld(axes3D().camera(camera), world)
   const { labels, lines, marks } = labelAxes(box.edges(spec), spec, format, titles)
+  // The gridline of a tick the new data dropped fades out with its label.
+  const leaving = new Set(
+    (["x", "y", "z"] as const).flatMap((a) =>
+      ((spec[a] as GlidingAxis).leaving ?? []).map((value) => `${a}-${value}`)
+    )
+  )
 
   return (
     <g data-slot="chart-3d-axes">
@@ -1522,14 +1608,16 @@ function Axes3D({
             <path d={quad(wall)} className="fill-muted/40 stroke-border" strokeWidth={0.75} />
             {wall.grid.map((segment) => {
               const [from, to] = [segment[0], segment[segment.length - 1]]
+              const key = gridKey(wall, from, to)
               return (
                 <line
-                  key={gridKey(wall, from, to)}
+                  key={key}
                   x1={from.projected.x}
                   y1={from.projected.y}
                   x2={to.projected.x}
                   y2={to.projected.y}
-                  className="stroke-border"
+                  style={{ opacity: leaving.has(key) ? 0 : 1 }}
+                  className="stroke-border transition-opacity duration-300 ease-out motion-reduce:transition-none"
                   strokeWidth={0.75}
                 />
               )
@@ -1624,7 +1712,7 @@ function labelAxes(
   const axes = edges
     .filter((edge) => edge.length)
     .map((edge) =>
-      edgeLabels(edge, spec[edge.axis].domain, format[edge.axis] ?? String, titles[edge.axis])
+      edgeLabels(edge, spec[edge.axis], format[edge.axis] ?? String, titles[edge.axis])
     )
   const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
   const placed: AxisLabel[] = []
@@ -1683,7 +1771,7 @@ function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, ch
 
 function edgeLabels(
   edge: AxisEdge,
-  domain: number[],
+  { domain, leaving = [] }: GlidingAxis,
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
 ) {
@@ -1704,8 +1792,13 @@ function edgeLabels(
   const ticks = edge.map((tick) =>
     label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP, tick[axis])
   )
+  // A tick the new data dropped fades out in place and takes no room from the others.
+  for (const t of ticks) if (t.value !== undefined && leaving.includes(t.value)) t.opacity = 0
   // Ticks outside the gliding ends fade out; only the ones inside take room.
-  const { ranged, range } = inRange(ticks, domain)
+  const { ranged, range } = inRange(
+    ticks.filter((t) => t.opacity > 0),
+    domain
+  )
   // How far a row of labels reaches out from the edge.
   const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }

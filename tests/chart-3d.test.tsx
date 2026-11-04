@@ -234,6 +234,8 @@ function stubGL() {
     vertexAttribPointer: vi.fn(),
     bufferData: vi.fn(),
     drawArrays: vi.fn(),
+    lineWidth: vi.fn(),
+    getParameter: vi.fn(() => [1, 1]),
     createProgram: vi.fn(() => ({})),
     attachShader: vi.fn(),
     linkProgram: vi.fn(),
@@ -249,6 +251,8 @@ function stubGL() {
     DYNAMIC_DRAW: 0x88e8,
     FLOAT: 0x1406,
     TRIANGLES: 0x0004,
+    LINE_LOOP: 0x0002,
+    ALIASED_LINE_WIDTH_RANGE: 0x846e,
     VERTEX_SHADER: 0x8b31,
     FRAGMENT_SHADER: 0x8b30,
   }
@@ -324,11 +328,12 @@ describe("shortcuts", () => {
     await chart.send(key("?"))
     expect(chart.host.textContent).toContain("Pan")
     expect(button.getAttribute("aria-expanded")).toBe("true")
-    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Ctrl")
+    const kbds = [...chart.host.querySelectorAll('[data-slot="kbd"]')].map((k) => k.textContent)
+    expect(kbds).toContain("Ctrl")
     await chart.send(key("Escape"))
     expect(chart.host.textContent).not.toContain("Pan")
     act(() => button.click())
-    expect(chart.host.textContent).toContain("Space")
+    expect(chart.host.textContent).toContain("Scroll")
 
     await chart.unmount()
   })
@@ -352,8 +357,8 @@ describe("shortcuts", () => {
     await chart.send(key("?"))
 
     expect(rows(chart.host)).toEqual([
-      ["Rotate", "CtrlDrag", "←→↑↓"],
-      ["Pan", "SpaceDrag", "Shift←→↑↓"],
+      ["Rotate", "←→↑↓", "CtrlDrag"],
+      ["Pan", "Shift←→↑↓", "AltDrag"],
       ["Zoom", "+−", "CtrlScroll"],
       ["Reset", "0", "Double-click"],
       ["Keyboard shortcuts", "?"],
@@ -508,10 +513,54 @@ describe("shortcuts", () => {
     expect(button.getAttribute("aria-controls")).toBe(panel.id)
 
     expect(rows(chart.host).slice(0, 2)).toEqual([
-      ["Rotate", "CtrlDrag", "→↑↓"],
+      ["Rotate", "→↑↓", "CtrlDrag"],
       ["Links drehen", "←"],
     ])
     expect(rows(chart.host).at(-1)).toEqual(["Tastenkürzel", "h"])
+
+    await chart.unmount()
+  })
+
+  test("Drag draws as the grab icon, and a rule parts the keys of a row from its gestures", async () => {
+    const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
+    await chart.send(key("?"))
+
+    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
+    const chips = [...panel.querySelectorAll('[data-slot="kbd"]')]
+    const drag = chips.find((k) => k.textContent === "Drag")!
+    expect(drag.querySelector("svg")).not.toBeNull()
+    expect(drag.getAttribute("title")).toBe("Drag")
+    expect(chips.find((k) => k.textContent === "Scroll")!.querySelector("svg")).toBeNull()
+
+    const [rotate, ...rest] = [...panel.querySelectorAll("dt")]
+    expect(rotate.querySelectorAll('[data-slot="chart-3d-shortcuts-rule"]')).toHaveLength(1)
+    // The keys sit left of the rule, the gestures right of it.
+    expect(rotate.firstElementChild!.textContent).toBe("←→↑↓")
+    // The help row has no gesture, so no rule.
+    expect(rest.at(-1)!.querySelector('[data-slot="chart-3d-shortcuts-rule"]')).toBeNull()
+
+    await chart.unmount()
+  })
+
+  test("a pointer down outside the corner closes the panel and still works the chart", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(key("?"))
+    const panel = () => chart.host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')
+
+    // Inside the corner, the list stays open.
+    await act(async () => panel()!.dispatchEvent(pointer("pointerdown", 0, 0)))
+    expect(panel()).not.toBeNull()
+
+    // Outside, it closes, and the press is not swallowed: the drag still rotates.
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    expect(panel()).toBeNull()
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
+    expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
 
     await chart.unmount()
   })
@@ -558,24 +607,57 @@ describe("pointer", () => {
     await chart.unmount()
   })
 
-  test("held Space turns a drag into a pan, until Space or the pointer is let go", async () => {
+  test("held Space does not pan: the drag only inspects, and Space scrolls the page", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
         <Camera />
       </ChartContainer3D>
     )
     chart.svg.setPointerCapture = vi.fn()
-    await chart.send(key(" "))
+    const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })
+    await chart.send(space)
+    expect(space.defaultPrevented).toBe(false)
     await chart.send(pointer("pointerdown", 100, 100))
     await chart.send(pointer("pointermove", 130, 110))
+    expect(view(chart.host)).toMatchObject({ origin: { x: 320, y: 200 }, yaw: 0 })
+    expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
+
+    await chart.unmount()
+  })
+
+  test("held Alt turns a drag into a pan, until Alt is let go", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { altKey: true }))
+    await chart.send(pointer("pointermove", 130, 110, undefined, { altKey: true }))
     expect(view(chart.host)).toMatchObject({ origin: { x: 350, y: 210 }, yaw: 0 })
     expect(chart.svg.dataset.orbiting).toBe("false")
 
-    await chart.send(pointer("pointercancel", 130, 110))
-    await chart.send(new KeyboardEvent("keyup", { key: " ", bubbles: true }))
-    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
-    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
-    expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
+    // Alt released mid-drag: the pan ends, the chart stays where it is.
+    await chart.send(pointer("pointermove", 160, 110))
+    expect(view(chart.host).origin).toEqual({ x: 350, y: 210 })
+
+    await chart.unmount()
+  })
+
+  test("keymap={{ dragPan: false }} leaves an Alt drag inspecting and takes it off the panel", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }} keymap={{ dragPan: false }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { altKey: true }))
+    await chart.send(pointer("pointermove", 130, 110, undefined, { altKey: true }))
+    expect(view(chart.host).origin).toEqual({ x: 320, y: 200 })
+    expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
+
+    await chart.send(key("?"))
+    expect(rows(chart.host)[1]).toEqual(["Pan", "Shift←→↑↓"])
 
     await chart.unmount()
   })
@@ -665,6 +747,9 @@ describe("pointer", () => {
     expect(chart.svg.getAttribute("aria-label")).toContain("⌘ and drag to rotate it")
     await chart.send(key("?"))
     expect(chart.host.textContent).toContain("⌘")
+    // The Alt key of the pan gesture reads as Option there.
+    expect(chart.host.textContent).toContain("⌥")
+    expect(chart.host.textContent).not.toContain("Alt")
 
     chart.svg.setPointerCapture = vi.fn()
     await chart.send(pointer("pointerdown", 100, 100, undefined, { metaKey: true }))
@@ -993,10 +1078,12 @@ describe("renderer", () => {
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
-    // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+    // The square fans into 2 triangles of 3 points, the dot into 12 segments
+    // of 3, and its white ring into a line loop of the 12 ring points.
     expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
       [0, 6],
       [0, 36],
+      [0, 12],
     ])
     // The color of a mark as bytes from the 1×1 canvas, over 255.
     expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1, 1)
@@ -1081,10 +1168,12 @@ describe("parity", () => {
         expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
         expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
       } else if (gl) {
-        // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+        // The square fans into 2 triangles of 3 points, the dot into 12 segments
+        // of 3, and its white ring into a line loop of the 12 ring points.
         expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
           [0, 6],
           [0, 36],
+          [0, 12],
         ])
       } else {
         expect(chart.svg.querySelector('path[fill="red"]')).not.toBeNull()
@@ -1097,13 +1186,18 @@ describe("parity", () => {
       await chart.send(pointer("pointermove", 150, 150))
       expect(chart.host.textContent).toContain("Square")
       expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
-        "var(--foreground)",
+        "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))",
         "white",
       ])
       // The hover reaches the reader: a canvas repaints, the SVG strokes the edge.
       if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
       else if (gl) expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(painted)
-      else expect(chart.svg.querySelector('path[stroke="var(--foreground)"]')).not.toBeNull()
+      else
+        expect(
+          chart.svg.querySelector(
+            'path[stroke="var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"]'
+          )
+        ).not.toBeNull()
 
       // Off the marks, tooltip and edge clear the same everywhere.
       await chart.send(pointer("pointermove", 300, 300))
@@ -1227,6 +1321,33 @@ describe("Axes3D", () => {
 
     await act(async () => root.unmount())
     host.remove()
+  })
+
+  test("a leaving tick fades out in place: its label and its gridlines at opacity 0", async () => {
+    const spec = {
+      x: axis(0, 10),
+      y: { domain: [0, 200], ticks: [0, 20, 50, 100, 150, 200], leaving: [20] },
+      z: axis(0, 10),
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Axes3D spec={spec} world={worldBox(spec)} />
+      </ChartContainer3D>
+    )
+    // The labels of the leaving tick stay mounted, faded out by the transition.
+    const labels = [...chart.svg.querySelectorAll("text")].filter((t) => t.textContent === "20")
+    expect(labels.length).toBeGreaterThan(0)
+    for (const label of labels) expect(label.style.opacity).toBe("0")
+    // Its gridlines fade with it: one per wall that grids y.
+    const fading = [
+      ...chart.svg.querySelectorAll<SVGLineElement>('line[stroke-width="0.75"]'),
+    ].filter((line) => line.style.opacity === "0")
+    expect(fading).toHaveLength(2)
+    // A tick that stays keeps its label seen.
+    const staying = [...chart.svg.querySelectorAll("text")].filter((t) => t.textContent === "50")
+    expect(staying.some((t) => t.style.opacity === "1")).toBe(true)
+
+    await chart.unmount()
   })
 
   test("the axis line never reaches past the gliding ends of its axis", async () => {
@@ -1508,7 +1629,7 @@ describe("focus", () => {
     { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const },
     { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const },
   ]
-  const edge = "var(--foreground)"
+  const edge = "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"
   const fills = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].map((path) => path.getAttribute("fill"))
   const strokes = (svg: SVGSVGElement) =>
@@ -1665,7 +1786,7 @@ describe("useTween", () => {
     await chart.unmount()
   })
 
-  test("a key that is new starts at enter, or where it ends, and one that is gone goes at once", async () => {
+  test("a new key starts at enter, and a gone one glides back to it before it leaves", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const chart = await mountTween(600)
     await chart.render({ a: 0 })
@@ -1677,14 +1798,27 @@ describe("useTween", () => {
     await act(() => vi.advanceTimersByTime(700))
     expect(shown(chart.host)).toEqual({ a: 600, b: 300 })
 
-    // Without enter, a new key starts where it ends, the rest glides from where it stands.
+    // Gone, b glides back to enter, the mirror of its entering, then leaves.
+    await chart.render({ a: 600 }, 0)
+    expect(shown(chart.host)).toEqual({ a: 600, b: 300 })
+    await act(() => vi.advanceTimersByTime(300))
+    const leaving = shown(chart.host).b
+    expect(leaving).toBeGreaterThan(0)
+    expect(leaving).toBeLessThan(300)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(shown(chart.host)).toEqual({ a: 600 })
+
+    // Without enter, a new key starts where it ends, and a gone one stands
+    // where it is until the glide is done.
     await chart.render({ a: 500, c: 8 })
     expect(shown(chart.host)).toEqual({ a: 600, c: 8 })
     await act(() => vi.advanceTimersByTime(700))
     expect(shown(chart.host)).toEqual({ a: 500, c: 8 })
     await chart.render({ a: 400 })
-    expect(shown(chart.host)).toEqual({ a: 500 })
-    await act(() => vi.advanceTimersByTime(700))
+    expect(shown(chart.host)).toEqual({ a: 500, c: 8 })
+    await act(() => vi.advanceTimersByTime(300))
+    expect(shown(chart.host).c).toBe(8)
+    await act(() => vi.advanceTimersByTime(400))
     expect(shown(chart.host)).toEqual({ a: 400 })
 
     await chart.unmount()
@@ -1755,13 +1889,15 @@ describe("useTween", () => {
 
     await render(100)
     await render(200)
-    // Rounded, the end jumps from 100 to 200; the axis glides there and keeps the ticks of the new spec.
+    // Rounded, the end jumps from 100 to 200; the axis glides there with the new
+    // ticks, and the dropped ones stay through the glide, fading out in place.
     await act(() => vi.advanceTimersByTime(300))
     const [lo, hi] = y().domain
     expect(lo).toBe(0)
     expect(hi).toBeGreaterThan(100)
     expect(hi).toBeLessThan(200)
-    expect(y().ticks).toEqual(axis(0, 200).ticks)
+    expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
+    expect(y().leaving).toEqual([20, 40, 60, 80])
     await act(() => vi.advanceTimersByTime(400))
     expect(y()).toEqual(axis(0, 200))
 
@@ -1789,12 +1925,13 @@ describe("useTween", () => {
 
     await render(200)
     await render(100)
-    // The axis shrinks: 150 and 200 lie beyond the new end. They stay in the
-    // ticks while the end glides down - off the gliding ends their labels fade
-    // out instead of popping away - and leave once it arrives.
+    // The axis shrinks: 150 and 200 lie beyond the new end, 50 within it. They
+    // stay in the ticks while the end glides down - 50 fading out in place, the
+    // others off the gliding ends - and leave once it arrives.
     await act(() => vi.advanceTimersByTime(300))
     expect(y().domain[1]).toBeGreaterThan(100)
-    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
+    expect(y().leaving).toEqual([50])
     await act(() => vi.advanceTimersByTime(400))
     expect(y()).toEqual(axis(0, 100))
 
@@ -1804,7 +1941,7 @@ describe("useTween", () => {
     await act(() => vi.advanceTimersByTime(300))
     await render(100)
     await act(() => vi.advanceTimersByTime(100))
-    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
     await act(() => vi.advanceTimersByTime(700))
     expect(y()).toEqual(axis(0, 100))
 

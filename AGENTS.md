@@ -163,9 +163,10 @@ The rules that `scripts/check-template.mjs` enforces:
   `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
   projected shapes with d3-3d's `sort`;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
-  and `docs/examples/<item>-demo.tsx`; a chart also has the three other demos:
-  `-update-demo` (data gliding in), `-renderers-demo` (one scene on every
-  renderer) and `-many-demo` (thousands of marks, staying interactive);
+  and `docs/examples/<item>-demo.tsx`; a chart also has the four other demos:
+  `-update-demo` (data gliding in), `-enter-demo` (marks entering and
+  leaving), `-renderers-demo` (one scene on every renderer) and `-many-demo`
+  (thousands of marks, staying interactive);
 - `index.ts` re-exports every registry file with `export *`, and nothing else.
 
 How the charts draw, so that a new one draws the same way:
@@ -191,8 +192,8 @@ How the charts draw, so that a new one draws the same way:
   round its point, where a flipping anchor makes it jump.
 - **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md)). A mark names the marks of the same element in `groups`: the
   faces of a bar. Pointing at a mark, the core gives
-  exactly those an edge in the foreground color - white in the dark theme,
-  black in the light - until the pointer leaves the mark; the fill never
+  exactly those an edge in the focus color - `--chart-3d-focus`, or their own
+  fill lightened - until the pointer leaves the mark; the fill never
   changes on hover, with every renderer, and a chart never highlights anything
   itself.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
@@ -218,16 +219,18 @@ How the charts draw, so that a new one draws the same way:
 - **Transitions.** A chart glides into new data by tweening its numbers with
   `useTween`, before it projects - never the projected marks: every frame
   reprojects, and the camera answers at once. A new key starts at `enter`, a
-  gone one goes at once. Build the axes from the data the chart glides into
+  gone one glides back to it - the mirror of its entering - and leaves when
+  the glide is done. Build the axes from the data the chart glides into
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a
   tick that stays glides on. Every part of the axes that enters - a label, a
   tick mark, a gridline, a wall - fades in through the `chart-3d-axes-in`
   keyframe, which covers `text`, `line` and `path` of the axes slot; a part
-  the data drops goes at once, like a gone mark (see Enter in GLOSSARY.md),
-  except a tick beyond the new ends of its axis: it stays until the glide is
-  done and fades out as the gliding end sweeps past it.
+  a part the data drops leaves as the mirror of its entering (see Enter in
+  GLOSSARY.md): a gone mark glides back to its enter value before it goes,
+  and a dropped tick stays until the glide is done and fades out - within
+  the new ends in place, beyond them as the gliding end sweeps past it.
 - **Motion only where the reader allows it.** `animates()` is true only where
   the browser says `prefers-reduced-motion: no-preference`; elsewhere, on the
   server and in jsdom too, the tweens and the camera jump. A test that wants
@@ -249,7 +252,7 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **Parity is behavioural and gated**
   ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). Every mark of the
   scene draws on every renderer, and hover, tooltip and focus act the same;
-  pixels may differ, and webgl draws fills only (ADR-0002). The parity test in
+  pixels may differ, such as the width of the focus edge (ADR-0002). The parity test in
   `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
   and a circle - over all three renderers. A third mark shape turns `Mark3D`
   into a discriminated union with an exhaustive switch everywhere the core
@@ -258,8 +261,8 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
   triangulates the same marks - a fan per polygon, a fan of 12 segments per
-  circle - draws them in paint order without a depth test, and takes its
-  colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
+  circle - draws them in paint order without a depth test, a stroke as a line
+  loop over the outline, and takes its colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
   only once the projection on the CPU is what is slow.
 
 ### Interaction
@@ -283,7 +286,8 @@ gesture is a new action, so the panel never misses one.
 - **The gestures follow the 3D viewers of the browser, gated by the platform
   modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
   Windows and Linux, and a drag rotates; a plain drag only inspects, with the
-  default cursor. Space and a drag pans, and a double click resets. The panel
+  default cursor. Alt - ⌥ on a Mac - and a drag pans, and a double click
+  resets. The panel
   shows each gesture with its hint, so a chart needs no gesture of its own.
 - **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
   pinches; the wheel alone scrolls the page. The listener is the core's own,
@@ -361,9 +365,9 @@ the client. The npm dependencies stay external.
 1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template above.
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its
    only registry dependency.
-3. Add `tests/<name>-chart-3d.test.tsx`, the four demos in `docs/examples/`
-   (`<name>-chart-3d-demo.tsx`, `-update-demo`, `-renderers-demo`,
-   `-many-demo`) and `docs/content/components/<name>-chart-3d.mdx`, and list
+3. Add `tests/<name>-chart-3d.test.tsx`, the five demos in `docs/examples/`
+   (`<name>-chart-3d-demo.tsx`, `-update-demo`, `-enter-demo`,
+   `-renderers-demo`, `-many-demo`) and `docs/content/components/<name>-chart-3d.mdx`, and list
    the page in `docs/content/components/meta.json`.
 4. Add `export * from "./registry/new-york/ui/<name>-chart-3d"` to `index.ts`.
 5. Run `npm run lint` and `npm test`.

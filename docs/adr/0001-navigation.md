@@ -24,3 +24,11 @@ modifier, so a touch drag only inspects; rotation there is arrow keys (or an
 opt-in `keymap` rebinding). The cursor is the default pointer until the
 modifier is held (then a hand, `grab`), and `grabbing` while the camera
 turns; a missed keyup (window blur while the modifier is held) resets the hand.
+
+Amended 2026-11-04: Alt and a drag pans - ⌥ on a Mac - and Space and a drag
+is gone. With the platform modifier on the rotate and Ctrl or ⌘ on the wheel,
+Alt is the modifier left free, the browser claims no Alt-drag of its own, and
+Space goes back to the page, which it scrolls. Some Linux window managers
+still take Alt and a drag to move the window; where they do, the chart never
+sees the drag, and panning falls back to Shift and the arrow keys. `keymap`
+turns `dragPan` off on its own, like any other action.

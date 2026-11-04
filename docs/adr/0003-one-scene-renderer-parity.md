@@ -12,7 +12,8 @@ scene. Only the core draws - as SVG elements, painted on a canvas, or
 triangulated on webgl - and the hover hit-tests the scene, whatever the
 renderer. Parity is behavioural: every mark of the scene draws on every
 renderer, and hover, tooltip and focus act the same. Pixels may differ, and
-webgl draws fills only, so the focus edge shows on SVG and canvas (ADR-0002).
+webgl draws a stroke as a line loop, so the focus edge may differ in width
+there (ADR-0002).
 
 Three gates hold the contract, because prose alone does not: the template check
 requires the d3-3d projection, the sort and the four demos (`-demo`,

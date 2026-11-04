@@ -58,9 +58,10 @@ _Avoid_: shape, element, datum
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not
 have, the gridline of that tick. It comes in gradually - a mark grows from
-its enter value, a part of the axes fades in - where a part the data drops
-goes at once. Only a tick beyond the new ends of its axis stays and fades
-out as the gliding end sweeps past it, the mirror of its entering.
+its enter value, or fades in, in place, where motion would mislead; a part
+of the axes fades in - and leaves as its mirror: a gone mark glides back to
+its enter value or fades out before it goes, a dropped tick fades out, in
+place or as the gliding end sweeps past one beyond the new ends.
 _Avoid_: appear, pop in
 
 **Scene**:
@@ -83,8 +84,8 @@ _Avoid_: mark kind, mark type
 
 **Parity**:
 The same chart behaves the same on every renderer: every mark draws, and
-hover, tooltip and focus act alike. Only the pixels may differ - webgl draws
-fills only, so the focus edge shows on SVG and canvas.
+hover, tooltip and focus act alike. Only the pixels may differ, such as the
+width of the focus edge.
 _Avoid_: pixel identity, visual equality
 
 **Renderer demo**:
@@ -114,8 +115,8 @@ and both go when the pointer leaves the mark or the chart.
 _Avoid_: mouseover, highlight state
 
 **Focus**:
-The element under the pointer, highlighted with an edge in the foreground
-color - white in the dark theme, black in the light; the fill never changes.
+The element under the pointer, highlighted with an edge in its own color,
+lightened - or in the focus color, where one is set; the fill never changes.
 Every chart's marks carry their `groups`, naming the marks highlighted
 together: one bar, one point, one cell.
 _Avoid_: selection, active state, fade
@@ -128,9 +129,9 @@ Turning the camera around the chart, with the platform modifier and a drag -
 _Avoid_: rotate the view, spin, plain drag
 
 **Pan**:
-Moving the chart within the view, with Space and a drag or Shift and an
-arrow key.
-_Avoid_: Cmd and drag (the browser and the OS take it), scroll, move the camera
+Moving the chart within the view, with Alt - ⌥ on a Mac - and a drag, or
+Shift and an arrow key.
+_Avoid_: Space and a drag (gone), Cmd and drag (the browser and the OS take it), scroll, move the camera
 
 **Zoom**:
 Moving the camera closer, with Ctrl or ⌘ and the wheel - a trackpad pinch

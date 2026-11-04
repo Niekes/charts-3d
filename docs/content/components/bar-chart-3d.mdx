@@ -5,6 +5,7 @@ description: Bars on a floor, one row per entry and one per series.
 
 import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
 import BarChart3DUpdateDemo from "@/docs/examples/bar-chart-3d-update-demo"
+import BarChart3DEnterDemo from "@/docs/examples/bar-chart-3d-enter-demo"
 import BarChart3DRenderersDemo from "@/docs/examples/bar-chart-3d-renderers-demo"
 import BarChart3DManyDemo from "@/docs/examples/bar-chart-3d-many-demo"
 
@@ -60,6 +61,24 @@ of its container, and the y axis scales along.
   </Tab>
   <Tab value="Code">
     <include>../../examples/bar-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring, drop and reorder whole rows - a bar follows the name
+of its entry, in the `index` field. An added month grows out of the floor
+while the row axis makes room, its tick and label fading in; a removed one
+shrinks back into it, the mirror of its entering, while the rows around it
+glide to their new cells and the axis closes the gap (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-enter-demo.tsx</include>
   </Tab>
 </Tabs>
 

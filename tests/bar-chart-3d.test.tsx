@@ -312,6 +312,221 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("a gone row shrinks away while the rows around it glide to their new cells", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: { name: string; a: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    const faces = () => host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')
+    const rightEdge = () =>
+      Math.max(
+        ...[...faces()].flatMap((f) =>
+          f
+            .getAttribute("d")!
+            .slice(1, -1)
+            .split("L")
+            .map((c) => Number(c.split(",")[0]))
+        )
+      )
+
+    await render([
+      { name: "x", a: 100 },
+      { name: "y", a: 50 },
+      { name: "z", a: 80 },
+    ])
+    const bars0 = faces().length
+    const edge0 = rightEdge()
+
+    // y leaves: its bar stays through the glide, shrinking, while z glides inward.
+    await render([
+      { name: "x", a: 100 },
+      { name: "z", a: 80 },
+    ])
+    expect(faces().length).toBe(bars0)
+    await act(() => vi.advanceTimersByTime(300))
+    expect(faces().length).toBe(bars0)
+    const edgeMid = rightEdge()
+    await act(() => vi.advanceTimersByTime(150))
+    const edgeLate = rightEdge()
+    await act(() => vi.advanceTimersByTime(250))
+    expect(faces().length).toBe((bars0 / 3) * 2)
+    const edge1 = rightEdge()
+    // z travels: away from its start mid-glide, and closing on its end late.
+    expect(edgeMid).not.toBe(edge0)
+    expect(Math.abs(edgeLate - edge1)).toBeLessThan(Math.abs(edgeMid - edge1))
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("the size of a bar eases with its cell: new rows shrink it gradually, never at once", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: Record<string, unknown>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" />
+          </ChartContainer3D>
+        )
+      )
+    // x stays the tallest bar, so the highest face of color a is its top; its
+    // span along the screen is the width of the bar.
+    const extent = () => {
+      const faces = [
+        ...host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]'),
+      ].map((f) =>
+        f
+          .getAttribute("d")!
+          .slice(1, -1)
+          .split("L")
+          .map((c) => c.split(",").map(Number))
+      )
+      const top = faces.reduce((a, b) =>
+        Math.min(...a.map(([, y]) => y)) < Math.min(...b.map(([, y]) => y)) ? a : b
+      )
+      const xs = top.map(([x]) => x)
+      return Math.max(...xs) - Math.min(...xs)
+    }
+    await render([{ name: "x", a: 100 }])
+    const wide = extent()
+
+    // Two new rows third the cells; the bar keeps its size until the glide moves it.
+    await render([
+      { name: "x", a: 100 },
+      { name: "y", a: 50 },
+      { name: "z", a: 80 },
+    ])
+    expect(Math.abs(extent() - wide)).toBeLessThan(0.5)
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = extent()
+    await act(() => vi.advanceTimersByTime(150))
+    const late = extent()
+    await act(() => vi.advanceTimersByTime(250))
+    const slim = extent()
+    expect(slim).toBeLessThan(wide)
+    // On its way it narrows through the middle, closing on its end.
+    expect(mid).toBeLessThan(wide)
+    expect(Math.abs(late - slim)).toBeLessThan(Math.abs(mid - slim))
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a glide reaches the canvas renderer: every frame repaints, the scene moving through", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const ctx = {
+      setTransform: vi.fn(),
+      beginPath: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      fillStyle: "",
+      getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
+    }
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ctx) as never)
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (a: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} renderer="canvas">
+            <BarChart3D data={[{ name: "x", a }]} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    // The highest painted corner: on the canvas, a taller bar reaches a smaller y.
+    const top = () => Math.min(...ctx.lineTo.mock.calls.map(([, y]) => y as number))
+
+    // From 305 to 480 the end of the y axis rounds from 350 to 500, so the
+    // share of the box the bar fills grows, and its top truly rises.
+    await render(305)
+    await act(() => vi.advanceTimersByTime(700))
+    const settled = ctx.fill.mock.calls.length
+
+    await render(480)
+    ctx.lineTo.mockClear()
+    await act(() => vi.advanceTimersByTime(100))
+    const painted1 = ctx.fill.mock.calls.length
+    const top1 = top()
+    ctx.lineTo.mockClear()
+    await act(() => vi.advanceTimersByTime(100))
+    const painted2 = ctx.fill.mock.calls.length
+    const top2 = top()
+    // The glide repaints frame by frame, and the bar rises between the frames.
+    expect(painted1).toBeGreaterThan(settled)
+    expect(painted2).toBeGreaterThan(painted1)
+    expect(top2).toBeLessThan(top1)
+    ctx.lineTo.mockClear()
+    await act(() => vi.advanceTimersByTime(500))
+    expect(top()).toBeLessThan(top2)
+
+    vi.restoreAllMocks()
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("rows and series swapped together: a cell only one tween knows stays unseen, no number breaks", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: Record<string, unknown>[], keys: string[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={keys} />
+          </ChartContainer3D>
+        )
+      )
+    await render(
+      [
+        { name: "x", a: 100, b: 50 },
+        { name: "y", a: 60, b: 30 },
+      ],
+      ["a"]
+    )
+    await act(() => vi.advanceTimersByTime(700))
+
+    // y leaves while the series swaps from a to b: the leaving row y has no
+    // value of b to show, so its cell of b stays unseen instead of breaking.
+    await render([{ name: "x", a: 100, b: 50 }], ["b"])
+    await act(() => vi.advanceTimersByTime(300))
+    const ds = [...host.querySelectorAll('path[fill^="color-mix"]')].map((p) =>
+      p.getAttribute("d")!
+    )
+    expect(ds.length).toBeGreaterThan(0)
+    expect(ds.some((d) => d.includes("NaN"))).toBe(false)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')).toHaveLength(
+      0
+    )
+    expect(
+      host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-b)"]').length
+    ).toBeGreaterThan(0)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a bar that keeps its value keeps its height smooth, and a tick that stays glides as the same label", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))
@@ -362,14 +577,14 @@ describe("BarChart3D transitions", () => {
 })
 
 describe("BarChart3D focus", () => {
-  const edge = "var(--foreground)"
+  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
   const barFaces = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].flatMap((p) => {
       const f = p.getAttribute("fill")
       return f?.startsWith("color-mix") ? [p] : []
     })
   const edged = (svg: SVGSVGElement) =>
-    barFaces(svg).filter((p) => p.getAttribute("stroke") === edge)
+    barFaces(svg).filter((p) => p.getAttribute("stroke") === edge(p.getAttribute("fill")!))
 
   test("hovering a bar highlights that bar alone with an edge; the fill never changes; leaving clears it", async () => {
     const chart = await mount(
@@ -424,6 +639,9 @@ describe("BarChart3D renderer switch", () => {
       vertexAttribPointer: vi.fn(),
       bufferData: vi.fn(),
       drawArrays: vi.fn(),
+      lineWidth: vi.fn(),
+      // A lost context answers getParameter with null; the painter must not throw.
+      getParameter: vi.fn(() => null),
       createProgram: vi.fn(() => ({})),
       attachShader: vi.fn(),
       linkProgram: vi.fn(),

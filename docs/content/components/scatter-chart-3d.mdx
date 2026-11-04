@@ -4,6 +4,7 @@ description: Points in a box, colored by series.
 ---
 
 import ScatterChart3DUpdateDemo from "@/docs/examples/scatter-chart-3d-update-demo"
+import ScatterChart3DEnterDemo from "@/docs/examples/scatter-chart-3d-enter-demo"
 import ScatterChart3DRenderersDemo from "@/docs/examples/scatter-chart-3d-renderers-demo"
 import ScatterChart3DManyDemo from "@/docs/examples/scatter-chart-3d-many-demo"
 import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
@@ -60,6 +61,24 @@ of the container, and the axes scale along.
   </Tab>
   <Tab value="Code">
     <include>../../examples/scatter-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+With an `id` field, a point follows its name through updates: a new one grows
+out of nothing at its place, a gone one shrinks away where it stands, and one
+that moves glides - the mirror of its entering (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Without an `id`, points are named by their position in `data`, which animates
+appending and removing at the end.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-enter-demo.tsx</include>
   </Tab>
 </Tabs>
 

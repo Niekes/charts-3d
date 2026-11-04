@@ -112,10 +112,57 @@ describe("ScatterChart3D transitions", () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  test("keyed by id, a new point grows from nothing and a gone one shrinks away", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { id: string; x: number; y: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} id="id" x="x" y="y" z="z" />
+          </ChartContainer3D>
+        )
+      )
+    const radii = () => [...host.querySelectorAll("circle")].map((c) => Number(c.getAttribute("r")))
+
+    const p = { id: "p", x: 0, y: 0, z: 0 }
+    const q = { id: "q", x: 10, y: 10, z: 10 }
+    await render([p, q])
+    await act(() => vi.advanceTimersByTime(700))
+    expect(radii()).toEqual([4, 4])
+
+    // q leaves: its point stays through the glide, shrinking to nothing - in
+    // place, frozen in the box, not riding the rescaling axes out of it.
+    const gone = () =>
+      [...host.querySelectorAll("circle")].find((c) => Number(c.getAttribute("r")) < 4)
+    await render([p])
+    expect(radii()).toEqual([4, 4])
+    await act(() => vi.advanceTimersByTime(300))
+    const shrinking = gone()!
+    expect(Number(shrinking.getAttribute("r"))).toBeGreaterThan(0)
+    const at = [shrinking.getAttribute("cx"), shrinking.getAttribute("cy")]
+    await act(() => vi.advanceTimersByTime(150))
+    expect([gone()!.getAttribute("cx"), gone()!.getAttribute("cy")]).toEqual(at)
+    await act(() => vi.advanceTimersByTime(250))
+    expect(radii()).toEqual([4])
+
+    // A new point grows from nothing, at its place.
+    await render([p, { id: "r", x: 5, y: 5, z: 5 }])
+    expect(radii().filter((r) => r === 0)).toHaveLength(1)
+    await act(() => vi.advanceTimersByTime(300))
+    expect(radii().filter((r) => r > 0 && r < 4)).toHaveLength(1)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(radii()).toEqual([4, 4])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
 })
 
 describe("ScatterChart3D focus", () => {
-  const edge = "var(--foreground)"
+  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
 
   test("hovering a point highlights that point alone with an edge; the fill never changes; leaving clears it", async () => {
     const host = document.body.appendChild(document.createElement("div"))
@@ -141,7 +188,8 @@ describe("ScatterChart3D focus", () => {
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     const circles = () => [...svg.querySelectorAll("circle")]
     const fills = () => circles().map((c) => c.getAttribute("fill")!)
-    const edged = () => circles().filter((c) => c.getAttribute("stroke") === edge)
+    const edged = () =>
+      circles().filter((c) => c.getAttribute("stroke") === edge(c.getAttribute("fill")!))
     const move = (clientX: number, clientY: number) =>
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))

@@ -12,6 +12,7 @@
  *   docs/content/components/<item>.mdx    one docs page per item
  *   docs/examples/<item>-demo.tsx         the example the page shows
  *   docs/examples/<chart>-update-demo.tsx data gliding in
+ *   docs/examples/<chart>-enter-demo.tsx  marks entering and leaving
  *   docs/examples/<chart>-renderers-demo.tsx one scene on every renderer
  *   docs/examples/<chart>-many-demo.tsx   thousands of marks, staying interactive
  *
@@ -180,9 +181,10 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     fail(`${UI}/${file}: a chart sorts its projected shapes with d3-3d's 'sort'`)
   }
 
-  // A chart shows what the template promises: data gliding in (update), one
-  // scene on every renderer (renderers), thousands of marks (many).
-  for (const demo of ["update", "renderers", "many"]) {
+  // A chart shows what the template promises: data gliding in (update), marks
+  // entering and leaving (enter), one scene on every renderer (renderers),
+  // thousands of marks (many).
+  for (const demo of ["update", "enter", "renderers", "many"]) {
     const path = `docs/examples/${name}-${demo}-demo.tsx`
     if (!exists(path)) fail(`${name}: is missing '${path}'`)
   }
