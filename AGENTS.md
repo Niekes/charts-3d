@@ -314,7 +314,8 @@ chooses a rung:
   owned registry copy, not a prop.
 
 A knob nobody turns is API debt: motion constants, camera steps and limits,
-tick density and the focus edge stay fixed until a user asks.
+tick density, the walls and gridlines, and the focus edge stay fixed until a
+user asks.
 
 ### Code style
 

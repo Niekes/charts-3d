@@ -102,7 +102,8 @@ _Avoid_: performance demo, stress test, benchmark
 **Slot**:
 A named part of the chart - the box, the marks, the tooltip, the legend, the
 keyboard button and its panel, the gizmo - addressed from outside by its
-`data-slot` name, to restyle, move or hide with CSS.
+`data-slot` name, to restyle, move or hide with CSS. The span between two
+data positions on an axis is a cell, never a slot.
 _Avoid_: css hook, class name
 
 ## The pointer

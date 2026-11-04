@@ -504,7 +504,7 @@ describe("shortcuts", () => {
     expect(button.hasAttribute("aria-controls")).toBe(false)
     await chart.send(key("h"))
     expect(button.getAttribute("aria-expanded")).toBe("true")
-    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
     expect(button.getAttribute("aria-controls")).toBe(panel.id)
 
     expect(rows(chart.host).slice(0, 2)).toEqual([
@@ -519,7 +519,7 @@ describe("shortcuts", () => {
 
 /** The rows of the open shortcut panel: the label, then the text of each group of keys. */
 function rows(host: HTMLElement) {
-  const panel = host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+  const panel = host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
   return [...panel.querySelectorAll("dt")].map((dt) => [
     dt.nextElementSibling!.textContent,
     ...[...dt.querySelectorAll('[data-slot="kbd-group"]')].map((group) => group.textContent),

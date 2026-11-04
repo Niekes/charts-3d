@@ -8,7 +8,7 @@ wish becomes a prop, and the API grows until it freezes the internals.
 Decision: every knob chooses a rung.
 
 - **Behaviour is a prop.** What differs per app: `keymap` (keys replaced,
-  labels renamed - also the language -, actions off), `renderer`,
+  labels renamed - the language with them - and actions turned off), `renderer`,
   `animationDuration`, `defaultView`, what shows (`legend`, `shortcuts`,
   `gizmo`), and the data props of the charts. A behaviour prop comes with a
   doc comment, a `@defaultValue` and a test; an added knob is a minor, a
@@ -26,7 +26,8 @@ Decision: every knob chooses a rung.
 
 A knob nobody turns is API debt: the motion constants (camera glide, axes
 fade), the step sizes and limits of the camera, the tick density, the walls
-and the width of the focus edge stay fixed until a user asks for them.
+and gridlines, and the width of the focus edge stay fixed until a user asks
+for them.
 
 Considered options: style props (rejected: two sources of truth beside the
 theme); render props or a slot-component per part (rejected: freezes the

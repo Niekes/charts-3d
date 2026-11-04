@@ -1420,7 +1420,11 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
   // Without a key or a panel, there is nothing to list.
   if (!rows.length) return null
   return (
-    <div ref={ref} className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+    <div
+      ref={ref}
+      data-slot="chart-3d-shortcuts"
+      className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1"
+    >
       <button
         type="button"
         data-slot="chart-3d-shortcuts-trigger"
@@ -1442,7 +1446,7 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
   return (
     <dl
       id={id}
-      data-slot="chart-3d-shortcuts"
+      data-slot="chart-3d-shortcuts-panel"
       className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl"
     >
       {rows.map(({ label, groups }) => (

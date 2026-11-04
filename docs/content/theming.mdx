@@ -30,28 +30,30 @@ The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadc
 Every visible part of a chart carries a `data-slot`, the public hook for your
 stylesheet: restyle it, move it, hide it, without touching the component.
 
-| Slot                         | The part                                               |
-| ---------------------------- | ------------------------------------------------------ |
-| `chart-3d`                   | the container, which also takes `className`            |
-| `chart-3d-canvas`            | the canvas of the canvas and webgl renderers           |
-| `chart-3d-marks`             | the marks, as SVG                                      |
-| `chart-3d-axes`              | the box: walls, gridlines, axis lines, ticks           |
-| `chart-3d-labels`            | the labels beside the marks                            |
-| `chart-3d-tooltip`           | the tooltip                                            |
-| `chart-3d-legend`            | the legend below the chart                             |
-| `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner) |
-| `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)      |
-| `chart-3d-shortcuts`         | the shortcut panel                                     |
-| `kbd-group`, `kbd`           | the key groups and keys inside the panel               |
+| Slot                         | The part                                                |
+| ---------------------------- | ------------------------------------------------------- |
+| `chart-3d`                   | the container, which also takes `className`             |
+| `chart-3d-canvas`            | the canvas of the canvas and webgl renderers            |
+| `chart-3d-marks`             | the marks, as SVG                                       |
+| `chart-3d-axes`              | the box: walls, gridlines, axis lines, ticks            |
+| `chart-3d-labels`            | the labels beside the marks                             |
+| `chart-3d-tooltip`           | the tooltip                                             |
+| `chart-3d-legend`            | the legend below the chart                              |
+| `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner)  |
+| `chart-3d-shortcuts`         | the corner that holds the keyboard button and its panel |
+| `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)       |
+| `chart-3d-shortcuts-panel`   | the shortcut panel                                      |
+| `kbd-group`, `kbd`           | the key groups and keys inside the panel                |
 
-For example, to move the keyboard button into the lower left corner:
+For example, to move the keyboard button and its panel into the lower left corner:
 
 ```css
-[data-slot="chart-3d-shortcuts-trigger"] {
-  position: absolute;
+[data-slot="chart-3d-shortcuts"] {
   top: auto;
+  right: auto;
   bottom: 0.5rem;
   left: 0.5rem;
+  align-items: flex-start;
 }
 ```
 
