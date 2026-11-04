@@ -1177,6 +1177,53 @@ describe("ChartLegend3D", () => {
 })
 
 describe("Axes3D", () => {
+  test("a wall is a plain quad and its gridlines are lines keyed by tick, so a new one fades in", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (hi: number) => {
+      const spec = { x: axis(0, 10), y: axis(0, hi), z: axis(0, 10) }
+      return act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes3D spec={spec} world={worldBox(spec)} />
+          </ChartContainer3D>
+        )
+      )
+    }
+    await render(100)
+
+    // The walls carry no gridlines of their own: each is one closed quad, and
+    // the gridlines are their own lines, in the border ink, which the
+    // chart-3d-axes-in keyframe fades in when they mount.
+    const walls = [...host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] path')]
+    expect(walls.length).toBeGreaterThan(0)
+    for (const wall of walls) expect(wall.getAttribute("d")).toMatch(/^M[^M]*Z$/)
+    const gridlines = () => [
+      ...host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="0.75"]'),
+    ]
+    const before = gridlines()
+    expect(before.length).toBeGreaterThan(0)
+
+    // New ticks mount new gridlines - fading in - and kept ticks keep their nodes.
+    await render(200)
+    const after = gridlines()
+    expect(after.filter((line) => !before.includes(line)).length).toBeGreaterThan(0)
+    expect(after.filter((line) => before.includes(line)).length).toBeGreaterThan(0)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("the enter fade covers the walls: the keyframe animates path with text and line", () => {
+    const html = renderToString(
+      <ChartContainer3D id="t" config={{}}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(html).toContain("path { animation: chart-3d-axes-in")
+    expect(html.split("prefers-reduced-motion")[1]).toContain("path { animation: none")
+  })
+
   test("thins an axis seen end on to its first label", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
     // From above, the y axis points at the camera and its ticks fall on one point.

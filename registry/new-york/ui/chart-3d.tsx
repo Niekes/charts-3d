@@ -11,6 +11,7 @@ import {
   type AxesSpec,
   type AxisEdge,
   type AxisSpec,
+  type AxisWall,
   type Camera3DInstance,
   type CubeFace,
   type Point2D,
@@ -1301,8 +1302,8 @@ function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   // A label or tick of the axes that just appeared fades in, instead of popping up.
   // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
   const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
-[data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: chart-3d-axes-in 300ms ease-out; }
-@media (prefers-reduced-motion: reduce) { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line { animation: none; } }
+[data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line, [data-chart=${id}] [data-slot="chart-3d-axes"] path { animation: chart-3d-axes-in 300ms ease-out; }
+@media (prefers-reduced-motion: reduce) { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line, [data-chart=${id}] [data-slot="chart-3d-axes"] path { animation: none; } }
 [data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
 [data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
@@ -1484,12 +1485,23 @@ function Axes3D({
         .data(spec)
         .filter((wall) => !wall.ccw)
         .map((wall) => (
-          <path
-            key={`${wall.axis}${wall.side}`}
-            d={box.draw(wall)}
-            className="fill-muted/40 stroke-border"
-            strokeWidth={0.75}
-          />
+          <React.Fragment key={`${wall.axis}${wall.side}`}>
+            <path d={quad(wall)} className="fill-muted/40 stroke-border" strokeWidth={0.75} />
+            {wall.grid.map((segment) => {
+              const [from, to] = [segment[0], segment[segment.length - 1]]
+              return (
+                <line
+                  key={gridKey(wall, from, to)}
+                  x1={from.projected.x}
+                  y1={from.projected.y}
+                  x2={to.projected.x}
+                  y2={to.projected.y}
+                  className="stroke-border"
+                  strokeWidth={0.75}
+                />
+              )
+            })}
+          </React.Fragment>
         ))}
       {lines.map((line) => (
         <AxisLine3D key={line.key} line={line} ink="stroke-foreground" width={1.5} />
@@ -1513,6 +1525,21 @@ const FADE = 4
 const DODGE = 12
 // How far the mark of a tick reaches out from its edge.
 const MARK = 6
+
+/** The closed quad of a wall; its gridlines are their own lines, so a new one fades in. */
+function quad(wall: AxisWall) {
+  return `M${wall.map(({ projected }) => `${projected.x},${projected.y}`).join("L")}Z`
+}
+
+/**
+ * The key of a gridline: the axis and value of the tick it marks - the one
+ * coordinate its ends share beside the wall's own axis - so the gridline of
+ * a tick that stays glides on, and one of a new tick mounts and fades in.
+ */
+function gridKey(wall: AxisWall, from: Point3D, to: Point3D) {
+  const axis = (["x", "y", "z"] as const).find((a) => a !== wall.axis && from[a] === to[a])!
+  return `${axis}-${from[axis]}`
+}
 
 /**
  * A line of an axis: the line that carries its scale along the edge it sits

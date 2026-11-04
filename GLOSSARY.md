@@ -54,6 +54,13 @@ One shape of a chart - a bar, a point, a face of a flow - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
 
+**Enter**:
+A part the new data brings: a mark with a new key, a tick the axis did not
+have, the gridline of that tick. It comes in gradually - a mark grows from
+its enter value, a part of the axes fades in - where a part the data drops
+goes at once.
+_Avoid_: appear, pop in
+
 **Scene**:
 The marks of a chart as plain data, in paint order: every renderer draws
 the scene and the hover hit-tests it, so a chart is data-driven on every
