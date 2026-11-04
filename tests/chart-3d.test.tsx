@@ -111,6 +111,7 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("Apples")
+    expect(html).toContain('data-slot="chart-3d-legend"')
   })
 
   test("useChart3D outside a container throws", () => {
@@ -779,6 +780,7 @@ describe("Marks3D", () => {
     )
     expect(html).toContain('d="M100,100L200,100L200,200L100,200Z" fill="red"')
     expect(html).toMatch(/<circle cx="400" cy="100" r="10" fill="blue" stroke="white"/)
+    expect(html).toContain('data-slot="chart-3d-marks"')
   })
 
   test("a circle without a stroke has no outline", () => {
@@ -801,6 +803,7 @@ describe("Marks3D", () => {
 
     await move(150, 150)
     expect(chart.host.textContent).toContain("Square")
+    expect(chart.host.querySelector('[data-slot="chart-3d-tooltip"]')).not.toBeNull()
     await move(405, 100)
     expect(chart.host.textContent).toContain("Dot")
     await move(300, 300)
@@ -915,6 +918,7 @@ describe("renderer", () => {
       </ChartContainer3D>
     )
     expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.host.querySelector("canvas")!.dataset.slot).toBe("chart-3d-canvas")
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
     expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)

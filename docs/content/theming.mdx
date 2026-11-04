@@ -1,7 +1,9 @@
 ---
 title: Theming
-description: Colors, shading and dark mode.
+description: Colors, slots, shading and dark mode.
 ---
+
+Customization climbs a ladder. **Behaviour is a prop**: the keys and gestures (`keymap`), the renderer, the durations, and what shows (`legend`, `shortcuts`, `gizmo`) - see [chart-3d](/docs/components/chart-3d). **Looks are CSS**: the theme tokens below and the slots, never style props. **Identity is fixed**: how hover highlights, how the gestures are gated and that every renderer draws the same scene are decisions, recorded in the [ADRs](https://github.com/Niekes/charts-3d/tree/master/docs/adr) - to change those, edit your copy of the registry file: you own it.
 
 ## The config
 
@@ -22,6 +24,36 @@ The container turns every key into a CSS variable, `--color-desktop` and `--colo
 ## The chart tokens
 
 The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`.
+
+## Slots
+
+Every visible part of a chart carries a `data-slot`, the public hook for your
+stylesheet: restyle it, move it, hide it, without touching the component.
+
+| Slot                         | The part                                               |
+| ---------------------------- | ------------------------------------------------------ |
+| `chart-3d`                   | the container, which also takes `className`            |
+| `chart-3d-canvas`            | the canvas of the canvas and webgl renderers           |
+| `chart-3d-marks`             | the marks, as SVG                                      |
+| `chart-3d-axes`              | the box: walls, gridlines, axis lines, ticks           |
+| `chart-3d-labels`            | the labels beside the marks                            |
+| `chart-3d-tooltip`           | the tooltip                                            |
+| `chart-3d-legend`            | the legend below the chart                             |
+| `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner) |
+| `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)      |
+| `chart-3d-shortcuts`         | the shortcut panel                                     |
+| `kbd-group`, `kbd`           | the key groups and keys inside the panel               |
+
+For example, to move the keyboard button into the lower left corner:
+
+```css
+[data-slot="chart-3d-shortcuts-trigger"] {
+  position: absolute;
+  top: auto;
+  bottom: 0.5rem;
+  left: 0.5rem;
+}
+```
 
 ## Shading
 

@@ -97,6 +97,14 @@ The docs section that shows one chart with thousands of marks, on canvas and
 with the renderer switch - the proof the chart stays interactive at size.
 _Avoid_: performance demo, stress test, benchmark
 
+## Styling
+
+**Slot**:
+A named part of the chart - the box, the marks, the tooltip, the legend, the
+keyboard button and its panel, the gizmo - addressed from outside by its
+`data-slot` name, to restyle, move or hide with CSS.
+_Avoid_: css hook, class name
+
 ## The pointer
 
 **Hover**:

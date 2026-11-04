@@ -1145,6 +1145,7 @@ function ChartCanvas3D({
     <canvas
       // A canvas that gave out one context cannot give another, so each renderer gets its own.
       key={renderer}
+      data-slot="chart-3d-canvas"
       ref={canvas}
       className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
@@ -1247,27 +1248,31 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   })
 
   if (renderer !== "svg") return null
-  return drawn.map(({ key, points, r, fill, stroke }) =>
-    r === undefined ? (
-      <path
-        key={key}
-        d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
-        fill={fill}
-        stroke={stroke ?? fill}
-        strokeWidth={stroke === "var(--foreground)" ? 1.5 : 0.5}
-        strokeLinejoin="round"
-      />
-    ) : (
-      <circle
-        key={key}
-        cx={points[0].x}
-        cy={points[0].y}
-        r={r}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={stroke ? 1 : undefined}
-      />
-    )
+  return (
+    <g data-slot="chart-3d-marks">
+      {drawn.map(({ key, points, r, fill, stroke }) =>
+        r === undefined ? (
+          <path
+            key={key}
+            d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+            fill={fill}
+            stroke={stroke ?? fill}
+            strokeWidth={stroke === "var(--foreground)" ? 1.5 : 0.5}
+            strokeLinejoin="round"
+          />
+        ) : (
+          <circle
+            key={key}
+            cx={points[0].x}
+            cy={points[0].y}
+            r={r}
+            fill={fill}
+            stroke={stroke}
+            strokeWidth={stroke ? 1 : undefined}
+          />
+        )
+      )}
+    </g>
   )
 }
 
@@ -1370,6 +1375,7 @@ function ChartTooltip3D({
 
   return (
     <div
+      data-slot="chart-3d-tooltip"
       className="pointer-events-none absolute z-10 grid min-w-32 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl"
       style={{ left: `${(tooltip.at.x / width) * 100}%`, top: `${(tooltip.at.y / height) * 100}%` }}
     >
@@ -1465,7 +1471,7 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
 
 function ChartLegend3D({ config }: { config: ChartConfig }) {
   return (
-    <div className="flex items-center justify-center gap-4 pt-3">
+    <div data-slot="chart-3d-legend" className="flex items-center justify-center gap-4 pt-3">
       {Object.entries(config).map(([key, item]) => (
         <div key={key} className="flex items-center gap-1.5">
           {item.icon ? (

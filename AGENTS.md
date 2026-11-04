@@ -297,6 +297,25 @@ gesture is a new action, so the panel never misses one.
 - **`orbiting` is true while the camera turns**, not while it pans or zooms.
   Nothing in the core reads it; `data-orbiting` on the svg is there to style.
 
+### Customization
+
+Customization climbs a ladder
+([ADR-0004](docs/adr/0004-customization-ladder.md)), and every new knob
+chooses a rung:
+
+- **Behaviour is a prop**: keys and gestures (`keymap`), renderer, durations,
+  what shows (`legend`, `shortcuts`, `gizmo`), the data props of the charts.
+  Documented with `@defaultValue`, tested, semver (an added knob is a minor).
+- **Looks are CSS**: the theme tokens and the slots - every visible part
+  carries a `data-slot`, listed on the theming page of the docs. Never style
+  props.
+- **Identity is fixed**: the hover (ADR-0002), the gestures (ADR-0001), one
+  scene on every renderer (ADR-0003). Changing identity means editing the
+  owned registry copy, not a prop.
+
+A knob nobody turns is API debt: motion constants, camera steps and limits,
+tick density and the focus edge stay fixed until a user asks.
+
 ### Code style
 
 The registry uses the style of shadcn/ui - two spaces, double quotes, no
