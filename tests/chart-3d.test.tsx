@@ -1204,11 +1204,14 @@ describe("Axes3D", () => {
     const before = gridlines()
     expect(before.length).toBeGreaterThan(0)
 
-    // New ticks mount new gridlines - fading in - and kept ticks keep their nodes.
+    // y goes from 0..100 (ticks 0, 20 ... 100) to 0..200 (ticks 0, 50 ... 200).
+    // Keyed by value, the two walls that grid y mount their three new ticks
+    // (50, 150, 200) and keep 0 and 100 - a key from the position instead
+    // would remount 100, which moves - and drop 20, 40, 60 and 80.
     await render(200)
     const after = gridlines()
-    expect(after.filter((line) => !before.includes(line)).length).toBeGreaterThan(0)
-    expect(after.filter((line) => before.includes(line)).length).toBeGreaterThan(0)
+    expect(after.filter((line) => !before.includes(line))).toHaveLength(6)
+    expect(after.filter((line) => before.includes(line))).toHaveLength(before.length - 8)
 
     await act(async () => root.unmount())
     host.remove()

@@ -1299,11 +1299,14 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
 
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
-  // A label or tick of the axes that just appeared fades in, instead of popping up.
+  // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
   // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
+  const entering = ["text", "line", "path"]
+    .map((el) => `[data-chart=${id}] [data-slot="chart-3d-axes"] ${el}`)
+    .join(", ")
   const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
-[data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line, [data-chart=${id}] [data-slot="chart-3d-axes"] path { animation: chart-3d-axes-in 300ms ease-out; }
-@media (prefers-reduced-motion: reduce) { [data-chart=${id}] [data-slot="chart-3d-axes"] text, [data-chart=${id}] [data-slot="chart-3d-axes"] line, [data-chart=${id}] [data-slot="chart-3d-axes"] path { animation: none; } }
+${entering} { animation: chart-3d-axes-in 300ms ease-out; }
+@media (prefers-reduced-motion: reduce) { ${entering} { animation: none; } }
 [data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
 [data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
@@ -1535,6 +1538,8 @@ function quad(wall: AxisWall) {
  * The key of a gridline: the axis and value of the tick it marks - the one
  * coordinate its ends share beside the wall's own axis - so the gridline of
  * a tick that stays glides on, and one of a new tick mounts and fades in.
+ * Exactly one coordinate differs along the line, because a domain always has
+ * width: `axis` widens an empty extent.
  */
 function gridKey(wall: AxisWall, from: Point3D, to: Point3D) {
   const axis = (["x", "y", "z"] as const).find((a) => a !== wall.axis && from[a] === to[a])!
