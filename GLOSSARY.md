@@ -30,7 +30,8 @@ _Avoid_: wall line
 
 **Axis line**:
 The line that carries the scale of an axis, along its chosen edge between
-the outermost ticks.
+the outermost ticks. While the axis glides into new data it ends at the
+gliding end, never at a tick beyond it.
 _Avoid_: axis border, box edge line
 
 **Tick mark**:

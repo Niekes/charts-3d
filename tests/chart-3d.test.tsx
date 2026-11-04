@@ -3,7 +3,7 @@ import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
-import { box, cubes3D, points3D } from "d3-3d"
+import { box, cubes3D, points3D, type AxisSpec } from "d3-3d"
 
 import {
   Axes3D,
@@ -1180,8 +1180,8 @@ describe("Axes3D", () => {
   test("a wall is a plain quad and its gridlines are lines keyed by tick, so a new one fades in", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
-    const render = (hi: number) => {
-      const spec = { x: axis(0, 10), y: axis(0, hi), z: axis(0, 10) }
+    const render = (y: AxisSpec) => {
+      const spec = { x: axis(0, 10), y, z: axis(0, 10) }
       return act(async () =>
         root.render(
           <ChartContainer3D config={{}}>
@@ -1190,7 +1190,7 @@ describe("Axes3D", () => {
         )
       )
     }
-    await render(100)
+    await render(axis(0, 100))
 
     // The walls carry no gridlines of their own: each is one closed quad, and
     // the gridlines are their own lines, in the border ink, which the
@@ -1201,20 +1201,58 @@ describe("Axes3D", () => {
     const gridlines = () => [
       ...host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="0.75"]'),
     ]
+    // Only the ticks between the ends draw gridlines - the border of the wall
+    // is the line of an end tick. Three walls, two axes each, four ticks
+    // between the ends per axis.
     const before = gridlines()
-    expect(before.length).toBeGreaterThan(0)
+    expect(before).toHaveLength(24)
 
-    // y goes from 0..100 (ticks 0, 20 ... 100) to 0..200 (ticks 0, 50 ... 200).
-    // Keyed by value, the two walls that grid y mount their three new ticks
-    // (50, 150, 200) and keep 0 and 100 - a key from the position instead
-    // would remount 100, which moves - and drop 20, 40, 60 and 80.
-    await render(200)
+    // y goes from 0..100 (ticks 20, 40, 60, 80 between the ends) to 0..200
+    // (50, 100, 150 between the ends). Keyed by value, the two walls that
+    // grid y mount the three new ticks and drop the four gone ones, while the
+    // x and z gridlines keep their nodes.
+    await render(axis(0, 200))
     const after = gridlines()
     expect(after.filter((line) => !before.includes(line))).toHaveLength(6)
     expect(after.filter((line) => before.includes(line))).toHaveLength(before.length - 8)
 
+    // While the end of the axis glides, a tick on or beyond it has no
+    // gridline yet: it mounts - and fades in - once the end passes it.
+    await render({ domain: [0, 130], ticks: axis(0, 200).ticks })
+    expect(gridlines()).toHaveLength(20)
+
     await act(async () => root.unmount())
     host.remove()
+  })
+
+  test("the axis line never reaches past the gliding ends of its axis", async () => {
+    // Mid-glide: the ends stand at 55 while the ticks already run to 70. The
+    // line of the axis ends at the gliding end - the ticks beyond would drag
+    // it out of the box, to appear at once instead of gliding in.
+    const spec = {
+      x: { domain: [0, 55], ticks: axis(0, 70).ticks },
+      y: axis(0, 100),
+      z: axis(0, 10),
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Axes3D spec={spec} world={worldBox(spec)} />
+      </ChartContainer3D>
+    )
+    const walls = [...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path')]
+    const cornerX = Math.max(
+      ...walls.flatMap((wall) =>
+        [...wall.getAttribute("d")!.matchAll(/([\d.-]+),[\d.-]+/g)].map(([, x]) => Number(x))
+      )
+    )
+    const lineX = Math.max(
+      ...[...chart.svg.querySelectorAll<SVGLineElement>('line[stroke-width="1.5"]')]
+        .filter((line) => Number(line.style.opacity) > 0.5)
+        .flatMap((line) => [Number(line.getAttribute("x1")), Number(line.getAttribute("x2"))])
+    )
+    expect(lineX).toBeLessThanOrEqual(cornerX + 0.5)
+
+    await chart.unmount()
   })
 
   test("the enter fade covers the walls: the keyframe animates path with text and line", () => {

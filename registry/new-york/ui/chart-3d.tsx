@@ -1618,6 +1618,22 @@ function labelAxes(
  * the rows that `fit` finds, and the title of the axis beyond them. The
  * labels of an edge the axis does not sit on are there, but do not show.
  */
+/**
+ * The point of `value` along `edge`, between the ticks that bracket it: the
+ * projection keeps the edge straight, so the point lies on their line. An
+ * axis of one tick is a point.
+ */
+function along(edge: AxisEdge, value: number): Point2D {
+  if (edge.length === 1) return edge[0].projected
+  let i = 0
+  while (i < edge.length - 2 && edge[i + 1][edge.axis] < value) i += 1
+  const [a, b] = [edge[i][edge.axis], edge[i + 1][edge.axis]]
+  // Neighbouring ticks are distinct values, so their span has width.
+  const t = clamp(0, 1, (value - a) / (b - a))
+  const [p, q] = [edge[i].projected, edge[i + 1].projected]
+  return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }
+}
+
 /** The ticks whose value lies in `domain`, with the ends of `domain`. */
 function inRange(ticks: AxisLabel[], domain: number[]) {
   const range = { lo: Math.min(...domain), hi: Math.max(...domain) }
@@ -1664,8 +1680,10 @@ function edgeLabels(
   const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
   const rows = fit(ranged, n, row)
-  const start = edge[0].projected
-  const end = edge[edge.length - 1].projected
+  // The line of the axis ends at the gliding ends: a tick beyond them would
+  // drag it out of the box, to appear at once instead of gliding in.
+  const start = along(edge, clamp(range.lo, range.hi, edge[0][axis]))
+  const end = along(edge, clamp(range.lo, range.hi, edge[edge.length - 1][axis]))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const head: AxisLabel | undefined = title
     ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
