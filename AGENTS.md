@@ -159,12 +159,26 @@ The rules that `scripts/check-template.mjs` enforces:
   the npm dependencies to the core. On `master` the dependency is unpinned;
   only the release commit, which the release workflow makes beside `master`,
   pins it to `#v<version>`, the version in `package.json`;
+- a chart projects its data with a d3-3d generator (`points3D`, `cubes3D`,
+  `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
+  projected shapes with d3-3d's `sort`;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
-  and `docs/examples/<item>-demo.tsx`;
+  and `docs/examples/<item>-demo.tsx`; a chart also has the three other demos:
+  `-update-demo` (data gliding in), `-renderers-demo` (one scene on every
+  renderer) and `-many-demo` (thousands of marks, staying interactive);
 - `index.ts` re-exports every registry file with `export *`, and nothing else.
 
 How the charts draw, so that a new one draws the same way:
 
+- **Projection with d3-3d**
+  ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). A chart projects
+  with a d3-3d generator, never with mathematics of its own: fallow forbids a
+  chart trigonometry, the DOM, a canvas and the event loop - the core owns
+  them. The import whitelist is the ladder: reach for a core helper first,
+  then for d3-3d or an allowed d3 module, and never write your own. A new d3
+  module is a deliberate change to the dependencies of `chart-3d` in
+  `registry.json`, and it lands in every installing project, so it has to
+  earn its place.
 - **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
   a circle, a CSS fill and, if it has one, a tooltip - and hands them to
   `Marks3D`. The core draws them and finds the one under the pointer, so a
@@ -227,6 +241,14 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **One scene.** `Marks3D` writes its marks into the scene of the container;
   the canvas paints the scene and the hover hit-tests it, whatever the
   renderer.
+- **Parity is behavioural and gated**
+  ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). Every mark of the
+  scene draws on every renderer, and hover, tooltip and focus act the same;
+  pixels may differ, and webgl draws fills only (ADR-0002). The parity test in
+  `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
+  and a circle - over all three renderers. A third mark shape turns `Mark3D`
+  into a discriminated union with an exhaustive switch in every painter, so a
+  shape one renderer misses fails to compile.
 - **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
   triangulates the same marks - a fan per polygon, a fan of 12 segments per
@@ -313,9 +335,10 @@ the client. The npm dependencies stay external.
 1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template above.
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its
    only registry dependency.
-3. Add `tests/<name>-chart-3d.test.tsx`, `docs/examples/<name>-chart-3d-demo.tsx`
-   and `docs/content/components/<name>-chart-3d.mdx`, and list the page in
-   `docs/content/components/meta.json`.
+3. Add `tests/<name>-chart-3d.test.tsx`, the four demos in `docs/examples/`
+   (`<name>-chart-3d-demo.tsx`, `-update-demo`, `-renderers-demo`,
+   `-many-demo`) and `docs/content/components/<name>-chart-3d.mdx`, and list
+   the page in `docs/content/components/meta.json`.
 4. Add `export * from "./registry/new-york/ui/<name>-chart-3d"` to `index.ts`.
 5. Run `npm run lint` and `npm test`.
 

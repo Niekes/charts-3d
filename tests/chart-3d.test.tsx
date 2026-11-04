@@ -1047,6 +1047,112 @@ describe("renderer", () => {
   })
 })
 
+describe("parity", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  // One scene with every mark shape: a polygon and a circle, with tooltip and groups.
+  const scene = [
+    {
+      key: "square",
+      points: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 },
+      ],
+      fill: "red",
+      groups: ["square"],
+      tooltip: { at: { x: 150, y: 150 }, items: [{ label: "Square", value: 1 }] },
+    },
+    {
+      key: "dot",
+      points: [{ x: 400, y: 100 }],
+      r: 10,
+      fill: "blue",
+      stroke: "white",
+      groups: ["dot"],
+      tooltip: { at: { x: 400, y: 100 }, items: [{ label: "Dot", value: 2 }] },
+    },
+  ]
+
+  // Each renderer stubs what it needs before the mount and asserts afterwards
+  // that both shapes of the scene were drawn.
+  const renderers: {
+    renderer: "svg" | "canvas" | "webgl"
+    stub: () => (svg: SVGSVGElement) => void
+  }[] = [
+    {
+      renderer: "svg",
+      stub: () => (svg) => {
+        expect(svg.querySelector('path[fill="red"]')).not.toBeNull()
+        expect(svg.querySelector('circle[fill="blue"]')).not.toBeNull()
+      },
+    },
+    {
+      renderer: "canvas",
+      stub: () => {
+        const ctx = stubCanvas()
+        return () => {
+          expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+          expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+        }
+      },
+    },
+    {
+      renderer: "webgl",
+      stub: () => {
+        const { gl } = stubGL()
+        return () => {
+          // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+          expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
+            [0, 6],
+            [0, 36],
+          ])
+        }
+      },
+    },
+  ]
+
+  test("one scene draws every mark and hovers the same on svg, canvas and webgl", async () => {
+    for (const { renderer, stub } of renderers) {
+      const drawn = stub()
+      let read: { current: { fill: string; stroke?: string }[] } = { current: [] }
+      function Scene() {
+        read = useChart3D().scene
+        return null
+      }
+      const chart = await mount(
+        <ChartContainer3D config={{}} renderer={renderer}>
+          <Marks3D marks={scene} />
+          <Scene />
+        </ChartContainer3D>
+      )
+      drawn(chart.svg)
+
+      // The pointer on the square: the same tooltip, and the same focus edge in
+      // the scene, on every renderer (webgl draws fills only, see ADR-0002).
+      await chart.send(pointer("pointermove", 150, 150))
+      expect(chart.host.textContent).toContain("Square")
+      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
+        "var(--foreground)",
+        "white",
+      ])
+
+      // Off the marks, tooltip and edge clear the same everywhere.
+      await chart.send(pointer("pointermove", 300, 300))
+      expect(chart.host.textContent).not.toMatch(/Square|Dot/)
+      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual(["red", "white"])
+
+      await chart.unmount()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe("helpers", () => {
   test("axis ends on nice ticks and widens an empty extent", () => {
     expect(axis(3, 97)).toEqual({ domain: [0, 100], ticks: [0, 20, 40, 60, 80, 100] })

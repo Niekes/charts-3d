@@ -1,6 +1,6 @@
 ---
 name: new-chart
-description: Load when adding a new 3D chart to the charts-3d registry ("make chart X", "new chart for ...", "add a <name> chart"). Walks the whole template end to end: registry file, registry.json, index.ts, tests, the three docs demos (base, update, renderers), the mdx page, and the gates.
+description: Load when adding a new 3D chart to the charts-3d registry ("make chart X", "new chart for ...", "add a <name> chart"). Walks the whole template end to end: registry file, registry.json, index.ts, tests, the four docs demos (base, update, renderers, many), the mdx page, and the gates.
 ---
 
 # New chart
@@ -45,10 +45,21 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   `keymap={{ wheelZoom: false }}`. The decisions are recorded in
   `docs/adr/0001-navigation.md` (navigation) and `docs/adr/0002-hover-highlight.md`
   (hover highlight).
+- **Project with d3-3d - the gates enforce it** (ADR-0003). The template
+  check requires a d3-3d projection generator (`points3D`, `cubes3D`,
+  `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort`; fallow
+  forbids a chart trigonometry (`Math.cos/sin/tan/atan2` - hand-rolled
+  projection), the DOM, a canvas and the event loop. Reach for a core helper
+  first, then d3-3d or an allowed d3 module, never write your own; a new d3
+  module is a deliberate change to the dependencies of `chart-3d` in
+  `registry.json`.
 - Sort projected shapes with d3-3d's `sort` and give marks stable keys;
   cull cube faces to the `ccw` ones; shade with `shade`, fade with the core,
   hand CSS colors to the core; build the world with `worldBox`; tween numbers
-  with `useTween`/`useTweenAxes`, never the projected marks.
+  with `useTween`/`useTweenAxes`, never the projected marks. A new mark shape
+  (beyond polygon and circle) extends every painter and the parity test in
+  `tests/chart-3d.test.tsx`, and turns `Mark3D` into a discriminated union
+  with an exhaustive switch (ADR-0003).
 - Style: shadcn/ui - two spaces, double quotes, no semicolons. Every function
   at most 60 lines; split along seams (hook / component / computation).
 
@@ -80,8 +91,13 @@ comes with its tests - the coverage gate is 98% in each metric.
   `<select>` over SVG / Canvas / WebGL (`renderer` prop, `RendererSelect` from
   `docs/examples/renderer-select.tsx`), showing one scene on every renderer.
   See `docs/examples/bar-chart-3d-renderers-demo.tsx`.
+- `docs/examples/<name>-chart-3d-many-demo.tsx` - the many demo: a fixed,
+  deterministic dataset of thousands of marks (no random, no slider), the
+  chart starting on `renderer="canvas"` - the renderer for many marks - with
+  the `RendererSelect`. Pick a size where the orbit stays smooth; see
+  `docs/examples/scatter-chart-3d-many-demo.tsx` (5000 points).
 - `docs/content/components/<name>-chart-3d.mdx` - sections Preview,
-  Installation, Update, Renderers, API Reference; add the page to
+  Installation, Update, Renderers, Many marks, API Reference; add the page to
   `docs/content/components/meta.json`.
 
 ## 5. Gates

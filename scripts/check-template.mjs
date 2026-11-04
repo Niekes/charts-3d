@@ -11,6 +11,9 @@
  *   tests/<item>.test.tsx                 one test file per item
  *   docs/content/components/<item>.mdx    one docs page per item
  *   docs/examples/<item>-demo.tsx         the example the page shows
+ *   docs/examples/<chart>-update-demo.tsx data gliding in
+ *   docs/examples/<chart>-renderers-demo.tsx one scene on every renderer
+ *   docs/examples/<chart>-many-demo.tsx   thousands of marks, staying interactive
  *
  * Fallow covers the parts that need a real dependency graph (layering, dead
  * code, test coverage). This script covers naming and shape, which are
@@ -145,6 +148,31 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
         `${UI}/${file}: may import only React, ${[...allowed].join(", ")} and '${CORE_IMPORT}', not '${specifier}'`
       )
     }
+  }
+
+  // A chart projects its data with d3-3d, never by hand: it imports a
+  // projection generator, calls it, and sorts the projected shapes with
+  // d3-3d's `sort`, so every renderer draws the same scene in paint order.
+  const d3d = source.match(/import\s*{([^}]*)}\s*from\s+"d3-3d"/)?.[1] ?? ""
+  const names = d3d
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name && !name.startsWith("type "))
+  const generator = names.find((name) => name.endsWith("3D"))
+  if (!generator || !new RegExp(`${generator}\\s*[<(]`).test(source)) {
+    fail(
+      `${UI}/${file}: a chart projects with a d3-3d generator ('points3D', 'cubes3D', 'gridPlanes3D', ...), imported from "d3-3d" and called`
+    )
+  }
+  if (!names.includes("sort")) {
+    fail(`${UI}/${file}: a chart sorts its projected shapes with d3-3d's 'sort'`)
+  }
+
+  // A chart shows what the template promises: data gliding in (update), one
+  // scene on every renderer (renderers), thousands of marks (many).
+  for (const demo of ["update", "renderers", "many"]) {
+    const path = `docs/examples/${name}-${demo}-demo.tsx`
+    if (!exists(path)) fail(`${name}: is missing '${path}'`)
   }
 
   // The core draws the marks with the renderer of the container, so a chart

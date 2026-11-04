@@ -5,6 +5,7 @@ description: A shaded surface over a grid of heights.
 
 import SurfaceChart3DUpdateDemo from "@/docs/examples/surface-chart-3d-update-demo"
 import SurfaceChart3DRenderersDemo from "@/docs/examples/surface-chart-3d-renderers-demo"
+import SurfaceChart3DManyDemo from "@/docs/examples/surface-chart-3d-many-demo"
 import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -72,6 +73,21 @@ The same chart on every renderer. The marks are data the chart hands to the cont
   </Tab>
   <Tab value="Code">
     <include>../../examples/surface-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+An 80 by 80 grid, over six thousand cells - and the chart stays interactive.
+The scene is one list of marks, so the demo starts on `"canvas"`, the renderer
+for many marks, and the select shows the same scene on SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SurfaceChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/surface-chart-3d-many-demo.tsx</include>
   </Tab>
 </Tabs>
 

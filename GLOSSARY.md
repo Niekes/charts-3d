@@ -66,10 +66,21 @@ triangulated on webgl; the box, its labels, the tooltip and the legend
 stay SVG and HTML with every renderer.
 _Avoid_: painter, backend, layer
 
+**Parity**:
+The same chart behaves the same on every renderer: every mark draws, and
+hover, tooltip and focus act alike. Only the pixels may differ - webgl draws
+fills only, so the focus edge shows on SVG and canvas.
+_Avoid_: pixel identity, visual equality
+
 **Renderer demo**:
 The docs section that shows one chart on every renderer, with a switch
 between `"svg"`, `"canvas"` and `"webgl"`.
 _Avoid_: renderer example, playground
+
+**Many demo**:
+The docs section that shows one chart with thousands of marks, on canvas and
+with the renderer switch - the proof the chart stays interactive at size.
+_Avoid_: performance demo, stress test, benchmark
 
 ## The pointer
 

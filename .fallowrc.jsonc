@@ -83,11 +83,29 @@
       "requireAllFiles": true,
       "allowUnmatched": ["vite.config.ts", "react-router.config.ts"],
     },
-    // House rules for the registry: no logging in code that lands in other projects.
+    // House rules for the registry: no logging in code that lands in other
+    // projects. A chart is a pure data-to-marks function: it projects with
+    // d3-3d (trigonometry of its own is hand-rolled projection), and it never
+    // touches the DOM, a canvas or the event loop - the core owns all three.
     "calls": {
       "forbidden": [
         { "from": "core", "callee": ["console.*", "debugger"] },
-        { "from": "charts", "callee": ["console.*", "debugger"] },
+        {
+          "from": "charts",
+          "callee": [
+            "console.*",
+            "debugger",
+            "Math.cos",
+            "Math.sin",
+            "Math.tan",
+            "Math.atan2",
+            "document.*",
+            "window.*",
+            "*.getContext",
+            "addEventListener",
+            "requestAnimationFrame",
+          ],
+        },
       ],
     },
   },
