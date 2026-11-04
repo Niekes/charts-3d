@@ -167,6 +167,11 @@ The rules that `scripts/check-template.mjs` enforces:
   `-update-demo` (data gliding in), `-enter-demo` (marks entering and
   leaving), `-renderers-demo` (one scene on every renderer) and `-many-demo`
   (thousands of marks, staying interactive);
+- every demo carries the `RendererSelect` of
+  `docs/examples/renderer-select.tsx` below the chart, so every scene can be
+  checked visually on every renderer; the `-renderers-demo` instead lays the
+  same scene out on all three renderers at once, with `RendererGrid` from the
+  same file;
 - `index.ts` re-exports every registry file with `export *`, and nothing else.
 
 How the charts draw, so that a new one draws the same way:
@@ -289,10 +294,15 @@ gesture is a new action, so the panel never misses one.
   default cursor. Alt - ⌥ on a Mac - and a drag pans, and a double click
   resets. The panel
   shows each gesture with its hint, so a chart needs no gesture of its own.
-- **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
-  pinches; the wheel alone scrolls the page. The listener is the core's own,
-  because React listens to the wheel passively and cannot keep the browser
-  from zooming the page.
+- **The wheel zooms only with the platform modifier** - ⌘ on a Mac, Ctrl
+  elsewhere, and the panel says so - while Ctrl keeps zooming on a Mac too,
+  because a trackpad pinch arrives as Ctrl and the wheel; the wheel alone
+  scrolls the page. The listener is the core's own, because React listens to
+  the wheel passively and cannot keep the browser from zooming the page.
+- **The cursor names the gesture**: a hand while the platform modifier is
+  held, `grabbing` while the drag turns, the four arrows (`move`) while Alt
+  is held, `zoom-in`/`zoom-out` while the wheel zooms, falling back
+  `ZOOM_CURSOR` after the last tick.
 - **A key glides, a drag jumps.** `useGlide` moves the view to the step of a
   key in `GLIDE` milliseconds, and a key pressed on the way heads on from
   there; a drag and the wheel follow the pointer at once and stop a glide.

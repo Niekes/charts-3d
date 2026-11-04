@@ -19,7 +19,7 @@ import {
   type ShapeInstance,
   type TransformedPoint,
 } from "d3-3d"
-import { HandGrabIcon, KeyboardIcon } from "lucide-react"
+import { KeyboardIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -118,6 +118,8 @@ const KEY_STEP = Math.PI / 36
 const PAN_STEP = 20
 const ZOOM_STEP = 1.2
 const CLICK_DISTANCE = 4
+// How long the zoom cursor outlives the last wheel tick before the hand returns.
+const ZOOM_CURSOR = 400
 
 /** A step of the camera: turned by `yaw` and `tilt`, moved by `pan`, zoomed by the factor `zoom`, or reset. */
 type Move = { yaw?: number; tilt?: number; pan?: Point2D; zoom?: number; reset?: boolean }
@@ -172,7 +174,7 @@ const SHORTCUTS: Record<
   panDown: { label: "Pan", keys: ["Shift+ArrowDown"], move: { pan: { x: 0, y: PAN_STEP } } },
   zoomIn: { label: "Zoom", keys: ["Plus", "="], move: { zoom: ZOOM_STEP } },
   zoomOut: { label: "Zoom", keys: ["-"], move: { zoom: 1 / ZOOM_STEP } },
-  wheelZoom: { label: "Zoom", hint: ["Ctrl", "Scroll"] },
+  wheelZoom: { label: "Zoom", hint: ["Mod", "Scroll"] },
   reset: { label: "Reset", keys: ["0"], move: { reset: true } },
   doubleClickReset: { label: "Reset", hint: ["Double-click"] },
   help: { label: "Keyboard shortcuts", keys: ["?"] },
@@ -691,7 +693,7 @@ function useOrbit(
 ) {
   const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
-  const modHeld = useModHeld()
+  const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const ref = useWheelZoom(jump, keys.on("wheelZoom"))
   // A drag follows the pointer at once, a key and a double click glide.
@@ -736,7 +738,8 @@ function useOrbit(
     onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
     "data-orbiting": orbiting,
-    "data-mod": keys.on("dragRotate") && modHeld ? true : undefined,
+    "data-mod": keys.on("dragRotate") && held.mod ? true : undefined,
+    "data-alt": keys.on("dragPan") && held.alt ? true : undefined,
   }
 
   return { view, handlers }
@@ -745,19 +748,27 @@ function useOrbit(
 type OrbitHandlers = React.SVGProps<SVGSVGElement> & {
   "data-orbiting": boolean
   "data-mod"?: boolean
+  "data-alt"?: boolean
 }
 
 /**
- * Whether the platform modifier is held, so the cursor shows a hand before
- * the drag rotates. A missed keyup (window blur while held) must not stick
- * the hand cursor.
+ * Whether the platform modifier or Alt is held, so the cursor shows a hand
+ * before the drag rotates and the four arrows before it pans. A missed keyup
+ * (window blur while held) must not stick either cursor.
  */
-function useModHeld() {
-  const [held, setHeld] = React.useState(false)
+function useModsHeld() {
+  const [mod, setMod] = React.useState(false)
+  const [alt, setAlt] = React.useState(false)
   React.useEffect(() => {
     const modKey = mac() ? "Meta" : "Control"
-    const onKey = (e: KeyboardEvent) => e.key === modKey && setHeld(e.type === "keydown")
-    const onBlur = () => setHeld(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === modKey) setMod(e.type === "keydown")
+      if (e.key === "Alt") setAlt(e.type === "keydown")
+    }
+    const onBlur = () => {
+      setMod(false)
+      setAlt(false)
+    }
     window.addEventListener("keydown", onKey)
     window.addEventListener("keyup", onKey)
     window.addEventListener("blur", onBlur)
@@ -767,7 +778,7 @@ function useModHeld() {
       window.removeEventListener("blur", onBlur)
     }
   }, [])
-  return held
+  return { mod, alt }
 }
 
 /**
@@ -791,22 +802,33 @@ function useKeys(
 }
 
 /**
- * A ref for the svg that zooms the view with Ctrl or ⌘ and the wheel, which
- * is also how a trackpad pinches, if `on`. The wheel alone still scrolls the page.
+ * A ref for the svg that zooms the view with the platform modifier and the
+ * wheel, if `on`. Ctrl and the wheel zooms on a Mac too, because a trackpad
+ * pinch arrives that way, indistinguishable from the keys. The wheel alone
+ * still scrolls the page. While the wheel zooms, the svg says so in
+ * `data-zoom` - `"in"` or `"out"`, the direction of its cursor - until
+ * `ZOOM_CURSOR` after the last tick.
  */
 function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean) {
   // React listens to the wheel passively, and only a listener that is not
   // passive can keep the browser from zooming the page.
   return React.useCallback(
     (svg: SVGSVGElement | null) => {
-      if (!on) return
+      if (!on || !svg) return
+      let timer: ReturnType<typeof setTimeout>
       const onWheel = (e: WheelEvent) => {
-        if (!e.ctrlKey && !e.metaKey) return
+        if (!platformMod(e) && !e.ctrlKey) return
         e.preventDefault()
         jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200) }, v))
+        svg.dataset.zoom = e.deltaY < 0 ? "in" : "out"
+        clearTimeout(timer)
+        timer = setTimeout(() => delete svg.dataset.zoom, ZOOM_CURSOR)
       }
-      svg?.addEventListener("wheel", onWheel, { passive: false })
-      return () => svg?.removeEventListener("wheel", onWheel)
+      svg.addEventListener("wheel", onWheel, { passive: false })
+      return () => {
+        clearTimeout(timer)
+        svg.removeEventListener("wheel", onWheel)
+      }
     },
     [jump, on]
   )
@@ -1378,7 +1400,9 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
-  // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
+  // The cursor names the gesture of the held modifier: the platform modifier
+  // a hand (Alt, held with it, wins, as it does on pointer down), Alt the four
+  // arrows of the pan, the wheel zoom its direction, and a turning drag grabbing.
   const entering = ["text", "line", "path"]
     .map((el) => `[data-chart=${id}] [data-slot="chart-3d-axes"] ${el}`)
     .join(", ")
@@ -1386,6 +1410,9 @@ function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
 ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
 @media (prefers-reduced-motion: reduce) { ${entering} { animation: none; } }
 [data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
+[data-chart=${id}] svg[data-alt="true"] { cursor: move; }
+[data-chart=${id}] svg[data-zoom="in"] { cursor: zoom-in; }
+[data-chart=${id}] svg[data-zoom="out"] { cursor: zoom-out; }
 [data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
   if (!colorConfig.length) {
@@ -1495,7 +1522,7 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
+        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md bg-background/60 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
       >
         <KeyboardIcon />
       </button>
@@ -1504,7 +1531,7 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
   )
 }
 
-/** One group of keys as chips; the word Drag draws as the grab icon, named for screen readers. */
+/** One group of keys as chips. */
 function KbdGroup3D({ group }: { group: string[] }) {
   return (
     <span data-slot="kbd-group" className="flex gap-1">
@@ -1512,18 +1539,16 @@ function KbdGroup3D({ group }: { group: string[] }) {
         <kbd
           key={j}
           data-slot="kbd"
-          title={key === "Drag" ? key : undefined}
           className="pointer-events-none inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none"
         >
-          {key === "Drag" ? <HandGrabIcon className="size-3.5" aria-hidden /> : key}
-          {key === "Drag" && <span className="sr-only">{key}</span>}
+          {key}
         </kbd>
       ))}
     </span>
   )
 }
 
-/** The list of the shortcut panel: per row its keys, a rule, its gestures, and its label. */
+/** The list of the shortcut panel: per row its label, then its keys, a rule, and its gestures. */
 function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] }) {
   return (
     <dl
@@ -1533,7 +1558,10 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
     >
       {rows.map(({ label, keys, gestures }) => (
         <React.Fragment key={label}>
-          <dt className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <dt data-slot="chart-3d-shortcuts-label" className="text-muted-foreground">
+            {label}
+          </dt>
+          <dd className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
             {keys.map((group, i) => (
               <KbdGroup3D key={i} group={group} />
             ))}
@@ -1543,9 +1571,6 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
             {gestures.map((group, i) => (
               <KbdGroup3D key={i} group={group} />
             ))}
-          </dt>
-          <dd data-slot="chart-3d-shortcuts-label" className="text-muted-foreground">
-            {label}
           </dd>
         </React.Fragment>
       ))}

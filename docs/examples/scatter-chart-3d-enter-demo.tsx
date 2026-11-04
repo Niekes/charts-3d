@@ -1,7 +1,8 @@
 import { useState } from "react"
 
-import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { ScatterChart3D } from "@/components/ui/scatter-chart-3d"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // A fixed pool of named points, so the only change is which of them are there.
 const pool = Array.from({ length: 24 }, (_, i) => ({
@@ -22,11 +23,12 @@ const button =
 
 export default function ScatterChart3DEnterDemo() {
   const [count, setCount] = useState(8)
+  const [renderer, setRenderer] = useState<Renderer3D>("svg")
   const data = pool.slice(0, count)
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={chartConfig} legend>
+      <ChartContainer3D config={chartConfig} renderer={renderer} legend>
         <ScatterChart3D data={data} id="id" x="x" y="y" z="z" series="cluster" />
       </ChartContainer3D>
       <div className="flex gap-2 self-center">
@@ -47,6 +49,7 @@ export default function ScatterChart3DEnterDemo() {
           + Points
         </button>
       </div>
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useState } from "react"
 
-import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { SurfaceChart3D } from "@/components/ui/surface-chart-3d"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same wave at every size, so a grown grid continues the surface.
 const wave = (n: number) =>
@@ -19,10 +20,11 @@ const button =
 
 export default function SurfaceChart3DEnterDemo() {
   const [size, setSize] = useState(8)
+  const [renderer, setRenderer] = useState<Renderer3D>("svg")
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={chartConfig}>
+      <ChartContainer3D config={chartConfig} renderer={renderer}>
         <SurfaceChart3D data={wave(size)} />
       </ChartContainer3D>
       <div className="flex gap-2 self-center">
@@ -43,6 +45,7 @@ export default function SurfaceChart3DEnterDemo() {
           + Grid
         </button>
       </div>
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

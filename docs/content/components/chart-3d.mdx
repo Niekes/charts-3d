@@ -60,7 +60,7 @@ The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML wit
 
 ## Shortcuts
 
-Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it; Escape or a click outside closes the panel again. Each row lists its keys, then - past a thin rule - its pointer gestures, with the drag drawn as a grab icon that screen readers hear as "Drag". The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Alt (⌥ on a Mac) and a drag pans, Ctrl or ⌘ with the wheel - a trackpad pinch arrives that way - zooms, and a double click resets; the wheel alone scrolls the page. See [ADR-0001](../adr/0001-navigation). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts"`.
+Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it; Escape or a click outside closes the panel again. Each row names its action, then lists its keys and - past a thin rule - its pointer gestures, with the drag written out as "Drag". The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Alt (⌥ on a Mac) and a drag pans, the platform modifier with the wheel zooms - a trackpad pinch arrives as Ctrl and the wheel, so it zooms on every platform - and a double click resets; the wheel alone scrolls the page. The cursor names the gesture: a hand while the platform modifier is held, `grabbing` while the drag turns, the four arrows while Alt is held, `zoom-in` or `zoom-out` while the wheel zooms. See [ADR-0001](../adr/0001-navigation). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts"`.
 
 ### Keymap
 
@@ -71,7 +71,7 @@ const keymap: Keymap3D = {
   rotateLeft: ["a", "ArrowLeft"], // new keys; the panel shows the first
   zoomIn: { keys: ["Control+Plus"], label: "Vergrößern" },
   reset: false, // the action is off
-  wheelZoom: false, // so is the gesture, and Ctrl with the wheel zooms the page
+  wheelZoom: false, // so is the gesture, and the modifier with the wheel zooms the page
   help: { label: "Tastenkürzel" }, // the name of the button and of its row
 }
 
@@ -80,24 +80,24 @@ const keymap: Keymap3D = {
 
 `keymap={false}` turns everything off: the chart stands still, leaves the tab order and shows no button. The panel lists the actions that are on, one row per label, so actions that share a label share a row.
 
-| Action             | Default keys            | Label              |
-| ------------------ | ----------------------- | ------------------ |
-| `dragRotate`       | ⌘/Ctrl and drag         | Rotate             |
-| `rotateLeft`       | `ArrowLeft`             | Rotate             |
-| `rotateRight`      | `ArrowRight`            | Rotate             |
-| `rotateUp`         | `ArrowUp`               | Rotate             |
-| `rotateDown`       | `ArrowDown`             | Rotate             |
-| `dragPan`          | Alt/⌥ and drag          | Pan                |
-| `panLeft`          | `Shift+ArrowLeft`       | Pan                |
-| `panRight`         | `Shift+ArrowRight`      | Pan                |
-| `panUp`            | `Shift+ArrowUp`         | Pan                |
-| `panDown`          | `Shift+ArrowDown`       | Pan                |
-| `zoomIn`           | `Plus`, `=`             | Zoom               |
-| `zoomOut`          | `-`                     | Zoom               |
-| `wheelZoom`        | Ctrl or ⌘ and the wheel | Zoom               |
-| `reset`            | `0`                     | Reset              |
-| `doubleClickReset` | Double-click            | Reset              |
-| `help`             | `?`                     | Keyboard shortcuts |
+| Action             | Default keys         | Label              |
+| ------------------ | -------------------- | ------------------ |
+| `dragRotate`       | ⌘/Ctrl and drag      | Rotate             |
+| `rotateLeft`       | `ArrowLeft`          | Rotate             |
+| `rotateRight`      | `ArrowRight`         | Rotate             |
+| `rotateUp`         | `ArrowUp`            | Rotate             |
+| `rotateDown`       | `ArrowDown`          | Rotate             |
+| `dragPan`          | Alt/⌥ and drag       | Pan                |
+| `panLeft`          | `Shift+ArrowLeft`    | Pan                |
+| `panRight`         | `Shift+ArrowRight`   | Pan                |
+| `panUp`            | `Shift+ArrowUp`      | Pan                |
+| `panDown`          | `Shift+ArrowDown`    | Pan                |
+| `zoomIn`           | `Plus`, `=`          | Zoom               |
+| `zoomOut`          | `-`                  | Zoom               |
+| `wheelZoom`        | ⌘/Ctrl and the wheel | Zoom               |
+| `reset`            | `0`                  | Reset              |
+| `doubleClickReset` | Double-click         | Reset              |
+| `help`             | `?`                  | Keyboard shortcuts |
 
 Keys are written the way `aria-keyshortcuts` writes them: the modifiers `Control`, `Alt`, `Meta` and `Shift`, then the [`key`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key) of the press, joined by `+`, with `Plus` for the plus key and `Space` for the space bar. A press matches only with exactly the modifiers of its keys, so Ctrl and `0` still resets the zoom of the browser. Shift counts beside a named key such as `ArrowLeft`; a character such as `?` is typed with it already, so `"?"` matches without it. The gestures can be turned off and renamed, but not rebound.
 

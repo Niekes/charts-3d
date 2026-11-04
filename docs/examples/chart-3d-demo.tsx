@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { box, cubes3D, sort } from "d3-3d"
 
 import {
@@ -7,7 +8,9 @@ import {
   shade,
   useChart3D,
   type ChartConfig,
+  type Renderer3D,
 } from "@/components/ui/chart-3d"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 const chartConfig = { cube: { label: "Cube", color: "var(--chart-1)" } } satisfies ChartConfig
 
@@ -41,10 +44,15 @@ function Cube() {
 }
 
 export default function Chart3DDemo() {
+  const [renderer, setRenderer] = useState<Renderer3D>("svg")
+
   return (
-    <ChartContainer3D config={chartConfig}>
-      <Axes3D spec={spec} world={world} />
-      <Cube />
-    </ChartContainer3D>
+    <div className="flex flex-col gap-2">
+      <ChartContainer3D config={chartConfig} renderer={renderer}>
+        <Axes3D spec={spec} world={world} />
+        <Cube />
+      </ChartContainer3D>
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
+    </div>
   )
 }

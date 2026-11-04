@@ -134,6 +134,7 @@ Shift and an arrow key.
 _Avoid_: Space and a drag (gone), Cmd and drag (the browser and the OS take it), scroll, move the camera
 
 **Zoom**:
-Moving the camera closer, with Ctrl or ⌘ and the wheel - a trackpad pinch
-arrives that way - or `+` and `-`. The wheel alone scrolls the page.
+Moving the camera closer, with the platform modifier and the wheel - ⌘ on a
+Mac, Ctrl elsewhere, and a trackpad pinch arrives as Ctrl and the wheel on
+every platform - or `+` and `-`. The wheel alone scrolls the page.
 _Avoid_: pinch without Ctrl, dolly, scale

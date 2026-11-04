@@ -88,6 +88,9 @@ describe("ChartContainer3D", () => {
     expect(html).toContain("[data-chart=chart-t]")
     expect(html).toContain("chart-3d-axes-in")
     expect(html).toContain("cursor: grab")
+    expect(html).toContain("cursor: move")
+    expect(html).toContain("cursor: zoom-in")
+    expect(html).toContain("cursor: zoom-out")
     expect(html).toContain("--color-a: red;")
     expect(html).toContain("--color-b: white;")
     expect(html).toContain(".dark [data-chart=chart-t]")
@@ -521,18 +524,16 @@ describe("shortcuts", () => {
     await chart.unmount()
   })
 
-  test("Drag draws as the grab icon, and a rule parts the keys of a row from its gestures", async () => {
+  test("Drag is written out as a chip, and a rule parts the keys of a row from its gestures", async () => {
     const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
     await chart.send(key("?"))
 
     const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
     const chips = [...panel.querySelectorAll('[data-slot="kbd"]')]
     const drag = chips.find((k) => k.textContent === "Drag")!
-    expect(drag.querySelector("svg")).not.toBeNull()
-    expect(drag.getAttribute("title")).toBe("Drag")
-    expect(chips.find((k) => k.textContent === "Scroll")!.querySelector("svg")).toBeNull()
+    expect(drag.querySelector("svg")).toBeNull()
 
-    const [rotate, ...rest] = [...panel.querySelectorAll("dt")]
+    const [rotate, ...rest] = [...panel.querySelectorAll("dd")]
     expect(rotate.querySelectorAll('[data-slot="chart-3d-shortcuts-rule"]')).toHaveLength(1)
     // The keys sit left of the rule, the gestures right of it.
     expect(rotate.firstElementChild!.textContent).toBe("←→↑↓")
@@ -570,8 +571,10 @@ describe("shortcuts", () => {
 function rows(host: HTMLElement) {
   const panel = host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
   return [...panel.querySelectorAll("dt")].map((dt) => [
-    dt.nextElementSibling!.textContent,
-    ...[...dt.querySelectorAll('[data-slot="kbd-group"]')].map((group) => group.textContent),
+    dt.textContent,
+    ...[...dt.nextElementSibling!.querySelectorAll('[data-slot="kbd-group"]')].map(
+      (group) => group.textContent
+    ),
   ])
 }
 
@@ -714,6 +717,52 @@ describe("pointer", () => {
     await chart.unmount()
   })
 
+  test("holding Alt shows the pan arrows, which blur and keymap dragPan off take away", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.dataset.alt).toBeUndefined()
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt" })))
+    expect(chart.svg.dataset.alt).toBe("true")
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })))
+    expect(chart.svg.dataset.alt).toBeUndefined()
+    // A missed keyup (window blur while held) must not stick the arrows.
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt" })))
+    act(() => window.dispatchEvent(new Event("blur")))
+    expect(chart.svg.dataset.alt).toBeUndefined()
+    await chart.unmount()
+
+    const off = await mount(
+      <ChartContainer3D config={{}} keymap={{ dragPan: false }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt" })))
+    expect(off.svg.dataset.alt).toBeUndefined()
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" })))
+    await off.unmount()
+  })
+
+  test("a wheel zoom shows its direction as the cursor, and the hand returns after the last tick", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    vi.useFakeTimers()
+    const wheel = { deltaY: -200, bubbles: true, cancelable: true, ctrlKey: true }
+    await chart.send(new WheelEvent("wheel", wheel))
+    expect(chart.svg.dataset.zoom).toBe("in")
+    await chart.send(new WheelEvent("wheel", { ...wheel, deltaY: 200 }))
+    expect(chart.svg.dataset.zoom).toBe("out")
+    act(() => vi.advanceTimersByTime(400))
+    expect(chart.svg.dataset.zoom).toBeUndefined()
+    vi.useRealTimers()
+    await chart.unmount()
+  })
+
   test("a rotate drag stops when the platform modifier is released mid-drag", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
@@ -750,6 +799,15 @@ describe("pointer", () => {
     // The Alt key of the pan gesture reads as Option there.
     expect(chart.host.textContent).toContain("⌥")
     expect(chart.host.textContent).not.toContain("Alt")
+    // The zoom hint follows the modifier too: no Ctrl anywhere on a Mac.
+    expect(chart.host.textContent).not.toContain("Ctrl")
+
+    // ⌘ and the wheel zooms, and so does Ctrl and the wheel, how a pinch arrives.
+    const wheel = { deltaY: -200, bubbles: true, cancelable: true }
+    await chart.send(new WheelEvent("wheel", { ...wheel, metaKey: true }))
+    expect(view(chart.host).scale).toBeCloseTo(240)
+    await chart.send(new WheelEvent("wheel", { ...wheel, deltaY: 200, ctrlKey: true }))
+    expect(view(chart.host).scale).toBeCloseTo(120)
 
     chart.svg.setPointerCapture = vi.fn()
     await chart.send(pointer("pointerdown", 100, 100, undefined, { metaKey: true }))

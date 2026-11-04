@@ -1,7 +1,8 @@
 import { useState } from "react"
 
-import { ChartContainer3D, type ChartConfig } from "@/components/ui/chart-3d"
+import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { BarChart3D } from "@/components/ui/bar-chart-3d"
+import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // A year of fixed numbers, so the only change is which months are there.
 const months = [
@@ -31,13 +32,14 @@ const button =
 
 export default function BarChart3DEnterDemo() {
   const [count, setCount] = useState(4)
+  const [renderer, setRenderer] = useState<Renderer3D>("svg")
   const data = months
     .slice(0, count)
     .map((month, i) => ({ month, desktop: desktop[i], mobile: mobile[i] }))
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={chartConfig}>
+      <ChartContainer3D config={chartConfig} renderer={renderer}>
         <BarChart3D data={data} index="month" titles={{ y: "Sessions" }} />
       </ChartContainer3D>
       <div className="flex gap-2 self-center">
@@ -58,6 +60,7 @@ export default function BarChart3DEnterDemo() {
           + Month
         </button>
       </div>
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

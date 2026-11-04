@@ -1,4 +1,6 @@
-import type { Renderer3D } from "@/components/ui/chart-3d"
+import type { ComponentProps } from "react"
+
+import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 
 const renderers: { id: Renderer3D; label: string }[] = [
   { id: "svg", label: "SVG" },
@@ -6,7 +8,26 @@ const renderers: { id: Renderer3D; label: string }[] = [
   { id: "webgl", label: "WebGL" },
 ]
 
-/** The select over the renderers, for the renderers demos. */
+/** The same scene on every renderer, side by side, for the renderers demos. */
+export function RendererGrid({
+  children,
+  ...container
+}: Omit<ComponentProps<typeof ChartContainer3D>, "renderer">) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {renderers.map(({ id, label }) => (
+        <figure key={id} className="flex flex-col gap-1">
+          <ChartContainer3D {...container} renderer={id}>
+            {children}
+          </ChartContainer3D>
+          <figcaption className="text-center text-xs text-muted-foreground">{label}</figcaption>
+        </figure>
+      ))}
+    </div>
+  )
+}
+
+/** The select over the renderers, below every demo. */
 export function RendererSelect({
   renderer,
   onChange,

@@ -95,10 +95,10 @@ comes with its tests - the coverage gate is 98% in each metric.
   surface does - a gone one leaves as the mirror, and the axes make room (see
   Enter in GLOSSARY.md). Fixed values, so the only change is which entries
   are there; see `docs/examples/bar-chart-3d-enter-demo.tsx`.
-- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same chart with a
-  `<select>` over SVG / Canvas / WebGL (`renderer` prop, `RendererSelect` from
-  `docs/examples/renderer-select.tsx`), showing one scene on every renderer.
-  See `docs/examples/bar-chart-3d-renderers-demo.tsx`.
+- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on all
+  three renderers side by side (`RendererGrid` from
+  `docs/examples/renderer-select.tsx`). See
+  `docs/examples/bar-chart-3d-renderers-demo.tsx`.
 - `docs/examples/<name>-chart-3d-many-demo.tsx` - the many demo: a fixed,
   deterministic dataset of thousands of marks (no random, no slider), the
   chart starting on `renderer="canvas"` - the renderer for many marks - with
@@ -107,6 +107,10 @@ comes with its tests - the coverage gate is 98% in each metric.
 - `docs/content/components/<name>-chart-3d.mdx` - sections Preview,
   Installation, Update, Enter and leave, Renderers, Many marks, API Reference; add the page to
   `docs/content/components/meta.json`.
+
+Every demo but the renderers one carries the `RendererSelect` below the
+chart, so every scene can be checked visually on every renderer; the
+renderers demo shows all three at once through `RendererGrid` (AGENTS.md).
 
 ## 5. Gates
 
