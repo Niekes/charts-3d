@@ -1089,12 +1089,17 @@ describe("parity", () => {
 
       // The pointer on the square: the same tooltip, and the same focus edge in
       // the scene, on every renderer (webgl draws fills only, see ADR-0002).
+      const painted = ctx ? ctx.fill.mock.calls.length : gl ? gl.drawArrays.mock.calls.length : 0
       await chart.send(pointer("pointermove", 150, 150))
       expect(chart.host.textContent).toContain("Square")
       expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
         "var(--foreground)",
         "white",
       ])
+      // The hover reaches the reader: a canvas repaints, the SVG strokes the edge.
+      if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
+      else if (gl) expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(painted)
+      else expect(chart.svg.querySelector('path[stroke="var(--foreground)"]')).not.toBeNull()
 
       // Off the marks, tooltip and edge clear the same everywhere.
       await chart.send(pointer("pointermove", 300, 300))
