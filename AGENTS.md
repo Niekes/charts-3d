@@ -225,7 +225,9 @@ How the charts draw, so that a new one draws the same way:
   tick that stays glides on. Every part of the axes that enters - a label, a
   tick mark, a gridline, a wall - fades in through the `chart-3d-axes-in`
   keyframe, which covers `text`, `line` and `path` of the axes slot; a part
-  the data drops goes at once, like a gone mark (see Enter in GLOSSARY.md).
+  the data drops goes at once, like a gone mark (see Enter in GLOSSARY.md),
+  except a tick beyond the new ends of its axis: it stays until the glide is
+  done and fades out as the gliding end sweeps past it.
 - **Motion only where the reader allows it.** `animates()` is true only where
   the browser says `prefers-reduced-motion: no-preference`; elsewhere, on the
   server and in jsdom too, the tweens and the camera jump. A test that wants

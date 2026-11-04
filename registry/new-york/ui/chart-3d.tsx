@@ -548,19 +548,39 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
  */
 function useTweenAxes(spec: AxesSpec): AxesSpec {
   const axes = ["x", "y", "z"] as const
+  const last = (domain: number[]) => domain[domain.length - 1]
   const ends = useTween(
     Object.fromEntries(
       axes.flatMap((a) => [
         [`${a}0`, spec[a].domain[0]],
-        [`${a}1`, spec[a].domain[spec[a].domain.length - 1]],
+        [`${a}1`, last(spec[a].domain)],
       ])
     )
   )
+  // At the end of a glide useTween hands back the targets themselves, so the
+  // ends tell whether the axes still glide.
+  const gliding = axes.some(
+    (a) => ends[`${a}0`] !== spec[a].domain[0] || ends[`${a}1`] !== last(spec[a].domain)
+  )
+  // The target the glide left, remembered the way useTween keys its numbers,
+  // so a retarget in the middle of a glide fades the ticks of that target out.
+  const key = JSON.stringify(spec)
+  const memory = React.useRef({ key, target: spec, from: spec })
+  if (memory.current.key !== key) {
+    memory.current = { key, target: spec, from: memory.current.target }
+  }
   const glided = (a: keyof AxesSpec): AxisSpec => {
     const [lo, hi] = [ends[`${a}0`], ends[`${a}1`]]
     // The ticks stay those of the target, so a label whose tick lies outside the
-    // gliding ends fades out instead of popping out of the range.
-    return { domain: [lo, hi], ticks: spec[a].ticks }
+    // gliding ends fades out instead of popping out of the range - and a tick
+    // the new data drops beyond its ends stays until the glide is done, fading
+    // out as the gliding end sweeps past it.
+    const [d0, d1] = [spec[a].domain[0], last(spec[a].domain)]
+    const gone = gliding
+      ? memory.current.from[a].ticks.filter((t) => t < Math.min(d0, d1) || t > Math.max(d0, d1))
+      : []
+    const ticks = gone.length ? [...spec[a].ticks, ...gone].sort((t, u) => t - u) : spec[a].ticks
+    return { domain: [lo, hi], ticks }
   }
   return { x: glided("x"), y: glided("y"), z: glided("z") }
 }

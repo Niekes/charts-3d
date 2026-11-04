@@ -1764,4 +1764,47 @@ describe("useTween", () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  test("useTweenAxes keeps a tick beyond the new ends until the glide is done, to fade it out", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    function Axes({ hi }: { hi: number }) {
+      const spec = useTweenAxes({ x: axis(0, 1), y: axis(0, hi), z: axis(0, 1) })
+      return <text>{JSON.stringify(spec.y)}</text>
+    }
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (hi: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes hi={hi} />
+          </ChartContainer3D>
+        )
+      )
+    const y = () => JSON.parse(host.querySelector("text")!.textContent!)
+
+    await render(200)
+    await render(100)
+    // The axis shrinks: 150 and 200 lie beyond the new end. They stay in the
+    // ticks while the end glides down - off the gliding ends their labels fade
+    // out instead of popping away - and leave once it arrives.
+    await act(() => vi.advanceTimersByTime(300))
+    expect(y().domain[1]).toBeGreaterThan(100)
+    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    await act(() => vi.advanceTimersByTime(400))
+    expect(y()).toEqual(axis(0, 100))
+
+    // A shrink in the middle of a glide fades the ticks of the glide's target
+    // out, not those of a spec long gone.
+    await render(200)
+    await act(() => vi.advanceTimersByTime(300))
+    await render(100)
+    await act(() => vi.advanceTimersByTime(100))
+    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    await act(() => vi.advanceTimersByTime(700))
+    expect(y()).toEqual(axis(0, 100))
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
 })
