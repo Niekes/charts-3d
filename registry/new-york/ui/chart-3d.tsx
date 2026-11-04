@@ -139,7 +139,7 @@ export type KeyAction3D =
   | "reset"
   | "help"
 
-/** The gestures of the pointer: a drag turns the camera, with Alt (⌥ on a Mac) held it pans, Ctrl or ⌘ with the wheel zooms, a double click resets. */
+/** The gestures of the pointer, which `keymap` can turn off or rename but not rebind; the shortcut panel shows each with its modifier on the reader's platform. */
 export type Gesture3D = "dragRotate" | "dragPan" | "wheelZoom" | "doubleClickReset"
 
 /**
