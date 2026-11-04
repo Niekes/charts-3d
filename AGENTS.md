@@ -373,7 +373,9 @@ the client. The npm dependencies stay external.
   and everything the docs and the tests need is a devDependency.
 - **The props are semver.** Users of the registry own their copy, users of the
   package depend on the API: a change to a prop or an export of `index.ts`
-  is a breaking change and needs a major version.
+  is a breaking change and needs a major version. Before 1.0.0 the minor
+  version is the major one: a breaking change goes from 0.4 to 0.5, which
+  `^0.4.0` does not pick up.
 
 ### Adding a chart
 
