@@ -247,8 +247,9 @@ every renderer, so text stays sharp and the theme stays in CSS.
   pixels may differ, and webgl draws fills only (ADR-0002). The parity test in
   `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
   and a circle - over all three renderers. A third mark shape turns `Mark3D`
-  into a discriminated union with an exhaustive switch in every painter, so a
-  shape one renderer misses fails to compile.
+  into a discriminated union with an exhaustive switch everywhere the core
+  draws - `Marks3D`, `paint`, `paintGL` - so a shape one renderer misses fails
+  to compile.
 - **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
   triangulates the same marks - a fan per polygon, a fan of 12 segments per

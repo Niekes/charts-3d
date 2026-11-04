@@ -59,7 +59,8 @@ chart, and the core knows nothing about the charts.
 
 1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template in [AGENTS.md](./AGENTS.md).
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its only registry dependency.
-3. Add `tests/<name>-chart-3d.test.tsx`, `docs/examples/<name>-chart-3d-demo.tsx` and
+3. Add `tests/<name>-chart-3d.test.tsx`, the four demos in `docs/examples/`
+   (`<name>-chart-3d-demo.tsx`, `-update-demo`, `-renderers-demo`, `-many-demo`) and
    `docs/content/components/<name>-chart-3d.mdx`.
 4. Re-export it from `index.ts` for the npm package.
 5. Run `npm run lint` and `npm test`.

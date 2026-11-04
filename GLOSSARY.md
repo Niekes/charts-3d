@@ -66,6 +66,12 @@ triangulated on webgl; the box, its labels, the tooltip and the legend
 stay SVG and HTML with every renderer.
 _Avoid_: painter, backend, layer
 
+**Mark shape**:
+The form of a mark: a polygon, or a circle around its one point. The shapes
+are a closed vocabulary: a new one joins every renderer and the parity test
+before a chart may use it.
+_Avoid_: mark kind, mark type
+
 **Parity**:
 The same chart behaves the same on every renderer: every mark draws, and
 hover, tooltip and focus act alike. Only the pixels may differ - webgl draws

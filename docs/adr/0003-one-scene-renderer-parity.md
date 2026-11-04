@@ -29,8 +29,8 @@ a checklist nobody runs gates nothing).
 
 Consequences: a chart never draws and never touches the DOM. The mark shapes
 are a closed vocabulary - a polygon and a circle; a third shape turns `Mark3D`
-into a discriminated union with an exhaustive switch in every painter, and
-extends the parity test. The npm whitelist of the charts stays minimal
+into a discriminated union with an exhaustive switch everywhere the core draws
+(`Marks3D`, `paint`, `paintGL`), and extends the parity test. The npm whitelist of the charts stays minimal
 (`d3-3d`, `d3-array`): a chart reaches for a core helper first, then an allowed
 d3 module, and never writes its own; a new d3 module is a deliberate change to
 the dependencies of `chart-3d` in `registry.json` and lands in every installing

@@ -57,9 +57,10 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   cull cube faces to the `ccw` ones; shade with `shade`, fade with the core,
   hand CSS colors to the core; build the world with `worldBox`; tween numbers
   with `useTween`/`useTweenAxes`, never the projected marks. A new mark shape
-  (beyond polygon and circle) extends every painter and the parity test in
-  `tests/chart-3d.test.tsx`, and turns `Mark3D` into a discriminated union
-  with an exhaustive switch (ADR-0003).
+  (beyond polygon and circle) extends everywhere the core draws (`Marks3D`,
+  `paint`, `paintGL`) and the parity test in `tests/chart-3d.test.tsx`, and
+  turns `Mark3D` into a discriminated union with an exhaustive switch
+  (ADR-0003).
 - Style: shadcn/ui - two spaces, double quotes, no semicolons. Every function
   at most 60 lines; split along seams (hook / component / computation).
 

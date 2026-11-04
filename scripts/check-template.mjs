@@ -150,21 +150,33 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     }
   }
 
-  // A chart projects its data with d3-3d, never by hand: it imports a
-  // projection generator, calls it, and sorts the projected shapes with
+  // A chart projects its data with d3-3d, never by hand: it imports one of
+  // the shape generators, calls it, and sorts the projected shapes with
   // d3-3d's `sort`, so every renderer draws the same scene in paint order.
-  const d3d = source.match(/import\s*{([^}]*)}\s*from\s+"d3-3d"/)?.[1] ?? ""
-  const names = d3d
+  // `axes3D` and `iso3D` are not in the list: they do not project marks.
+  const GENERATORS = new Set([
+    "points3D",
+    "lines3D",
+    "lineStrips3D",
+    "planes3D",
+    "polygons3D",
+    "gridPlanes3D",
+    "triangles3D",
+    "cubes3D",
+  ])
+  const clause = source.match(/import\s*{([^}]*)}\s*from\s+"d3-3d"/)?.[1] ?? ""
+  const names = clause
     .split(",")
     .map((name) => name.trim())
     .filter((name) => name && !name.startsWith("type "))
-  const generator = names.find((name) => name.endsWith("3D"))
-  if (!generator || !new RegExp(`${generator}\\s*[<(]`).test(source)) {
+  const generator = names.find((name) => GENERATORS.has(name))
+  const body = source.replace(/import\s*{[^}]*}\s*from\s+"d3-3d"/, "")
+  if (!generator || !new RegExp(`${generator}\\s*[<(]`).test(body)) {
     fail(
-      `${UI}/${file}: a chart projects with a d3-3d generator ('points3D', 'cubes3D', 'gridPlanes3D', ...), imported from "d3-3d" and called`
+      `${UI}/${file}: a chart projects with a d3-3d shape generator (${[...GENERATORS].join(", ")}), imported from "d3-3d" and called`
     )
   }
-  if (!names.includes("sort")) {
+  if (!names.includes("sort") || !/\bsort\b/.test(body)) {
     fail(`${UI}/${file}: a chart sorts its projected shapes with d3-3d's 'sort'`)
   }
 
