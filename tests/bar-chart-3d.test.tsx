@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
-import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
 
@@ -297,10 +297,16 @@ describe("BarChart3D transitions", () => {
       { name: "x", a: 10, b: -20 },
       { name: "y", a: 8, b: -15 },
     ])
-    // The y axis still shows the ticks of the old values.
-    expect(host.textContent).not.toContain("-20")
+    // The opacity of every axis label with `text`: out-of-range ticks stay mounted but faded out.
+    const opacities = (text: string) =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')]
+        .filter((t) => t.textContent === text)
+        .map((t) => (t as SVGTextElement).style.opacity)
+    // Mid-glide, -20 is outside the gliding ends: present, but faded out.
+    expect(opacities("-20").length).toBeGreaterThan(0)
+    expect(opacities("-20").every((o) => o === "0")).toBe(true)
     await act(() => vi.advanceTimersByTime(700))
-    expect(host.textContent).toContain("-20")
+    expect(opacities("-20").some((o) => o === "1")).toBe(true)
 
     await act(async () => root.unmount())
     host.remove()
@@ -352,5 +358,151 @@ describe("BarChart3D transitions", () => {
 
     await act(async () => root.unmount())
     host.remove()
+  })
+})
+
+describe("BarChart3D focus", () => {
+  const edge = "var(--foreground)"
+  const barFaces = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("path")].flatMap((p) => {
+      const f = p.getAttribute("fill")
+      return f?.startsWith("color-mix") ? [p] : []
+    })
+  const edged = (svg: SVGSVGElement) =>
+    barFaces(svg).filter((p) => p.getAttribute("stroke") === edge)
+
+  test("hovering a bar highlights that bar alone with an edge; the fill never changes; leaving clears it", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={data} index="name" />
+      </ChartContainer3D>
+    )
+    const svg = chart.host.querySelector("svg")!
+    const move = (clientX: number, clientY: number) =>
+      chart.send("pointermove", { clientX, clientY })
+    const before = barFaces(svg).map((p) => p.getAttribute("fill"))
+    // The centroid of a face of a bar of series a.
+    const face = barFaces(svg).find((p) => p.getAttribute("fill")!.includes("var(--color-a)"))!
+    const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+    )
+
+    await move(x, y)
+    // One bar alone is highlighted, with an edge; no fill changes.
+    expect(edged(svg).length).toBeGreaterThan(0)
+    expect(barFaces(svg).map((p) => p.getAttribute("fill"))).toEqual(before)
+
+    // Off the bar, still inside the chart: no edge.
+    await move(5, 5)
+    expect(edged(svg)).toHaveLength(0)
+
+    // Hover again, then leave the chart.
+    await move(x, y)
+    expect(edged(svg).length).toBeGreaterThan(0)
+    await chart.send("pointerout", { relatedTarget: document.body })
+    expect(edged(svg)).toHaveLength(0)
+
+    await chart.unmount()
+  })
+})
+
+describe("BarChart3D renderer switch", () => {
+  test("svg to canvas to webgl and back repaints each time, without error", async () => {
+    const gl = {
+      viewport: vi.fn(),
+      disable: vi.fn(),
+      enable: vi.fn(),
+      blendFunc: vi.fn(),
+      useProgram: vi.fn(),
+      uniform2f: vi.fn(),
+      uniform4f: vi.fn(),
+      getUniformLocation: vi.fn(() => ({})),
+      getAttribLocation: vi.fn(() => 0),
+      enableVertexAttribArray: vi.fn(),
+      bindBuffer: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      bufferData: vi.fn(),
+      drawArrays: vi.fn(),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      DEPTH_TEST: 1,
+      BLEND: 2,
+      SRC_ALPHA: 3,
+      ONE_MINUS_SRC_ALPHA: 4,
+      ARRAY_BUFFER: 5,
+      DYNAMIC_DRAW: 6,
+      FLOAT: 7,
+      TRIANGLES: 8,
+      VERTEX_SHADER: 9,
+      FRAGMENT_SHADER: 10,
+    }
+    const ctx = {
+      setTransform: vi.fn(),
+      beginPath: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      fillStyle: "",
+      getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
+    }
+    // A canvas gives out one context only: another type on the same element is null.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
+      this: HTMLCanvasElement & { ctxType?: string },
+      type: string
+    ) {
+      if (this.ctxType && this.ctxType !== type) return null
+      this.ctxType = type
+      return (type === "webgl" ? gl : ctx) as never
+    })
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (renderer: Renderer3D) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} renderer={renderer}>
+            <BarChart3D data={data} index="name" />
+          </ChartContainer3D>
+        )
+      )
+
+    await render("svg")
+    expect(host.querySelector("canvas")).toBeNull()
+    expect(host.querySelector('svg path[fill^="color-mix"]')).not.toBeNull()
+
+    await render("canvas")
+    expect(host.querySelector("canvas")).not.toBeNull()
+    expect(host.querySelector('svg path[fill^="color-mix"]')).toBeNull()
+    expect(ctx.fill).toHaveBeenCalled()
+
+    await render("webgl")
+    expect(host.querySelector("canvas")).not.toBeNull()
+    expect(gl.drawArrays).toHaveBeenCalled()
+
+    await render("svg")
+    expect(host.querySelector("canvas")).toBeNull()
+    expect(host.querySelector('svg path[fill^="color-mix"]')).not.toBeNull()
+
+    await act(async () => root.unmount())
+    host.remove()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 })

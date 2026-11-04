@@ -159,12 +159,26 @@ The rules that `scripts/check-template.mjs` enforces:
   the npm dependencies to the core. On `master` the dependency is unpinned;
   only the release commit, which the release workflow makes beside `master`,
   pins it to `#v<version>`, the version in `package.json`;
+- a chart projects its data with a d3-3d generator (`points3D`, `cubes3D`,
+  `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
+  projected shapes with d3-3d's `sort`;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
-  and `docs/examples/<item>-demo.tsx`;
+  and `docs/examples/<item>-demo.tsx`; a chart also has the three other demos:
+  `-update-demo` (data gliding in), `-renderers-demo` (one scene on every
+  renderer) and `-many-demo` (thousands of marks, staying interactive);
 - `index.ts` re-exports every registry file with `export *`, and nothing else.
 
 How the charts draw, so that a new one draws the same way:
 
+- **Projection with d3-3d**
+  ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). A chart projects
+  with a d3-3d generator, never with mathematics of its own: fallow forbids a
+  chart trigonometry, the DOM, a canvas and the event loop - the core owns
+  them. The import whitelist is the ladder: reach for a core helper first,
+  then for d3-3d or an allowed d3 module, and never write your own. A new d3
+  module is a deliberate change to the dependencies of `chart-3d` in
+  `registry.json`, and it lands in every installing project, so it has to
+  earn its place.
 - **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
   a circle, a CSS fill and, if it has one, a tooltip - and hands them to
   `Marks3D`. The core draws them and finds the one under the pointer, so a
@@ -175,10 +189,11 @@ How the charts draw, so that a new one draws the same way:
   renderer, ringed by the background. Give a direction that turns with the
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
-- **Focus.** A mark or a label names what it belongs to in `groups`: a flow,
-  say, or the flows a node connects. Pointing at a mark, the core fades every
-  mark and label that shares none of its groups, in place and with every
-  renderer, until the pointer leaves the chart; a chart never fades anything
+- **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md)). A mark names the marks of the same element in `groups`: the
+  faces of a bar. Pointing at a mark, the core gives
+  exactly those an edge in the foreground color - white in the dark theme,
+  black in the light - until the pointer leaves the mark; the fill never
+  changes on hover, with every renderer, and a chart never highlights anything
   itself.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
   axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
@@ -207,7 +222,12 @@ How the charts draw, so that a new one draws the same way:
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a
-  tick that stays glides on.
+  tick that stays glides on. Every part of the axes that enters - a label, a
+  tick mark, a gridline, a wall - fades in through the `chart-3d-axes-in`
+  keyframe, which covers `text`, `line` and `path` of the axes slot; a part
+  the data drops goes at once, like a gone mark (see Enter in GLOSSARY.md),
+  except a tick beyond the new ends of its axis: it stays until the glide is
+  done and fades out as the gliding end sweeps past it.
 - **Motion only where the reader allows it.** `animates()` is true only where
   the browser says `prefers-reduced-motion: no-preference`; elsewhere, on the
   server and in jsdom too, the tweens and the camera jump. A test that wants
@@ -226,7 +246,16 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **One scene.** `Marks3D` writes its marks into the scene of the container;
   the canvas paints the scene and the hover hit-tests it, whatever the
   renderer.
-- **WebGL is the next link.** It joins the same chain: `"webgl"` probes
+- **Parity is behavioural and gated**
+  ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). Every mark of the
+  scene draws on every renderer, and hover, tooltip and focus act the same;
+  pixels may differ, and webgl draws fills only (ADR-0002). The parity test in
+  `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
+  and a circle - over all three renderers. A third mark shape turns `Mark3D`
+  into a discriminated union with an exhaustive switch everywhere the core
+  draws - `Marks3D`, `paint`, `paintGL` - so a shape one renderer misses fails
+  to compile.
+- **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
   triangulates the same marks - a fan per polygon, a fan of 12 segments per
   circle - draws them in paint order without a depth test, and takes its
@@ -251,6 +280,11 @@ gesture is a new action, so the panel never misses one.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
   zoom stop at their limits there and nowhere else.
+- **The gestures follow the 3D viewers of the browser, gated by the platform
+  modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
+  Windows and Linux, and a drag rotates; a plain drag only inspects, with the
+  default cursor. Space and a drag pans, and a double click resets. The panel
+  shows each gesture with its hint, so a chart needs no gesture of its own.
 - **The wheel zooms only with Ctrl or ⌘**, which is also how a trackpad
   pinches; the wheel alone scrolls the page. The listener is the core's own,
   because React listens to the wheel passively and cannot keep the browser
@@ -262,6 +296,26 @@ gesture is a new action, so the panel never misses one.
   the view right after a key.
 - **`orbiting` is true while the camera turns**, not while it pans or zooms.
   Nothing in the core reads it; `data-orbiting` on the svg is there to style.
+
+### Customization
+
+Customization climbs a ladder
+([ADR-0004](docs/adr/0004-customization-ladder.md)), and every new knob
+chooses a rung:
+
+- **Behaviour is a prop**: keys and gestures (`keymap`), renderer, durations,
+  what shows (`legend`, `shortcuts`, `gizmo`), the data props of the charts.
+  Documented with `@defaultValue`, tested, semver (an added knob is a minor).
+- **Looks are CSS**: the theme tokens and the slots - every visible part
+  carries a `data-slot`, listed on the theming page of the docs. Never style
+  props.
+- **Identity is fixed**: the hover (ADR-0002), the gestures (ADR-0001), one
+  scene on every renderer (ADR-0003). Changing identity means editing the
+  owned registry copy, not a prop.
+
+A knob nobody turns is API debt: motion constants, camera steps and limits,
+tick density, the walls and gridlines, and the focus edge stay fixed until a
+user asks.
 
 ### Code style
 
@@ -307,9 +361,10 @@ the client. The npm dependencies stay external.
 1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template above.
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its
    only registry dependency.
-3. Add `tests/<name>-chart-3d.test.tsx`, `docs/examples/<name>-chart-3d-demo.tsx`
-   and `docs/content/components/<name>-chart-3d.mdx`, and list the page in
-   `docs/content/components/meta.json`.
+3. Add `tests/<name>-chart-3d.test.tsx`, the four demos in `docs/examples/`
+   (`<name>-chart-3d-demo.tsx`, `-update-demo`, `-renderers-demo`,
+   `-many-demo`) and `docs/content/components/<name>-chart-3d.mdx`, and list
+   the page in `docs/content/components/meta.json`.
 4. Add `export * from "./registry/new-york/ui/<name>-chart-3d"` to `index.ts`.
 5. Run `npm run lint` and `npm test`.
 

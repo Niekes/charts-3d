@@ -5,6 +5,8 @@ description: Bars on a floor, one row per entry and one per series.
 
 import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
 import BarChart3DUpdateDemo from "@/docs/examples/bar-chart-3d-update-demo"
+import BarChart3DRenderersDemo from "@/docs/examples/bar-chart-3d-renderers-demo"
+import BarChart3DManyDemo from "@/docs/examples/bar-chart-3d-many-demo"
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -58,6 +60,34 @@ of its container, and the y axis scales along.
   </Tab>
   <Tab value="Code">
     <include>../../examples/bar-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Three hundred bars - and the chart stays interactive. The scene is one list of
+marks, so the demo starts on `"canvas"`, the renderer for many marks, and the
+select shows the same scene on SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-many-demo.tsx</include>
   </Tab>
 </Tabs>
 

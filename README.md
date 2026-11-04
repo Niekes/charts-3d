@@ -38,7 +38,6 @@
     </tr>
     <tr style="background-color: #f6f8fa">
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/surface-chart-3d"><img src="assets/examples/surface-chart-3d.png" alt="Surface Chart 3D"></a></td>
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/sankey-chart-3d"><img src="assets/examples/sankey-chart-3d.png" alt="Sankey Chart 3D"></a></td>
     </tr>
 </table>
 

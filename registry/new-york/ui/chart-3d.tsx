@@ -11,6 +11,7 @@ import {
   type AxesSpec,
   type AxisEdge,
   type AxisSpec,
+  type AxisWall,
   type Camera3DInstance,
   type CubeFace,
   type Point2D,
@@ -49,7 +50,7 @@ export type View3D = {
 }
 
 /** How the marks of a chart are drawn. The box, its labels, the tooltip and the legend are always SVG and HTML. */
-export type Renderer3D = "svg" | "canvas"
+export type Renderer3D = "svg" | "canvas" | "webgl"
 
 /** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
 export type World = Record<keyof AxesSpec, (value: number) => number>
@@ -75,9 +76,10 @@ export type Mark3D = {
   /** Shown while the pointer is over the mark. */
   tooltip?: Tooltip3D
   /**
-   * What the mark belongs to, such as a flow, or connects, such as a node.
-   * Pointing at a mark fades every mark and label that shares none of its
-   * groups, until the pointer leaves the chart; one without groups never fades.
+   * The marks of the same element as this one: the faces of a bar, the
+   * segments of a flow. Pointing at a mark gives them an edge in the
+   * foreground color, until the pointer leaves the mark; the fill never
+   * changes on hover.
    */
   groups?: string[]
 }
@@ -158,7 +160,7 @@ const SHORTCUTS: Record<
   Action3D,
   { label: string; keys?: string[]; hint?: string[]; move?: Move }
 > = {
-  dragRotate: { label: "Rotate", hint: ["Drag"] },
+  dragRotate: { label: "Rotate", hint: ["Mod", "Drag"] },
   rotateLeft: { label: "Rotate", keys: ["ArrowLeft"], move: { yaw: -KEY_STEP } },
   rotateRight: { label: "Rotate", keys: ["ArrowRight"], move: { yaw: KEY_STEP } },
   rotateUp: { label: "Rotate", keys: ["ArrowUp"], move: { tilt: -KEY_STEP } },
@@ -177,6 +179,24 @@ const SHORTCUTS: Record<
 }
 
 const MODIFIERS = ["Control", "Alt", "Meta", "Shift"]
+
+/** Whether the reader is on a Mac, where the platform modifier is ⌘; elsewhere it is Ctrl. */
+const mac = () =>
+  /mac/i.test(
+    (globalThis.navigator as Navigator & { userAgentData?: { platform?: string } })?.userAgentData
+      ?.platform ??
+      globalThis.navigator?.platform ??
+      ""
+  )
+
+/** The label of the platform modifier: ⌘ on a Mac, Ctrl elsewhere. */
+const modLabel = () => (mac() ? "⌘" : "Ctrl")
+
+/** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
+const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
+
+/** Whether `value` lies between the ends `lo` and `hi`. */
+const within = (lo: number, hi: number, value: number) => value >= lo && value <= hi
 // The keys that `aria-keyshortcuts` names, because `+` delimits and a space separates.
 const NAMED: Record<string, string> = { Plus: "+", Space: " " }
 const ARIA: Record<string, string> = { "+": "Plus", " ": "Space" }
@@ -245,7 +265,7 @@ type Shortcut = ReturnType<typeof shortcutsOf>[number]
 function rowsOf(shortcuts: Shortcut[]) {
   const rows = new Map<string, Map<string, string[]>>()
   for (const { action, label, keys, hint } of shortcuts) {
-    const parts = hint ?? split(keys[0]).map((k) => KBD[k] ?? k)
+    const parts = (hint ?? split(keys[0])).map((k) => (k === "Mod" ? modLabel() : (KBD[k] ?? k)))
     const group = hint ? action : parts.slice(0, -1).join("+")
     const groups = rows.get(label) ?? new Map<string, string[]>()
     const known = groups.get(group)
@@ -306,9 +326,9 @@ export type ChartContainer3DProps = {
    */
   legend?: boolean
   /**
-   * How the marks of the chart are drawn: "canvas" suits many marks. The
-   * chart draws as SVG until the browser shows it has a canvas, and where it
-   * has none.
+   * How the marks of the chart are drawn: "canvas" suits many marks, "webgl" more.
+   * The chart draws as SVG until the browser shows it has the requested renderer,
+   * "webgl" falling back to "canvas", and where it has none, as SVG.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D
@@ -400,7 +420,7 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
   const help = keys.help[0]
   const said = [
     "3D chart.",
-    keys.on("dragRotate") && "Drag to rotate it.",
+    keys.on("dragRotate") && `${modLabel()} and drag to rotate it.`,
     help && `Press ${aria(help)} for all shortcuts.`,
   ]
   return {
@@ -409,7 +429,8 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
     tabIndex: keys.aria ? 0 : undefined,
     className: cn(
       "block h-auto w-full outline-hidden select-none mask-y-from-96%",
-      drag && "cursor-grab touch-none active:cursor-grabbing"
+      // The default cursor stays, so a plain drag only inspects; the modifier and a drag rotate.
+      drag && "touch-none"
     ),
   }
 }
@@ -423,7 +444,7 @@ function useScene(requested: Renderer3D, width: number, height: number) {
   const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
   const focus = useFocus()
   const renderer = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width)
+  const { canvas, repaint } = useCanvas(scene, width, height, renderer)
   const { hover, hide, leave } = useHover(scene, width, height, setTooltip, focus)
   return { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus }
 }
@@ -522,22 +543,44 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
  * `spec` gliding into new data with the marks: the ends of every axis glide
  * as `useTween` glides the numbers, where ends rounded from the numbers on
  * screen would jump from one round number to the next, and the box with
- * them. The ticks are those of `spec` that lie between the ends.
+ * them. The ticks stay those of `spec`; labels of ticks outside the gliding
+ * ends fade out in `edgeLabels` instead of popping out of the range.
  */
 function useTweenAxes(spec: AxesSpec): AxesSpec {
   const axes = ["x", "y", "z"] as const
+  const last = (domain: number[]) => domain[domain.length - 1]
   const ends = useTween(
     Object.fromEntries(
       axes.flatMap((a) => [
         [`${a}0`, spec[a].domain[0]],
-        [`${a}1`, spec[a].domain[spec[a].domain.length - 1]],
+        [`${a}1`, last(spec[a].domain)],
       ])
     )
   )
+  // At the end of a glide useTween hands back the targets themselves, so the
+  // ends tell whether the axes still glide.
+  const gliding = axes.some(
+    (a) => ends[`${a}0`] !== spec[a].domain[0] || ends[`${a}1`] !== last(spec[a].domain)
+  )
+  // The target the glide left, remembered the way useTween keys its numbers,
+  // so a retarget in the middle of a glide fades the ticks of that target out.
+  const key = JSON.stringify(spec)
+  const memory = React.useRef({ key, target: spec, from: spec })
+  if (memory.current.key !== key) {
+    memory.current = { key, target: spec, from: memory.current.target }
+  }
   const glided = (a: keyof AxesSpec): AxisSpec => {
     const [lo, hi] = [ends[`${a}0`], ends[`${a}1`]]
-    const inside = (t: number) => t >= Math.min(lo, hi) && t <= Math.max(lo, hi)
-    return { domain: [lo, hi], ticks: spec[a].ticks.filter(inside) }
+    // The ticks stay those of the target, so a label whose tick lies outside the
+    // gliding ends fades out instead of popping out of the range - and a tick
+    // the new data drops beyond its ends stays until the glide is done, fading
+    // out as the gliding end sweeps past it.
+    const [d0, d1] = [spec[a].domain[0], last(spec[a].domain)]
+    const gone = gliding
+      ? memory.current.from[a].ticks.filter((t) => t < Math.min(d0, d1) || t > Math.max(d0, d1))
+      : []
+    const ticks = gone.length ? [...spec[a].ticks, ...gone].sort((t, u) => t - u) : spec[a].ticks
+    return { domain: [lo, hi], ticks }
   }
   return { x: glided("x"), y: glided("y"), z: glided("z") }
 }
@@ -624,7 +667,23 @@ function useOrbit(
 ) {
   const { view, jump, glide } = useGlide(defaultView)
   const [orbiting, setOrbiting] = React.useState(false)
-  const drag = React.useRef<Point2D & { moved: boolean }>(null)
+  // Whether the platform modifier is held, so the cursor shows a hand before the drag rotates.
+  const [modHeld, setModHeld] = React.useState(false)
+  React.useEffect(() => {
+    const modKey = mac() ? "Meta" : "Control"
+    const onKey = (e: KeyboardEvent) => e.key === modKey && setModHeld(e.type === "keydown")
+    // A missed keyup (window blur while held) must not stick the hand cursor.
+    const onBlur = () => setModHeld(false)
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("keyup", onKey)
+    window.addEventListener("blur", onBlur)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("keyup", onKey)
+      window.removeEventListener("blur", onBlur)
+    }
+  }, [])
+  const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const ref = useWheelZoom(jump, keys.on("wheelZoom"))
   // A drag follows the pointer at once, a key and a double click glide.
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
@@ -635,17 +694,22 @@ function useOrbit(
     setOrbiting(false)
   }
 
-  const handlers: React.SVGProps<SVGSVGElement> & { "data-orbiting": boolean } = {
+  const handlers: React.SVGProps<SVGSVGElement> & {
+    "data-orbiting": boolean
+    "data-mod"?: boolean
+  } = {
     ref,
     onPointerDown: (e) => {
-      // Space is held only while the drag pans; without it, the drag turns.
-      if (space.current || keys.on("dragRotate")) {
-        drag.current = { x: e.clientX, y: e.clientY, moved: false }
+      // Space is held only while the drag pans; the platform modifier held, the drag turns.
+      if (space.current || (keys.on("dragRotate") && platformMod(e))) {
+        drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !space.current }
       }
     },
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return onHover(e)
+      // A rotate drag turns only while the platform modifier is held.
+      if (d.rotate && !platformMod(e)) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
       // A press that wanders a few pixels is still a click on a bar.
@@ -654,7 +718,7 @@ function useOrbit(
         e.currentTarget.setPointerCapture(e.pointerId)
         onDragStart()
       }
-      drag.current = { x: e.clientX, y: e.clientY, moved: true }
+      drag.current = { x: e.clientX, y: e.clientY, moved: true, rotate: d.rotate }
       const k = width / e.currentTarget.getBoundingClientRect().width
       setOrbiting(!space.current)
       move(space.current ? { pan: { x: dx * k, y: dy * k } } : { yaw: dx * DRAG, tilt: dy * DRAG })
@@ -664,6 +728,7 @@ function useOrbit(
     onDoubleClick: keys.on("doubleClickReset") ? () => step({ reset: true }) : undefined,
     ...keyHandlers,
     "data-orbiting": orbiting,
+    "data-mod": keys.on("dragRotate") && modHeld ? true : undefined,
   }
 
   return { view, handlers }
@@ -722,12 +787,13 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
 
 /**
  * The tooltip of the mark under the pointer, the one painted last, and the
- * focus on its groups. `hover` sets the tooltip only when the pointer moves
- * onto another mark, and the focus only when the groups change, so a move
- * within a mark does not render the chart again. Off the marks and while a
- * drag turns the chart, `hide` drops the tooltip but keeps the focus, so a
- * flow does not flash in the gaps beside it and can be followed from every
- * side; `leave` drops both.
+ * focus on its groups. The highlight follows the mark: `hover` sets the
+ * tooltip only when the pointer moves onto another mark, and the focus only
+ * when the groups change, so a move within a mark does not render the chart
+ * again; off the mark and when the pointer leaves the chart, `leave` drops
+ * both. While a drag turns the chart under the captured pointer, `hide`
+ * drops the tooltip and keeps the focus, so a flow does not flash away and
+ * can be followed from every side.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -739,7 +805,7 @@ function useHover(
   const hovered = React.useRef<Mark3D>(undefined)
   const show = (mark?: Mark3D) => {
     // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
-    if (mark?.groups) focus.set(mark.groups)
+    focus.set(mark?.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
     setTooltip(mark?.tooltip ?? null)
@@ -754,11 +820,11 @@ function useHover(
       }
       show(hit(scene.current, at))
     },
-    hide: () => show(undefined),
-    leave: () => {
-      show(undefined)
-      focus.set(undefined)
+    hide: () => {
+      hovered.current = undefined
+      setTooltip(null)
     },
+    leave: () => show(undefined),
   }
 }
 
@@ -783,17 +849,12 @@ function useFocus(): Focus3D {
   return focus
 }
 
-/**
- * Whether an item fades under the focus: it has groups and shares none with
- * the focus, while some item of `items` does, so a focus on groups that are
- * gone fades nothing.
- */
-function useFades(items: { groups?: string[] }[]) {
+/** Whether an item shares a group with the focus: the hover highlights those items with an edge. */
+function useLit(items: { groups?: string[] }[]) {
   const { focus } = useChart3D()
   const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
-  const lit = (of?: string[]) => of?.some((group) => groups?.includes(group)) ?? false
-  const on = items.some((item) => lit(item.groups))
-  return (item: { groups?: string[] }) => on && item.groups !== undefined && !lit(item.groups)
+  return (item: { groups?: string[] }) =>
+    item.groups !== undefined && (groups?.some((group) => item.groups!.includes(group)) ?? false)
 }
 
 /** The topmost mark under `at`: the last one painted that holds it. */
@@ -821,31 +882,46 @@ function inside(polygon: Point2D[], at: Point2D) {
 
 /**
  * The renderer the chart draws with: SVG on the server and in the first
- * render on the client, then the requested one if the browser has it.
+ * render on the client, then the requested one if the browser has it, with
+ * "webgl" falling back to "canvas" and "canvas" to SVG.
  */
 function useRenderer(requested: Renderer3D) {
   const [renderer, setRenderer] = React.useState<Renderer3D>("svg")
   React.useEffect(() => {
-    // A canvas of its own, as one that gave out a context cannot give another.
-    const canvas = requested === "canvas" && document.createElement("canvas").getContext("2d")
+    // A canvas of its own per probe, as one that gave out a context cannot give another.
+    if (requested === "webgl" && document.createElement("canvas").getContext("webgl")) {
+      return setRenderer("webgl")
+    }
+    const canvas = requested !== "svg" && document.createElement("canvas").getContext("2d")
     setRenderer(canvas ? "canvas" : "svg")
   }, [requested])
   return renderer
 }
 
+/** A resolved CSS color as bytes, which the webgl renderer draws with. */
+type RGBA = [number, number, number, number]
+
 /**
  * A ref for the canvas of the marks, and the repaint that paints them: on new
  * marks, when the canvas changes its size and when the theme changes. A color
- * resolves on the canvas itself, inside the chart, so the `--color-*` apply.
+ * resolves on the canvas itself, inside the chart, so the `--color-*` apply;
+ * webgl takes the resolved color as bytes from a 1×1 canvas.
  */
-function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
+function useCanvas(
+  scene: React.RefObject<Mark3D[]>,
+  width: number,
+  height: number,
+  renderer: Renderer3D
+) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
+  const bytes = React.useRef(new Map<string, RGBA>())
+  const pixel = React.useRef<CanvasRenderingContext2D | null>(null)
 
   const repaint = React.useCallback(() => {
     const canvas = element.current
     if (!canvas) return
-    paint(canvas, scene.current, width, (css) => {
+    const resolve = (css: string) => {
       let color = colors.current.get(css)
       if (color === undefined) {
         canvas.style.color = css
@@ -853,8 +929,16 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
         colors.current.set(css, color)
       }
       return color
-    })
-  }, [scene, width])
+    }
+    if (renderer === "webgl") {
+      pixel.current ??= onePixel()
+      paintGL(canvas, scene.current, width, height, (css) =>
+        colorBytes(resolve(css), pixel.current!, bytes.current)
+      )
+    } else {
+      paint(canvas, scene.current, width, resolve)
+    }
+  }, [scene, width, height, renderer])
 
   const canvas = React.useCallback(
     // A ref that returns its cleanup is never called with null.
@@ -866,6 +950,7 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
       // ponytail: watches the theme on <html> only, as the class `.dark` of THEMES does.
       const theme = new MutationObserver(() => {
         colors.current.clear()
+        bytes.current.clear()
         repaint()
       })
       theme.observe(document.documentElement, { attributeFilter: ["class", "style"] })
@@ -907,12 +992,139 @@ function paint(
     ctx.fillStyle = color(fill)
     ctx.fill()
     // A polygon is outlined in its own color, which closes the seams to its neighbours.
-    const outline = r === undefined ? fill : stroke
+    const outline = r === undefined ? (stroke ?? fill) : stroke
     if (!outline) continue
     ctx.strokeStyle = color(outline)
     ctx.lineWidth = r === undefined ? 0.5 : 1
     ctx.stroke()
   }
+}
+
+/** A 1×1 canvas whose 2D context resolves a color to bytes, for the webgl renderer. */
+function onePixel() {
+  const canvas = document.createElement("canvas")
+  canvas.width = 1
+  canvas.height = 1
+  // useRenderer draws with webgl only where the browser gives a canvas a context; a 2D one comes with it.
+  return canvas.getContext("2d")!
+}
+
+/** The resolved `color` as bytes, drawn on the 1×1 `pixel` and read back, cached per color. */
+function colorBytes(
+  color: string,
+  pixel: CanvasRenderingContext2D,
+  cache: Map<string, RGBA>
+): RGBA {
+  let rgba = cache.get(color)
+  if (rgba === undefined) {
+    pixel.clearRect(0, 0, 1, 1)
+    pixel.fillStyle = color
+    pixel.fillRect(0, 0, 1, 1)
+    rgba = [...pixel.getImageData(0, 0, 1, 1).data] as RGBA
+    cache.set(color, rgba)
+  }
+  return rgba
+}
+
+/**
+ * Paints `marks` on a webgl `canvas`, from the view box of `width`×`height` to
+ * the pixels of the canvas: a fan per polygon, a fan of 12 segments per
+ * circle, in paint order and without a depth test, the color of each as bytes.
+ */
+function paintGL(
+  canvas: HTMLCanvasElement,
+  marks: Mark3D[],
+  width: number,
+  height: number,
+  color: (css: string) => RGBA
+) {
+  canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
+  canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
+  // useRenderer draws with webgl only where the browser gives one a context.
+  const gl = canvas.getContext("webgl")!
+  gl.viewport(0, 0, canvas.width, canvas.height)
+  gl.disable(gl.DEPTH_TEST)
+  gl.enable(gl.BLEND)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+  const program = programOf(gl)
+  gl.useProgram(program)
+  gl.uniform2f(gl.getUniformLocation(program, "u_res"), 2 / width, 2 / height)
+  const where = gl.getAttribLocation(program, "a_pos")
+  gl.enableVertexAttribArray(where)
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufferOf(gl))
+  gl.vertexAttribPointer(where, 2, gl.FLOAT, false, 0, 0)
+  for (const mark of marks) {
+    const fan = trianglesOf(mark)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(fan.flatMap((p) => [p.x, p.y])),
+      gl.DYNAMIC_DRAW
+    )
+    const [r, g, b, a] = color(mark.fill)
+    gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
+    gl.drawArrays(gl.TRIANGLES, 0, fan.length)
+  }
+}
+
+/** The triangles of `mark` as view-box points: a fan per polygon, a fan of 12 segments per circle. */
+function trianglesOf(mark: Mark3D): Point2D[] {
+  const { points, r } = mark
+  if (r !== undefined) {
+    const c = points[0]
+    const at = (i: number) => ({
+      x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
+      y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
+    })
+    return Array.from({ length: 12 }, (_, i) => [c, at(i), at(i + 1)]).flat()
+  }
+  return points.slice(1, -1).flatMap((p, i) => [points[0], p, points[i + 2]])
+}
+
+// The paint program and the vertex buffer of a context, each made once.
+const programs = new WeakMap<WebGLRenderingContext, WebGLProgram>()
+const buffers = new WeakMap<WebGLRenderingContext, WebGLBuffer>()
+
+/** The paint program of `gl`, compiled once: view-box points in, clip space out, one color per draw. */
+function programOf(gl: WebGLRenderingContext) {
+  let program = programs.get(gl)
+  if (!program) {
+    program = gl.createProgram()!
+    gl.attachShader(
+      program,
+      shaderOf(
+        gl,
+        gl.VERTEX_SHADER,
+        "attribute vec2 a_pos; uniform vec2 u_res; void main() { gl_Position = vec4(a_pos.x * u_res.x - 1.0, 1.0 - a_pos.y * u_res.y, 0.0, 1.0); }"
+      )
+    )
+    gl.attachShader(
+      program,
+      shaderOf(
+        gl,
+        gl.FRAGMENT_SHADER,
+        "precision mediump float; uniform vec4 u_color; void main() { gl_FragColor = u_color; }"
+      )
+    )
+    gl.linkProgram(program)
+    programs.set(gl, program)
+  }
+  return program
+}
+
+function shaderOf(gl: WebGLRenderingContext, type: number, source: string) {
+  const shader = gl.createShader(type)!
+  gl.shaderSource(shader, source)
+  gl.compileShader(shader)
+  return shader
+}
+
+function bufferOf(gl: WebGLRenderingContext) {
+  let buffer = buffers.get(gl)
+  if (!buffer) {
+    buffer = gl.createBuffer()!
+    buffers.set(gl, buffer)
+  }
+  return buffer
 }
 
 /** The canvas over the chart box that the marks are painted on, if the chart draws on one. */
@@ -927,10 +1139,13 @@ function ChartCanvas3D({
   width: number
   height: number
 }) {
-  if (renderer !== "canvas") return null
+  if (renderer === "svg") return null
 
   return (
     <canvas
+      // A canvas that gave out one context cannot give another, so each renderer gets its own.
+      key={renderer}
+      data-slot="chart-3d-canvas"
       ref={canvas}
       className="pointer-events-none absolute top-0 left-0 w-full mask-y-from-96%"
       style={{ aspectRatio: `${width} / ${height}` }}
@@ -1013,36 +1228,51 @@ function ChartGizmo3D({
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
-  const fades = useFades(marks)
-  // Faded in place, so the order, and with it the depth, stays as the chart painted it.
-  const drawn = marks.map((mark) => (fades(mark) ? { ...mark, fill: fade(mark.fill) } : mark))
+  const lit = useLit(marks)
+  // The lit marks get an edge in the foreground color, which reads in both themes - unless
+  // they carry their own stroke: a background ring turns into the edge, a flow's inner faces
+  // keep their color, so no seams. The fill never changes on hover, and the order, and with
+  // it the depth, stays as painted.
+  const drawn = marks.map((mark) =>
+    lit(mark)
+      ? {
+          ...mark,
+          stroke:
+            mark.stroke && mark.stroke !== "var(--background)" ? mark.stroke : "var(--foreground)",
+        }
+      : mark
+  )
   React.useLayoutEffect(() => {
     scene.current = drawn
     repaint()
   })
 
-  if (renderer === "canvas") return null
-  return drawn.map(({ key, points, r, fill, stroke }) =>
-    r === undefined ? (
-      <path
-        key={key}
-        d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
-        fill={fill}
-        stroke={fill}
-        strokeWidth={0.5}
-        strokeLinejoin="round"
-      />
-    ) : (
-      <circle
-        key={key}
-        cx={points[0].x}
-        cy={points[0].y}
-        r={r}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={stroke ? 1 : undefined}
-      />
-    )
+  if (renderer !== "svg") return null
+  return (
+    <g data-slot="chart-3d-marks">
+      {drawn.map(({ key, points, r, fill, stroke }) =>
+        r === undefined ? (
+          <path
+            key={key}
+            d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+            fill={fill}
+            stroke={stroke ?? fill}
+            strokeWidth={stroke === "var(--foreground)" ? 1.5 : 0.5}
+            strokeLinejoin="round"
+          />
+        ) : (
+          <circle
+            key={key}
+            cx={points[0].x}
+            cy={points[0].y}
+            r={r}
+            fill={fill}
+            stroke={stroke}
+            strokeWidth={stroke ? 1 : undefined}
+          />
+        )
+      )}
+    </g>
   )
 }
 
@@ -1058,8 +1288,6 @@ export type Label3D = {
   text: React.ReactNode
   anchor?: "start" | "middle" | "end"
   toward?: Point2D
-  /** The groups of the mark it names, so it fades with the mark out of focus. */
-  groups?: string[]
 }
 
 /**
@@ -1067,7 +1295,6 @@ export type Label3D = {
  * read on the marks. Like the labels of the box, they are SVG with every renderer.
  */
 function Labels3D({ labels }: { labels: Label3D[] }) {
-  const fades = useFades(labels)
   // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
@@ -1085,10 +1312,7 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
             paintOrder="stroke"
             strokeWidth={3}
             strokeLinejoin="round"
-            className={cn(
-              "fill-foreground stroke-background text-[10px] font-medium",
-              fades(label) && "opacity-25"
-            )}
+            className="fill-foreground stroke-background text-[10px] font-medium"
           >
             {label.text}
           </text>
@@ -1100,16 +1324,27 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
 
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
+  // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
+  // While the platform modifier is held the cursor is a hand, while a rotate drag turns it is grabbing.
+  const entering = ["text", "line", "path"]
+    .map((el) => `[data-chart=${id}] [data-slot="chart-3d-axes"] ${el}`)
+    .join(", ")
+  const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
+${entering} { animation: chart-3d-axes-in 300ms ease-out; }
+@media (prefers-reduced-motion: reduce) { ${entering} { animation: none; } }
+[data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
+[data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
   if (!colorConfig.length) {
-    return null
+    return <style dangerouslySetInnerHTML={{ __html: base }} />
   }
 
   return (
     <style
       dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
+        __html: [
+          base,
+          ...Object.entries(THEMES).map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
@@ -1120,8 +1355,8 @@ ${colorConfig
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
+          ),
+        ].join("\n"),
       }}
     />
   )
@@ -1140,6 +1375,7 @@ function ChartTooltip3D({
 
   return (
     <div
+      data-slot="chart-3d-tooltip"
       className="pointer-events-none absolute z-10 grid min-w-32 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl"
       style={{ left: `${(tooltip.at.x / width) * 100}%`, top: `${(tooltip.at.y / height) * 100}%` }}
     >
@@ -1184,7 +1420,11 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
   // Without a key or a panel, there is nothing to list.
   if (!rows.length) return null
   return (
-    <div ref={ref} className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+    <div
+      ref={ref}
+      data-slot="chart-3d-shortcuts"
+      className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1"
+    >
       <button
         type="button"
         data-slot="chart-3d-shortcuts-trigger"
@@ -1206,7 +1446,7 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
   return (
     <dl
       id={id}
-      data-slot="chart-3d-shortcuts"
+      data-slot="chart-3d-shortcuts-panel"
       className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 shadow-xl"
     >
       {rows.map(({ label, groups }) => (
@@ -1235,7 +1475,7 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
 
 function ChartLegend3D({ config }: { config: ChartConfig }) {
   return (
-    <div className="flex items-center justify-center gap-4 pt-3">
+    <div data-slot="chart-3d-legend" className="flex items-center justify-center gap-4 pt-3">
       {Object.entries(config).map(([key, item]) => (
         <div key={key} className="flex items-center gap-1.5">
           {item.icon ? (
@@ -1270,7 +1510,7 @@ function Axes3D({
 }) {
   const { camera } = useChart3D()
   const box = intoWorld(axes3D().camera(camera), world)
-  const { labels, lines, marks } = labelAxes(box.edges(spec), format, titles)
+  const { labels, lines, marks } = labelAxes(box.edges(spec), spec, format, titles)
 
   return (
     <g data-slot="chart-3d-axes">
@@ -1278,12 +1518,23 @@ function Axes3D({
         .data(spec)
         .filter((wall) => !wall.ccw)
         .map((wall) => (
-          <path
-            key={`${wall.axis}${wall.side}`}
-            d={box.draw(wall)}
-            className="fill-muted/40 stroke-border"
-            strokeWidth={0.75}
-          />
+          <React.Fragment key={`${wall.axis}${wall.side}`}>
+            <path d={quad(wall)} className="fill-muted/40 stroke-border" strokeWidth={0.75} />
+            {wall.grid.map((segment) => {
+              const [from, to] = [segment[0], segment[segment.length - 1]]
+              return (
+                <line
+                  key={gridKey(wall, from, to)}
+                  x1={from.projected.x}
+                  y1={from.projected.y}
+                  x2={to.projected.x}
+                  y2={to.projected.y}
+                  className="stroke-border"
+                  strokeWidth={0.75}
+                />
+              )
+            })}
+          </React.Fragment>
         ))}
       {lines.map((line) => (
         <AxisLine3D key={line.key} line={line} ink="stroke-foreground" width={1.5} />
@@ -1308,6 +1559,23 @@ const DODGE = 12
 // How far the mark of a tick reaches out from its edge.
 const MARK = 6
 
+/** The closed quad of a wall; its gridlines are their own lines, so a new one fades in. */
+function quad(wall: AxisWall) {
+  return `M${wall.map(({ projected }) => `${projected.x},${projected.y}`).join("L")}Z`
+}
+
+/**
+ * The key of a gridline: the axis and value of the tick it marks - the one
+ * coordinate its ends share beside the wall's own axis - so the gridline of
+ * a tick that stays glides on, and one of a new tick mounts and fades in.
+ * Exactly one coordinate differs along the line, because a domain always has
+ * width: `axis` widens an empty extent.
+ */
+function gridKey(wall: AxisWall, from: Point3D, to: Point3D) {
+  const axis = (["x", "y", "z"] as const).find((a) => a !== wall.axis && from[a] === to[a])!
+  return `${axis}-${from[axis]}`
+}
+
 /**
  * A line of an axis: the line that carries its scale along the edge it sits
  * on, or the mark of one of its ticks. Its place follows the camera at once;
@@ -1328,6 +1596,8 @@ type AxisLine = {
 type AxisLabel = {
   key: string
   axis: keyof AxesSpec
+  /** The tick value; the axis title has none. */
+  value?: number
   at: Point2D
   w: number
   h: number
@@ -1346,16 +1616,21 @@ type AxisLabel = {
  */
 function labelAxes(
   edges: AxisEdge[],
+  spec: AxesSpec,
   format: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>,
   titles: Partial<Record<keyof AxesSpec, React.ReactNode>>
 ) {
   // An axis without ticks, such as the rows of an empty chart, has nothing to label.
   const axes = edges
     .filter((edge) => edge.length)
-    .map((edge) => edgeLabels(edge, format[edge.axis] ?? String, titles[edge.axis]))
+    .map((edge) =>
+      edgeLabels(edge, spec[edge.axis].domain, format[edge.axis] ?? String, titles[edge.axis])
+    )
   const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
   const placed: AxisLabel[] = []
   for (const label of [...shown.flatMap((a) => a.ticks), ...shown.flatMap((a) => a.title ?? [])]) {
+    // A tick outside the gliding ends stays faded out and does not take room from the others.
+    if (label.opacity === 0) continue
     label.opacity = shows(label, placed)
     placed.push(label)
   }
@@ -1373,34 +1648,79 @@ function labelAxes(
  * the rows that `fit` finds, and the title of the axis beyond them. The
  * labels of an edge the axis does not sit on are there, but do not show.
  */
+/**
+ * The point of `value` along `edge`, between the ticks that bracket it: the
+ * projection keeps the edge straight, so the point lies on their line. An
+ * axis of one tick is a point.
+ */
+function along(edge: AxisEdge, value: number): Point2D {
+  if (edge.length === 1) return edge[0].projected
+  let i = 0
+  while (i < edge.length - 2 && edge[i + 1][edge.axis] < value) i += 1
+  const [a, b] = [edge[i][edge.axis], edge[i + 1][edge.axis]]
+  // Neighbouring ticks are distinct values, so their span has width.
+  const t = clamp(0, 1, (value - a) / (b - a))
+  const [p, q] = [edge[i].projected, edge[i + 1].projected]
+  return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }
+}
+
+/** The ticks whose value lies in `domain`, with the ends of `domain`. */
+function inRange(ticks: AxisLabel[], domain: number[]) {
+  const range = { lo: Math.min(...domain), hi: Math.max(...domain) }
+  return {
+    ranged: ticks.filter((t) => t.value !== undefined && within(range.lo, range.hi, t.value)),
+    range,
+  }
+}
+
+/** An edge the axis does not sit on hides its labels; on a chosen one, the ticks outside the gliding ends fade out. */
+function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, chosen: boolean) {
+  if (!chosen) for (const l of labels) l.opacity = 0
+  else
+    for (const l of labels)
+      if (l.value !== undefined && !within(range.lo, range.hi, l.value)) l.opacity = 0
+}
+
 function edgeLabels(
   edge: AxisEdge,
+  domain: number[],
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
 ) {
   const { axis, normal: n, chosen } = edge
-  const label = (key: string, at: Point2D, text: React.ReactNode, h: number, gap: number) => {
+  const label = (
+    key: string,
+    at: Point2D,
+    text: React.ReactNode,
+    h: number,
+    gap: number,
+    value?: number
+  ) => {
     const w = textWidth(text, h)
-    return { key, axis, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
+    return { key, axis, value, at: beside(at, n, w, h, gap), w, h, shift: ZERO, text, opacity: 1 }
   }
   const id = `${axis}${edge.sides.join("")}`
   // Keyed by value, so a tick that new data keeps glides on as the same label.
   const ticks = edge.map((tick) =>
-    label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP)
+    label(`${id}-${tick[axis]}`, tick.projected, format(tick[axis]), 10, GAP, tick[axis])
   )
+  // Ticks outside the gliding ends fade out; only the ones inside take room.
+  const { ranged, range } = inRange(ticks, domain)
   // How far a row of labels reaches out from the edge.
-  const depth = Math.max(...ticks.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
+  const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
-  const rows = fit(ticks, n, row)
-  const start = edge[0].projected
-  const end = edge[edge.length - 1].projected
+  const rows = fit(ranged, n, row)
+  // The line of the axis ends at the gliding ends: a tick beyond them would
+  // drag it out of the box, to appear at once instead of gliding in.
+  const start = along(edge, clamp(range.lo, range.hi, edge[0][axis]))
+  const end = along(edge, clamp(range.lo, range.hi, edge[edge.length - 1][axis]))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const head: AxisLabel | undefined = title
     ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
     : undefined
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
-  if (!chosen) for (const l of [...ticks, ...(head ? [head] : [])]) l.opacity = 0
+  hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
   // tick, as far out as its label is clear of it, and hides where the label does.
   const line: AxisLine = { key: id, from: start, to: end, opacity: chosen ? 1 : 0 }
@@ -1558,7 +1878,7 @@ function AxisLine3D({
       y2={to.y}
       strokeWidth={width}
       style={{ opacity: Math.round(opacity * 100) / 100 }}
-      className={cn("transition-opacity duration-200 ease-out motion-reduce:transition-none", ink)}
+      className={cn("transition-opacity duration-300 ease-out motion-reduce:transition-none", ink)}
     />
   )
 }
@@ -1576,7 +1896,7 @@ function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: Ax
       dominantBaseline="central"
       style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
       className={cn(
-        "transition-[opacity,translate] duration-200 ease-out motion-reduce:transition-none",
+        "transition-[opacity,translate] duration-300 ease-out motion-reduce:transition-none",
         title ? "fill-foreground font-medium" : "fill-muted-foreground text-[10px]"
       )}
     >
@@ -1642,11 +1962,6 @@ function shade(face: TransformedPoint<unknown>[], color: string) {
   const side = n.z < 0 ? -1 : 1
   const light = Math.max(0, side * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z))
   return `color-mix(in oklch, ${color} ${Math.round(65 + 35 * light)}%, black)`
-}
-
-/** `color` out of focus: a quarter of it over the background, opaque, so the seams between faces stay closed. */
-function fade(color: string) {
-  return `color-mix(in oklch, ${color} 25%, var(--background))`
 }
 
 /** The mean of the projected points, where a tooltip points at. */

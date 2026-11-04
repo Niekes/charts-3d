@@ -153,10 +153,80 @@ describe("SurfaceChart3D transitions", () => {
       [0, 5],
       [10, 15],
     ])
-    // The y axis still shows the ticks of the old heights.
-    expect(host.textContent).not.toContain("15")
+    // The opacity of every axis label with `text`: out-of-range ticks stay mounted but faded out.
+    const opacities = (text: string) =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')]
+        .filter((t) => t.textContent === text)
+        .map((t) => (t as SVGTextElement).style.opacity)
+    // Mid-glide, 15 is outside the gliding ends: present, but faded out.
+    expect(opacities("15").length).toBeGreaterThan(0)
+    expect(opacities("15").every((o) => o === "0")).toBe(true)
     await act(() => vi.advanceTimersByTime(700))
-    expect(host.textContent).toContain("15")
+    expect(opacities("15").some((o) => o === "1")).toBe(true)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})
+
+describe("SurfaceChart3D focus", () => {
+  const edge = "var(--foreground)"
+
+  test("hovering a cell highlights that cell alone with an edge; the fill never changes; leaving clears it", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D
+            data={[
+              [1, 2, 3],
+              [2, 3, 4],
+              [3, 4, 5],
+            ]}
+          />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const quads = () =>
+      [...svg.querySelectorAll("path")].flatMap((p) => {
+        const f = p.getAttribute("fill")
+        return f?.startsWith("color-mix") ? [p] : []
+      })
+    const fills = () => quads().map((p) => p.getAttribute("fill")!)
+    const edged = () => quads().filter((p) => p.getAttribute("stroke") === edge)
+    const move = (clientX: number, clientY: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    const quad = quads()[0]
+    const corners = quad.getAttribute("d")!.slice(1, -1).split("L")
+    const [x, y] = [0, 1].map(
+      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+    )
+    const before = fills()
+
+    await move(x, y)
+    // Only the hovered cell gets the edge; every fill stays as it was.
+    expect(quads().length).toBeGreaterThan(1)
+    expect(edged()).toHaveLength(1)
+    expect(fills()).toEqual(before)
+
+    // Off the cell, still inside the chart: no edge.
+    await move(5, 5)
+    expect(edged()).toHaveLength(0)
+
+    // Hover again, then leave the chart.
+    await move(x, y)
+    expect(edged()).toHaveLength(1)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+      )
+    )
+    expect(edged()).toHaveLength(0)
 
     await act(async () => root.unmount())
     host.remove()

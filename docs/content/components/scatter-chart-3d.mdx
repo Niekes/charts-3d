@@ -4,6 +4,8 @@ description: Points in a box, colored by series.
 ---
 
 import ScatterChart3DUpdateDemo from "@/docs/examples/scatter-chart-3d-update-demo"
+import ScatterChart3DRenderersDemo from "@/docs/examples/scatter-chart-3d-renderers-demo"
+import ScatterChart3DManyDemo from "@/docs/examples/scatter-chart-3d-many-demo"
 import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
 
 <Tabs items={["Preview", "Code"]}>
@@ -58,6 +60,34 @@ of the container, and the axes scale along.
   </Tab>
   <Tab value="Code">
     <include>../../examples/scatter-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Five thousand points - and the chart stays interactive. The scene is one list
+of marks, so the demo starts on `"canvas"`, the renderer for many marks, and
+the select shows the same scene on SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-many-demo.tsx</include>
   </Tab>
 </Tabs>
 

@@ -168,7 +168,7 @@ function barCorners(
   })
 }
 
-/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. */
+/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
 function barMarks({
   id,
   faces,
@@ -189,5 +189,5 @@ function barMarks({
     title,
     items: [{ label, value, color }],
   }
-  return cubeMarks(id, faces, color, tooltip)
+  return cubeMarks(id, faces, color, tooltip).map((mark) => ({ ...mark, groups: [id] }))
 }

@@ -91,6 +91,8 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
         key: quad.plane,
         points: quad.map((p) => p.projected),
         fill: shade(quad, `color-mix(in oklch, var(--color-${high}) ${t}%, var(--color-${low}))`),
+        // Its group is the cell, so hovering it lights the cell alone.
+        groups: [quad.plane],
         tooltip: { at: center(quad), items: [{ label: titles?.y ?? "value", value: height }] },
       }
     })

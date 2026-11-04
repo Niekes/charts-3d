@@ -98,10 +98,76 @@ describe("ScatterChart3D transitions", () => {
       { x: 0, y: 0, z: 0 },
       { x: 20, y: 20, z: 20 },
     ])
-    // The axes still show the ticks of the old positions.
-    expect(host.textContent).not.toContain("20")
+    // The opacity of every axis label with `text`: out-of-range ticks stay mounted but faded out.
+    const opacities = (text: string) =>
+      [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')]
+        .filter((t) => t.textContent === text)
+        .map((t) => (t as SVGTextElement).style.opacity)
+    // Mid-glide, 20 is outside the gliding ends: present, but faded out.
+    expect(opacities("20").length).toBeGreaterThan(0)
+    expect(opacities("20").every((o) => o === "0")).toBe(true)
     await act(() => vi.advanceTimersByTime(700))
-    expect(host.textContent).toContain("20")
+    expect(opacities("20").some((o) => o === "1")).toBe(true)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})
+
+describe("ScatterChart3D focus", () => {
+  const edge = "var(--foreground)"
+
+  test("hovering a point highlights that point alone with an edge; the fill never changes; leaving clears it", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <ScatterChart3D
+            data={[
+              { x: 1, y: 1, z: 1, cluster: "a" },
+              { x: 2, y: 2, z: 2, cluster: "b" },
+              { x: 3, y: 3, z: 3, cluster: "a" },
+            ]}
+            x="x"
+            y="y"
+            z="z"
+            series="cluster"
+          />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const circles = () => [...svg.querySelectorAll("circle")]
+    const fills = () => circles().map((c) => c.getAttribute("fill")!)
+    const edged = () => circles().filter((c) => c.getAttribute("stroke") === edge)
+    const move = (clientX: number, clientY: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    const point = circles().find((c) => c.getAttribute("fill") === "var(--color-a)")!
+    const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+    const before = fills()
+
+    await move(clientX, clientY)
+    // The single point alone gets the edge - not its series - and no fill changes.
+    expect(edged()).toHaveLength(1)
+    expect(fills()).toEqual(before)
+
+    // Off the point, still inside the chart: no edge.
+    await move(5, 5)
+    expect(edged()).toHaveLength(0)
+
+    // Hover again, then leave the chart.
+    await move(clientX, clientY)
+    expect(edged()).toHaveLength(1)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+      )
+    )
+    expect(edged()).toHaveLength(0)
 
     await act(async () => root.unmount())
     host.remove()

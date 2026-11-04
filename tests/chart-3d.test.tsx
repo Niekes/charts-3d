@@ -3,7 +3,7 @@ import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
-import { box, cubes3D, points3D } from "d3-3d"
+import { box, cubes3D, points3D, type AxisSpec } from "d3-3d"
 
 import {
   Axes3D,
@@ -86,6 +86,8 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("[data-chart=chart-t]")
+    expect(html).toContain("chart-3d-axes-in")
+    expect(html).toContain("cursor: grab")
     expect(html).toContain("--color-a: red;")
     expect(html).toContain("--color-b: white;")
     expect(html).toContain(".dark [data-chart=chart-t]")
@@ -109,6 +111,7 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("Apples")
+    expect(html).toContain('data-slot="chart-3d-legend"')
   })
 
   test("useChart3D outside a container throws", () => {
@@ -180,8 +183,20 @@ function Camera() {
 }
 const view = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
-const pointer = (type: string, clientX: number, clientY: number, relatedTarget?: EventTarget) =>
-  new MouseEvent(type, { bubbles: true, clientX, clientY, relatedTarget: relatedTarget ?? null })
+const pointer = (
+  type: string,
+  clientX: number,
+  clientY: number,
+  relatedTarget?: EventTarget,
+  init: MouseEventInit = {}
+) =>
+  new MouseEvent(type, {
+    bubbles: true,
+    clientX,
+    clientY,
+    relatedTarget: relatedTarget ?? null,
+    ...init,
+  })
 
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
@@ -200,6 +215,67 @@ function stubCanvas() {
     }
   )
   return ctx
+}
+
+/** A webgl context of spies, and a 2D context that reads colors back as bytes, on every canvas. */
+function stubGL() {
+  const gl = {
+    viewport: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
+    blendFunc: vi.fn(),
+    useProgram: vi.fn(),
+    uniform2f: vi.fn(),
+    uniform4f: vi.fn(),
+    getUniformLocation: vi.fn(() => ({})),
+    getAttribLocation: vi.fn(() => 0),
+    enableVertexAttribArray: vi.fn(),
+    bindBuffer: vi.fn(),
+    vertexAttribPointer: vi.fn(),
+    bufferData: vi.fn(),
+    drawArrays: vi.fn(),
+    createProgram: vi.fn(() => ({})),
+    attachShader: vi.fn(),
+    linkProgram: vi.fn(),
+    createShader: vi.fn(() => ({})),
+    shaderSource: vi.fn(),
+    compileShader: vi.fn(),
+    createBuffer: vi.fn(() => ({})),
+    DEPTH_TEST: 0x0b71,
+    BLEND: 0x0be2,
+    SRC_ALPHA: 0x0302,
+    ONE_MINUS_SRC_ALPHA: 0x0303,
+    ARRAY_BUFFER: 0x8892,
+    DYNAMIC_DRAW: 0x88e8,
+    FLOAT: 0x1406,
+    TRIANGLES: 0x0004,
+    VERTEX_SHADER: 0x8b31,
+    FRAGMENT_SHADER: 0x8b30,
+  }
+  const ctx = {
+    setTransform: vi.fn(),
+    beginPath: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    fillStyle: "",
+    getImageData: vi.fn(() => ({ data: [10, 20, 30, 255] })),
+  }
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    (type: string) => (type === "webgl" ? gl : ctx) as never
+  )
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  return { gl, ctx }
 }
 
 describe("shortcuts", () => {
@@ -248,7 +324,7 @@ describe("shortcuts", () => {
     await chart.send(key("?"))
     expect(chart.host.textContent).toContain("Pan")
     expect(button.getAttribute("aria-expanded")).toBe("true")
-    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Drag")
+    expect(chart.host.querySelector('[data-slot="kbd"]')!.textContent).toBe("Ctrl")
     await chart.send(key("Escape"))
     expect(chart.host.textContent).not.toContain("Pan")
     act(() => button.click())
@@ -271,12 +347,12 @@ describe("shortcuts", () => {
   test("the panel lists an action by its label, its keys grouped by their modifiers", async () => {
     const chart = await mount(<ChartContainer3D config={{}}>{null}</ChartContainer3D>)
     expect(chart.svg.getAttribute("aria-label")).toBe(
-      "3D chart. Drag to rotate it. Press ? for all shortcuts."
+      "3D chart. Ctrl and drag to rotate it. Press ? for all shortcuts."
     )
     await chart.send(key("?"))
 
     expect(rows(chart.host)).toEqual([
-      ["Rotate", "Drag", "←→↑↓"],
+      ["Rotate", "CtrlDrag", "←→↑↓"],
       ["Pan", "SpaceDrag", "Shift←→↑↓"],
       ["Zoom", "+−", "CtrlScroll"],
       ["Reset", "0", "Double-click"],
@@ -375,8 +451,8 @@ describe("shortcuts", () => {
     await chart.send(space)
     expect(space.defaultPrevented).toBe(false)
     // Without a drag, a press and a move hover the marks.
-    await chart.send(pointer("pointerdown", 150, 150))
-    await chart.send(pointer("pointermove", 196, 150))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(read().yaw).toBeCloseTo(Math.PI / 36)
     expect(chart.host.textContent).toContain("Square")
 
@@ -420,7 +496,7 @@ describe("shortcuts", () => {
     const button = chart.host.querySelector("button")!
     expect(button.getAttribute("aria-label")).toBe("Tastenkürzel")
     expect(chart.svg.getAttribute("aria-label")).toBe(
-      "3D chart. Drag to rotate it. Press h for all shortcuts."
+      "3D chart. Ctrl and drag to rotate it. Press h for all shortcuts."
     )
 
     await chart.send(key("?"))
@@ -428,11 +504,11 @@ describe("shortcuts", () => {
     expect(button.hasAttribute("aria-controls")).toBe(false)
     await chart.send(key("h"))
     expect(button.getAttribute("aria-expanded")).toBe("true")
-    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+    const panel = chart.host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
     expect(button.getAttribute("aria-controls")).toBe(panel.id)
 
     expect(rows(chart.host).slice(0, 2)).toEqual([
-      ["Rotate", "Drag", "→↑↓"],
+      ["Rotate", "CtrlDrag", "→↑↓"],
       ["Links drehen", "←"],
     ])
     expect(rows(chart.host).at(-1)).toEqual(["Tastenkürzel", "h"])
@@ -443,7 +519,7 @@ describe("shortcuts", () => {
 
 /** The rows of the open shortcut panel: the label, then the text of each group of keys. */
 function rows(host: HTMLElement) {
-  const panel = host.querySelector('[data-slot="chart-3d-shortcuts"]')!
+  const panel = host.querySelector('[data-slot="chart-3d-shortcuts-panel"]')!
   return [...panel.querySelectorAll("dt")].map((dt) => [
     dt.nextElementSibling!.textContent,
     ...[...dt.querySelectorAll('[data-slot="kbd-group"]')].map((group) => group.textContent),
@@ -462,19 +538,19 @@ describe("pointer", () => {
     await chart.send(pointer("pointermove", 150, 150))
     expect(chart.host.textContent).toContain("Square")
 
-    await chart.send(pointer("pointerdown", 150, 150))
-    await chart.send(pointer("pointermove", 152, 151))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 152, 151, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBe(0)
     expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
 
-    await chart.send(pointer("pointermove", 196, 150))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
     expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
     // The drag takes the tooltip away and marks the chart as orbiting.
     expect(chart.host.textContent).not.toContain("Square")
     expect(chart.svg.dataset.orbiting).toBe("true")
 
-    await chart.send(pointer("pointermove", 200, 150))
+    await chart.send(pointer("pointermove", 200, 150, undefined, { ctrlKey: true }))
     expect(chart.svg.setPointerCapture).toHaveBeenCalledTimes(1)
     await chart.send(pointer("pointerup", 200, 150))
     expect(chart.svg.dataset.orbiting).toBe("false")
@@ -497,10 +573,105 @@ describe("pointer", () => {
 
     await chart.send(pointer("pointercancel", 130, 110))
     await chart.send(new KeyboardEvent("keyup", { key: " ", bubbles: true }))
-    await chart.send(pointer("pointerdown", 100, 100))
-    await chart.send(pointer("pointermove", 130, 100))
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
 
+    await chart.unmount()
+  })
+
+  test("a plain drag does not rotate and keeps the default cursor; the platform modifier and a drag do", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    expect(chart.svg.getAttribute("class")).not.toContain("cursor-grab")
+
+    // Without the modifier, a press and a move only hover the marks.
+    await chart.send(pointer("pointermove", 150, 150))
+    await chart.send(pointer("pointerdown", 150, 150))
+    await chart.send(pointer("pointermove", 196, 150))
+    expect(view(chart.host).yaw).toBe(0)
+    expect(chart.svg.setPointerCapture).not.toHaveBeenCalled()
+    expect(chart.host.textContent).toContain("Square")
+
+    // With the platform modifier (Ctrl off Mac), the same drag rotates.
+    await chart.send(pointer("pointerup", 196, 150))
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
+    expect(view(chart.host).yaw).toBeCloseTo((46 * Math.PI) / 230)
+
+    await chart.unmount()
+  })
+
+  test("holding the platform modifier shows the hand, a rotate drag shows grabbing", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.dataset.mod).toBeUndefined()
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control" })))
+    expect(chart.svg.dataset.mod).toBe("true")
+    act(() => window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" })))
+    expect(chart.svg.dataset.mod).toBeUndefined()
+    // A missed keyup (window blur while held) must not stick the hand.
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control" })))
+    act(() => window.dispatchEvent(new Event("blur")))
+    expect(chart.svg.dataset.mod).toBeUndefined()
+
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
+    expect(chart.svg.dataset.orbiting).toBe("true")
+    expect(view(chart.host).yaw).toBeGreaterThan(0)
+
+    await chart.unmount()
+  })
+
+  test("a rotate drag stops when the platform modifier is released mid-drag", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { ctrlKey: true }))
+    const turned = view(chart.host).yaw
+    expect(turned).toBeGreaterThan(0)
+
+    // Modifier released mid-drag: the drag ends, the camera stops.
+    await chart.send(pointer("pointermove", 160, 100))
+    expect(view(chart.host).yaw).toBe(turned)
+    expect(chart.svg.dataset.orbiting).toBe("false")
+
+    await chart.unmount()
+  })
+
+  test("on a Mac the platform modifier is ⌘: the hint and the label show it, and Meta+drag rotates", async () => {
+    Object.defineProperty(navigator, "userAgentData", {
+      value: { platform: "MacIntel" },
+      configurable: true,
+    })
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.getAttribute("aria-label")).toContain("⌘ and drag to rotate it")
+    await chart.send(key("?"))
+    expect(chart.host.textContent).toContain("⌘")
+
+    chart.svg.setPointerCapture = vi.fn()
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { metaKey: true }))
+    await chart.send(pointer("pointermove", 130, 100, undefined, { metaKey: true }))
+    expect(view(chart.host).yaw).toBeCloseTo((30 * Math.PI) / 230)
+
+    delete (navigator as { userAgentData?: unknown }).userAgentData
     await chart.unmount()
   })
 
@@ -560,8 +731,8 @@ describe("glide", () => {
     await chart.send(key("ArrowRight"))
     await frames(50)
     chart.svg.setPointerCapture = vi.fn()
-    await chart.send(pointer("pointerdown", 100, 100))
-    await chart.send(pointer("pointermove", 123, 100))
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 123, 100, undefined, { ctrlKey: true }))
     const dragged = yaw()
     await frames(250)
     expect(yaw()).toBe(dragged)
@@ -609,6 +780,7 @@ describe("Marks3D", () => {
     )
     expect(html).toContain('d="M100,100L200,100L200,200L100,200Z" fill="red"')
     expect(html).toMatch(/<circle cx="400" cy="100" r="10" fill="blue" stroke="white"/)
+    expect(html).toContain('data-slot="chart-3d-marks"')
   })
 
   test("a circle without a stroke has no outline", () => {
@@ -631,6 +803,7 @@ describe("Marks3D", () => {
 
     await move(150, 150)
     expect(chart.host.textContent).toContain("Square")
+    expect(chart.host.querySelector('[data-slot="chart-3d-tooltip"]')).not.toBeNull()
     await move(405, 100)
     expect(chart.host.textContent).toContain("Dot")
     await move(300, 300)
@@ -745,6 +918,7 @@ describe("renderer", () => {
       </ChartContainer3D>
     )
     expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.host.querySelector("canvas")!.dataset.slot).toBe("chart-3d-canvas")
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
     expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
@@ -776,6 +950,170 @@ describe("renderer", () => {
 
     document.documentElement.classList.remove("dark")
     await chart.unmount()
+  })
+
+  test("webgl draws as SVG where the browser has neither webgl nor a canvas", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null)
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).toBeNull()
+    expect(chart.svg.querySelector("path")).not.toBeNull()
+
+    await chart.unmount()
+  })
+
+  test("webgl falls back to canvas where the browser has no webgl but a 2D context", async () => {
+    const ctx = stubCanvas()
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      (type: string) => (type === "2d" ? ctx : null) as never
+    )
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(ctx.fill).toHaveBeenCalled()
+
+    await chart.unmount()
+  })
+
+  test("webgl paints the marks as fans, in paint order, without a depth test, and the hover still finds them", async () => {
+    const { gl, ctx } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(chart.host.querySelector("canvas")).not.toBeNull()
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
+    expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
+    // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+    expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
+      [0, 6],
+      [0, 36],
+    ])
+    // The color of a mark as bytes from the 1×1 canvas, over 255.
+    expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1, 1)
+    expect(gl.uniform4f).toHaveBeenCalledWith({}, 10 / 255, 20 / 255, 30 / 255, 1)
+
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("webgl reads a color once and serves later repaints from the cache", async () => {
+    const { ctx } = stubGL()
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = () =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}} renderer="webgl">
+            <Marks3D marks={marks} />
+          </ChartContainer3D>
+        )
+      )
+    await render()
+    const reads = ctx.getImageData.mock.calls.length
+    await render()
+    expect(ctx.getImageData.mock.calls.length).toBe(reads)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("webgl compiles its program and buffer once, and repaints when the theme changes", async () => {
+    const { gl } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const drawn = gl.drawArrays.mock.calls.length
+    await act(async () => {
+      document.documentElement.classList.add("dark")
+      // A MutationObserver reports after the change, not during it.
+      await new Promise((resolve) => setTimeout(resolve))
+    })
+    expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(drawn)
+    expect(gl.createProgram).toHaveBeenCalledTimes(1)
+    expect(gl.createBuffer).toHaveBeenCalledTimes(1)
+
+    document.documentElement.classList.remove("dark")
+    await chart.unmount()
+  })
+})
+
+describe("parity", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  // One scene with every mark shape: the shared square and dot, each its own group.
+  const scene = marks.map((mark) => ({ ...mark, groups: [mark.key] }))
+
+  test("one scene draws every mark and hovers the same on svg, canvas and webgl", async () => {
+    for (const renderer of ["svg", "canvas", "webgl"] as const) {
+      const ctx = renderer === "canvas" ? stubCanvas() : null
+      const gl = renderer === "webgl" ? stubGL().gl : null
+      let read: { current: { fill: string; stroke?: string }[] } = { current: [] }
+      function Scene() {
+        read = useChart3D().scene
+        return null
+      }
+      const chart = await mount(
+        <ChartContainer3D config={{}} renderer={renderer}>
+          <Marks3D marks={scene} />
+          <Scene />
+        </ChartContainer3D>
+      )
+
+      // Every shape of the scene is drawn, whatever the renderer.
+      if (ctx) {
+        expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+        expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+      } else if (gl) {
+        // The square fans into 2 triangles of 3 points, the dot into 12 segments of 3.
+        expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
+          [0, 6],
+          [0, 36],
+        ])
+      } else {
+        expect(chart.svg.querySelector('path[fill="red"]')).not.toBeNull()
+        expect(chart.svg.querySelector('circle[fill="blue"]')).not.toBeNull()
+      }
+
+      // The pointer on the square: the same tooltip, and the same focus edge in
+      // the scene, on every renderer (webgl draws fills only, see ADR-0002).
+      const painted = ctx ? ctx.fill.mock.calls.length : gl ? gl.drawArrays.mock.calls.length : 0
+      await chart.send(pointer("pointermove", 150, 150))
+      expect(chart.host.textContent).toContain("Square")
+      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
+        "var(--foreground)",
+        "white",
+      ])
+      // The hover reaches the reader: a canvas repaints, the SVG strokes the edge.
+      if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
+      else if (gl) expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(painted)
+      else expect(chart.svg.querySelector('path[stroke="var(--foreground)"]')).not.toBeNull()
+
+      // Off the marks, tooltip and edge clear the same everywhere.
+      await chart.send(pointer("pointermove", 300, 300))
+      expect(chart.host.textContent).not.toMatch(/Square|Dot/)
+      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual(["red", "white"])
+
+      await chart.unmount()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
   })
 })
 
@@ -843,6 +1181,94 @@ describe("ChartLegend3D", () => {
 })
 
 describe("Axes3D", () => {
+  test("a wall is a plain quad and its gridlines are lines keyed by tick, so a new one fades in", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (y: AxisSpec) => {
+      const spec = { x: axis(0, 10), y, z: axis(0, 10) }
+      return act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes3D spec={spec} world={worldBox(spec)} />
+          </ChartContainer3D>
+        )
+      )
+    }
+    await render(axis(0, 100))
+
+    // The walls carry no gridlines of their own: each is one closed quad, and
+    // the gridlines are their own lines, in the border ink, which the
+    // chart-3d-axes-in keyframe fades in when they mount.
+    const walls = [...host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] path')]
+    expect(walls.length).toBeGreaterThan(0)
+    for (const wall of walls) expect(wall.getAttribute("d")).toMatch(/^M[^M]*Z$/)
+    const gridlines = () => [
+      ...host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="0.75"]'),
+    ]
+    // Only the ticks between the ends draw gridlines - the border of the wall
+    // is the line of an end tick. Three walls, two axes each, four ticks
+    // between the ends per axis.
+    const before = gridlines()
+    expect(before).toHaveLength(24)
+
+    // y goes from 0..100 (ticks 20, 40, 60, 80 between the ends) to 0..200
+    // (50, 100, 150 between the ends). Keyed by value, the two walls that
+    // grid y mount the three new ticks and drop the four gone ones, while the
+    // x and z gridlines keep their nodes.
+    await render(axis(0, 200))
+    const after = gridlines()
+    expect(after.filter((line) => !before.includes(line))).toHaveLength(6)
+    expect(after.filter((line) => before.includes(line))).toHaveLength(before.length - 8)
+
+    // While the end of the axis glides, a tick on or beyond it has no
+    // gridline yet: it mounts - and fades in - once the end passes it.
+    await render({ domain: [0, 130], ticks: axis(0, 200).ticks })
+    expect(gridlines()).toHaveLength(20)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("the axis line never reaches past the gliding ends of its axis", async () => {
+    // Mid-glide: the ends stand at 55 while the ticks already run to 70. The
+    // line of the axis ends at the gliding end - the ticks beyond would drag
+    // it out of the box, to appear at once instead of gliding in.
+    const spec = {
+      x: { domain: [0, 55], ticks: axis(0, 70).ticks },
+      y: axis(0, 100),
+      z: axis(0, 10),
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Axes3D spec={spec} world={worldBox(spec)} />
+      </ChartContainer3D>
+    )
+    const walls = [...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path')]
+    const cornerX = Math.max(
+      ...walls.flatMap((wall) =>
+        [...wall.getAttribute("d")!.matchAll(/([\d.-]+),[\d.-]+/g)].map(([, x]) => Number(x))
+      )
+    )
+    const lineX = Math.max(
+      ...[...chart.svg.querySelectorAll<SVGLineElement>('line[stroke-width="1.5"]')]
+        .filter((line) => Number(line.style.opacity) > 0.5)
+        .flatMap((line) => [Number(line.getAttribute("x1")), Number(line.getAttribute("x2"))])
+    )
+    expect(lineX).toBeLessThanOrEqual(cornerX + 0.5)
+
+    await chart.unmount()
+  })
+
+  test("the enter fade covers the walls: the keyframe animates path with text and line", () => {
+    const html = renderToString(
+      <ChartContainer3D id="t" config={{}}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(html).toContain("path { animation: chart-3d-axes-in")
+    expect(html.split("prefers-reduced-motion")[1]).toContain("path { animation: none")
+  })
+
   test("thins an axis seen end on to its first label", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
     // From above, the y axis points at the camera and its ticks fall on one point.
@@ -1079,20 +1505,18 @@ describe("focus", () => {
     square("none", 300),
   ]
   const labels = [
-    { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const, groups: ["a"] },
-    { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const, groups: ["b"] },
+    { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const },
+    { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const },
   ]
-  const faded = "color-mix(in oklch, red 25%, var(--background))"
+  const edge = "var(--foreground)"
   const fills = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].map((path) => path.getAttribute("fill"))
-  const fadedLabels = (svg: SVGSVGElement) =>
-    [...svg.querySelectorAll("[data-slot=chart-3d-labels] text")].map((text) =>
-      text.classList.contains("opacity-25")
-    )
+  const strokes = (svg: SVGSVGElement) =>
+    [...svg.querySelectorAll("path")].map((path) => path.getAttribute("stroke"))
   const move = (clientX: number, clientY: number) =>
     new MouseEvent("pointermove", { bubbles: true, clientX, clientY })
 
-  test("the pointer on a mark fades the marks and labels that share none of its groups", async () => {
+  test("the pointer on a mark gives the marks that share its groups an edge; the fill never changes", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -1100,26 +1524,28 @@ describe("focus", () => {
       </ChartContainer3D>
     )
     expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
-    // b shares no group with a, ab shares one, and a mark without groups never fades.
-    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
-    expect(fadedLabels(chart.svg)).toEqual([false, true])
+    // a and ab share group "a" with the hovered mark and get the edge; b and the groupless one do not.
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
 
-    // Off the marks the tooltip goes and the focus stays; leaving the chart drops it.
+    // Off the mark the tooltip and the edge go with it; leaving the chart does the same.
     await chart.send(move(25, 350))
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(fills(chart.svg)).toEqual(["red", faded, "red", "red"])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
+    await chart.send(move(25, 125))
+    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
     await chart.send(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }))
-    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
-    expect(fadedLabels(chart.svg)).toEqual([false, false])
+    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
 
     await chart.unmount()
   })
 
-  test("the scene, which the canvas paints and the hover reads, has the faded marks too", async () => {
-    let scene: { current: { fill: string }[] } = { current: [] }
+  test("the scene, which the canvas paints and the hover reads, has the edged marks too", async () => {
+    let scene: { current: { fill: string; stroke?: string }[] } = { current: [] }
     function Scene() {
       scene = useChart3D().scene
       return null
@@ -1131,11 +1557,16 @@ describe("focus", () => {
       </ChartContainer3D>
     )
     await chart.send(move(25, 125))
-    expect(scene.current.map((mark) => mark.fill)).toEqual(["red", faded, "red", "red"])
+    expect(scene.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
+      edge,
+      "red",
+      edge,
+      "red",
+    ])
     await chart.unmount()
   })
 
-  test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
+  test("a drag that turns the chart drops the tooltip and keeps the edge", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -1143,7 +1574,7 @@ describe("focus", () => {
     )
     chart.svg.setPointerCapture = vi.fn()
     const press = (type: string, clientX: number) =>
-      new MouseEvent(type, { bubbles: true, clientX, clientY: 125 })
+      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true })
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
@@ -1151,12 +1582,12 @@ describe("focus", () => {
     await chart.send(press("pointermove", 75))
     expect(chart.svg.setPointerCapture).toHaveBeenCalled()
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(fills(chart.svg)).toContain(faded)
+    expect(strokes(chart.svg)).toContain(edge)
 
     await chart.unmount()
   })
 
-  test("a focus on groups that no mark has any more fades nothing", async () => {
+  test("a focus on groups that no mark has any more highlights nothing", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     const render = (marks: typeof squares) =>
@@ -1171,10 +1602,10 @@ describe("focus", () => {
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     await act(() => svg.dispatchEvent(move(25, 125)))
-    expect(fills(svg)).toContain(faded)
+    expect(strokes(svg)).toContain(edge)
 
     await render([square("b", 100, ["b"]), square("c", 200, ["c"])])
-    expect(fills(svg)).toEqual(["red", "red"])
+    expect(strokes(svg)).toEqual(["red", "red"])
 
     await act(async () => root.unmount())
     host.remove()
@@ -1304,7 +1735,7 @@ describe("useTween", () => {
     await chart.unmount()
   })
 
-  test("useTweenAxes glides the ends of the axes, with the ticks of the new ones between them", async () => {
+  test("useTweenAxes glides the ends of the axes and keeps the ticks of the new spec", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     function Axes({ hi }: { hi: number }) {
       const spec = useTweenAxes({ x: axis(0, 1), y: axis(0, hi), z: axis(0, 1) })
@@ -1324,15 +1755,58 @@ describe("useTween", () => {
 
     await render(100)
     await render(200)
-    // Rounded, the end jumps from 100 to 200; the axis glides there and shows its ticks up to where it is.
+    // Rounded, the end jumps from 100 to 200; the axis glides there and keeps the ticks of the new spec.
     await act(() => vi.advanceTimersByTime(300))
     const [lo, hi] = y().domain
     expect(lo).toBe(0)
     expect(hi).toBeGreaterThan(100)
     expect(hi).toBeLessThan(200)
-    expect(y().ticks).toEqual(axis(0, 200).ticks.filter((t) => t <= hi))
+    expect(y().ticks).toEqual(axis(0, 200).ticks)
     await act(() => vi.advanceTimersByTime(400))
     expect(y()).toEqual(axis(0, 200))
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("useTweenAxes keeps a tick beyond the new ends until the glide is done, to fade it out", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    function Axes({ hi }: { hi: number }) {
+      const spec = useTweenAxes({ x: axis(0, 1), y: axis(0, hi), z: axis(0, 1) })
+      return <text>{JSON.stringify(spec.y)}</text>
+    }
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (hi: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes hi={hi} />
+          </ChartContainer3D>
+        )
+      )
+    const y = () => JSON.parse(host.querySelector("text")!.textContent!)
+
+    await render(200)
+    await render(100)
+    // The axis shrinks: 150 and 200 lie beyond the new end. They stay in the
+    // ticks while the end glides down - off the gliding ends their labels fade
+    // out instead of popping away - and leave once it arrives.
+    await act(() => vi.advanceTimersByTime(300))
+    expect(y().domain[1]).toBeGreaterThan(100)
+    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    await act(() => vi.advanceTimersByTime(400))
+    expect(y()).toEqual(axis(0, 100))
+
+    // A shrink in the middle of a glide fades the ticks of the glide's target
+    // out, not those of a spec long gone.
+    await render(200)
+    await act(() => vi.advanceTimersByTime(300))
+    await render(100)
+    await act(() => vi.advanceTimersByTime(100))
+    expect(y().ticks).toEqual([...axis(0, 100).ticks, 150, 200])
+    await act(() => vi.advanceTimersByTime(700))
+    expect(y()).toEqual(axis(0, 100))
 
     await act(async () => root.unmount())
     host.remove()
