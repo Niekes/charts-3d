@@ -4,6 +4,7 @@ description: Points in a box, colored by series.
 ---
 
 import ScatterChart3DUpdateDemo from "@/docs/examples/scatter-chart-3d-update-demo"
+import ScatterChart3DEnterDemo from "@/docs/examples/scatter-chart-3d-enter-demo"
 import ScatterChart3DRenderersDemo from "@/docs/examples/scatter-chart-3d-renderers-demo"
 import ScatterChart3DManyDemo from "@/docs/examples/scatter-chart-3d-many-demo"
 import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
@@ -63,9 +64,28 @@ of the container, and the axes scale along.
   </Tab>
 </Tabs>
 
+## Enter and leave
+
+With an `id` field, a point follows its name through updates: a new one grows
+out of nothing at its place as it fades in, a gone one shrinks and fades away
+where it stands - the mirror of its entering - and one that moves glides (see
+Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Without an `id`, points are named by their position in `data`, which animates
+appending and removing at the end.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ScatterChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/scatter-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
 ## Renderers
 
-The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

@@ -1,6 +1,6 @@
 ---
 name: new-chart
-description: Load when adding a new 3D chart to the charts-3d registry ("make chart X", "new chart for ...", "add a <name> chart"). Walks the whole template end to end: registry file, registry.json, index.ts, tests, the four docs demos (base, update, renderers, many), the mdx page, and the gates.
+description: Load when adding a new 3D chart to the charts-3d registry ("make chart X", "new chart for ...", "add a <name> chart"). Walks the whole template end to end: registry file, registry.json, index.ts, tests, the five docs demos (base, update, enter, renderers, many), the mdx page, and the gates.
 ---
 
 # New chart
@@ -38,8 +38,9 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - the platform
   modifier and a drag rotate (⌘ on a Mac, Ctrl elsewhere; a plain drag only
-  inspects, with the default cursor), Space and a drag pans, Ctrl or ⌘ with the
-  wheel (a trackpad pinch) zooms, a double click resets - and so do the keys
+  inspects, with the default cursor), Alt (⌥ on a Mac) and a drag pans, Ctrl
+  or ⌘ with the wheel (a trackpad pinch) zooms, a double click resets - and so
+  do the keys
   (arrows rotate, Shift+arrows pan, `+`/`-` zoom, `0` reset, `?` help). A demo
   turns a gesture off only as an explicit opt-out, e.g.
   `keymap={{ wheelZoom: false }}`. The decisions are recorded in
@@ -88,18 +89,28 @@ comes with its tests - the coverage gate is 98% in each metric.
   gesture-off `keymap` above.
 - `docs/examples/<name>-chart-3d-update-demo.tsx` - a button that swaps the
   data, so the chart glides.
-- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same chart with a
-  `<select>` over SVG / Canvas / WebGL (`renderer` prop, `RendererSelect` from
-  `docs/examples/renderer-select.tsx`), showing one scene on every renderer.
-  See `docs/examples/bar-chart-3d-renderers-demo.tsx`.
+- `docs/examples/<name>-chart-3d-enter-demo.tsx` - buttons that add and remove
+  entries, so marks enter, move and leave: an entering mark grows from its
+  enter value as it fades in (`faded`, after `shade`) - or only fades in, in place, where motion would mislead, as the
+  surface does - a gone one leaves as the mirror, and the axes make room (see
+  Enter in GLOSSARY.md). Fixed values, so the only change is which entries
+  are there; see `docs/examples/bar-chart-3d-enter-demo.tsx`.
+- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on all
+  three renderers side by side (`RendererGrid` from
+  `docs/examples/renderer-select.tsx`). See
+  `docs/examples/bar-chart-3d-renderers-demo.tsx`.
 - `docs/examples/<name>-chart-3d-many-demo.tsx` - the many demo: a fixed,
   deterministic dataset of thousands of marks (no random, no slider), the
   chart starting on `renderer="canvas"` - the renderer for many marks - with
   the `RendererSelect`. Pick a size where the orbit stays smooth; see
   `docs/examples/scatter-chart-3d-many-demo.tsx` (5000 points).
 - `docs/content/components/<name>-chart-3d.mdx` - sections Preview,
-  Installation, Update, Renderers, Many marks, API Reference; add the page to
+  Installation, Update, Enter and leave, Renderers, Many marks, API Reference; add the page to
   `docs/content/components/meta.json`.
+
+Every demo but the renderers one carries the `RendererSelect` below the
+chart, so every scene can be checked visually on every renderer; the
+renderers demo shows all three at once through `RendererGrid` (AGENTS.md).
 
 ## 5. Gates
 

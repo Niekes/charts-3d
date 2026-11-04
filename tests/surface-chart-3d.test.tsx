@@ -167,10 +167,68 @@ describe("SurfaceChart3D transitions", () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  test("a grown grid fades in at its place, a shrunken one fades out before it goes", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    const quads = () => host.querySelectorAll('[data-slot="chart-3d-marks"] path')
+    const sane = () => [...quads()].every((q) => !q.getAttribute("d")!.includes("NaN"))
+    const faded = () =>
+      [...quads()].filter((q) => q.getAttribute("fill")!.includes("transparent")).length
+
+    const small = [
+      [1, 2],
+      [3, 4],
+    ]
+    const big = [
+      [1, 2, 3],
+      [3, 4, 5],
+      [5, 6, 7],
+    ]
+    await render(small)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(quads()).toHaveLength(1)
+
+    // Grown, the border cells are there at once, in place, fading in; the
+    // old cell keeps its full fill.
+    await render(big)
+    expect(quads()).toHaveLength(4)
+    expect(faded()).toBe(3)
+    expect(sane()).toBe(true)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(quads()).toHaveLength(4)
+    expect(faded()).toBe(0)
+
+    // Shrunken, the border cells stay through the glide, fading out where
+    // they stand, then leave.
+    await render(small)
+    expect(quads()).toHaveLength(4)
+    expect(faded()).toBe(0)
+    await act(() => vi.advanceTimersByTime(300))
+    expect(quads()).toHaveLength(4)
+    expect(faded()).toBe(3)
+    expect(sane()).toBe(true)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(quads()).toHaveLength(1)
+    expect(faded()).toBe(0)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
 })
 
 describe("SurfaceChart3D focus", () => {
-  const edge = "var(--foreground)"
+  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
 
   test("hovering a cell highlights that cell alone with an edge; the fill never changes; leaving clears it", async () => {
     const host = document.body.appendChild(document.createElement("div"))
@@ -196,7 +254,8 @@ describe("SurfaceChart3D focus", () => {
         return f?.startsWith("color-mix") ? [p] : []
       })
     const fills = () => quads().map((p) => p.getAttribute("fill")!)
-    const edged = () => quads().filter((p) => p.getAttribute("stroke") === edge)
+    const edged = () =>
+      quads().filter((p) => p.getAttribute("stroke") === edge(p.getAttribute("fill")!))
     const move = (clientX: number, clientY: number) =>
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))

@@ -4,6 +4,7 @@ description: A shaded surface over a grid of heights.
 ---
 
 import SurfaceChart3DUpdateDemo from "@/docs/examples/surface-chart-3d-update-demo"
+import SurfaceChart3DEnterDemo from "@/docs/examples/surface-chart-3d-enter-demo"
 import SurfaceChart3DRenderersDemo from "@/docs/examples/surface-chart-3d-renderers-demo"
 import SurfaceChart3DManyDemo from "@/docs/examples/surface-chart-3d-many-demo"
 import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
@@ -63,9 +64,27 @@ of the container, and its color ramp follows the heights.
   </Tab>
 </Tabs>
 
+## Enter and leave
+
+The grid may grow and shrink. Coming and going is a fade in place: new border
+cells fade in where they belong while the axes make room, and shrunken away,
+they fade out where they stand and leave when the glide is done - the mirror
+of their entering (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)). The
+surface itself never moves where data merely appears or disappears.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SurfaceChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/surface-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
 ## Renderers
 
-The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

@@ -24,3 +24,21 @@ modifier, so a touch drag only inspects; rotation there is arrow keys (or an
 opt-in `keymap` rebinding). The cursor is the default pointer until the
 modifier is held (then a hand, `grab`), and `grabbing` while the camera
 turns; a missed keyup (window blur while the modifier is held) resets the hand.
+
+Amended 2026-11-04: Alt and a drag pans - ⌥ on a Mac - and Space and a drag
+is gone. With the platform modifier on the rotate and Ctrl or ⌘ on the wheel,
+Alt is the modifier left free, the browser claims no Alt-drag of its own, and
+Space goes back to the page, which it scrolls. Some Linux window managers
+still take Alt and a drag to move the window; where they do, the chart never
+sees the drag, and panning falls back to Shift and the arrow keys. `keymap`
+turns `dragPan` off on its own, like any other action.
+
+Amended 2026-11-04: the zoom follows the platform modifier, like the rotate -
+the panel says "⌘ Scroll" on a Mac, "Ctrl Scroll" elsewhere - so every
+gesture but the pan reads as the one modifier. Ctrl and the wheel keeps
+zooming on a Mac too, unannounced, because a trackpad pinch arrives in the
+browser as Ctrl and the wheel and cannot be told from the keys; the Windows
+key and the wheel zoom nothing. The cursor now names every gesture, not only
+the rotate: Alt held shows the four arrows (`move`), through a pan drag too,
+and a wheel zoom shows `zoom-in` or `zoom-out` by its direction, falling back
+to the hand shortly after the last tick.

@@ -25,6 +25,16 @@ The container turns every key into a CSS variable, `--color-desktop` and `--colo
 
 The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`.
 
+## The focus edge
+
+Pointing at a mark gives its element an edge - the hover highlight. It draws in `--chart-3d-focus` where you set it, and otherwise in the mark's own fill, lightened with `color-mix`, so the highlight carries the color of what it highlights. The core resolves it for every renderer; set the property on the chart, or any ancestor, for one color instead:
+
+```css
+[data-slot="chart-3d"] {
+  --chart-3d-focus: var(--ring);
+}
+```
+
 ## Slots
 
 Every visible part of a chart carries a `data-slot`, the public hook for your
@@ -43,6 +53,8 @@ stylesheet: restyle it, move it, hide it, without touching the component.
 | `chart-3d-shortcuts`         | the corner that holds the keyboard button and its panel |
 | `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)       |
 | `chart-3d-shortcuts-panel`   | the shortcut panel                                      |
+| `chart-3d-shortcuts-label`   | the label naming each row of the panel                  |
+| `chart-3d-shortcuts-rule`    | the rule between the keys of a row and its gestures     |
 | `kbd-group`, `kbd`           | the key groups and keys inside the panel                |
 
 For example, to move the keyboard button and its panel into the lower left corner:
@@ -56,6 +68,38 @@ For example, to move the keyboard button and its panel into the lower left corne
   align-items: flex-start;
 }
 ```
+
+The keyboard button ships clickable the way a shadcn/ui ghost button does - the pointer cursor and the accent background on hover. To add a little lift on top:
+
+```css
+[data-slot="chart-3d-shortcuts-trigger"] {
+  transition: transform 150ms;
+}
+
+[data-slot="chart-3d-shortcuts-trigger"]:hover {
+  transform: scale(1.15);
+}
+```
+
+The scene fades out at the edges of its box, through a CSS mask on the svg and the canvas. Plain CSS takes it off - or restyles it with your own `mask-image`:
+
+```css
+[data-slot="chart-3d"] svg,
+[data-slot="chart-3d-canvas"] {
+  mask-image: none;
+}
+```
+
+The stylesheet is one of three doors, and all of them are the shadcn way. A single utility reads best as `className` on the container, with the slot as an arbitrary variant:
+
+```tsx
+<ChartContainer3D
+  config={config}
+  className="[&_[data-slot=chart-3d-shortcuts-trigger]]:rounded-full"
+/>
+```
+
+And since you own your copy of `chart-3d.tsx`, a change that should hold in every chart of your app can go straight onto the button's own classes. The stylesheet door stays open for the other two kinds of users: a project without Tailwind, and the npm package, which has no copy to edit.
 
 ## Shading
 

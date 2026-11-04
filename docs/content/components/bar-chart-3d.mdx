@@ -5,6 +5,7 @@ description: Bars on a floor, one row per entry and one per series.
 
 import BarChart3DDemo from "@/docs/examples/bar-chart-3d-demo"
 import BarChart3DUpdateDemo from "@/docs/examples/bar-chart-3d-update-demo"
+import BarChart3DEnterDemo from "@/docs/examples/bar-chart-3d-enter-demo"
 import BarChart3DRenderersDemo from "@/docs/examples/bar-chart-3d-renderers-demo"
 import BarChart3DManyDemo from "@/docs/examples/bar-chart-3d-many-demo"
 
@@ -63,9 +64,28 @@ of its container, and the y axis scales along.
   </Tab>
 </Tabs>
 
+## Enter and leave
+
+New data may also bring, drop and reorder whole rows - a bar follows the name
+of its entry, in the `index` field. An added month grows out of the floor
+and fades in while the row axis makes room, its line growing to the new
+tick, its label fading in; a removed one shrinks back into the floor and
+fades out, the mirror of its entering, while the rows around it glide to
+their new cells and the axis closes the gap (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
 ## Renderers
 
-The same chart on every renderer. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
