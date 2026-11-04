@@ -14,6 +14,7 @@ import {
   axis,
   center,
   cubeMarks,
+  faded,
   intoWorld,
   linear,
   pad,
@@ -1287,6 +1288,16 @@ describe("helpers", () => {
     expect(linear([2, 2], [-1, 1])(2)).toBe(-1)
   })
 
+  test("faded mixes a color with transparent to its opacity, in whole percents, and leaves it opaque as it is", () => {
+    expect(faded("red", 1)).toBe("red")
+    expect(faded("red", 0.5)).toBe("color-mix(in oklab, red 50%, transparent)")
+    expect(faded("red", 0.004)).toBe("color-mix(in oklab, red 0%, transparent)")
+    // After shade, so the face keeps its light as it fades.
+    expect(faded("color-mix(in oklch, red 80%, black)", 0.25)).toBe(
+      "color-mix(in oklab, color-mix(in oklch, red 80%, black) 25%, transparent)"
+    )
+  })
+
   test("shade does not depend on the winding of the face", () => {
     const face = [point(0, 0, 0), point(1, 0, 0), point(1, 1, 0)]
     expect(shade(face, "red")).toMatch(/^color-mix\(in oklch, red \d+%, black\)$/)
@@ -1333,6 +1344,40 @@ describe("ChartLegend3D", () => {
 })
 
 describe("Axes3D", () => {
+  test("the line of an axis runs the gliding span of its ticks, not its outermost tick", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const lengths = async (span?: number[]) => {
+      const spec = { x: { ...axis(0, 4, 4), span }, y: axis(0, 10), z: axis(0, 10) }
+      await act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Axes3D spec={spec} world={worldBox(spec)} />
+          </ChartContainer3D>
+        )
+      )
+      return [...host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="1.5"]')].map(
+        (l) => {
+          const [x1, y1, x2, y2] = ["x1", "y1", "x2", "y2"].map((a) => Number(l.getAttribute(a)))
+          return Math.hypot(x2 - x1, y2 - y1)
+        }
+      )
+    }
+
+    const outermost = await lengths()
+    // A span that ends at the outermost tick draws the same line as no span.
+    expect(await lengths([0, 4])).toEqual(outermost)
+    // Halfway through a dropped tick, the four lines of x - one per edge -
+    // end short of it; those of y and z stay.
+    const glided = await lengths([0, 3.5])
+    const shorter = glided.filter((length, i) => length < outermost[i] - 1)
+    expect(shorter).toHaveLength(4)
+    expect(glided.filter((length, i) => length === outermost[i])).toHaveLength(8)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a wall is a plain quad and its gridlines are lines keyed by tick, so a new one fades in", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
@@ -1956,8 +2001,11 @@ describe("useTween", () => {
     expect(hi).toBeLessThan(200)
     expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
     expect(y().leaving).toEqual([20, 40, 60, 80])
+    // The span of the ticks, which the line of the axis runs, glides with the end.
+    expect(y().span[1]).toBeGreaterThan(100)
+    expect(y().span[1]).toBeLessThan(200)
     await act(() => vi.advanceTimersByTime(400))
-    expect(y()).toEqual(axis(0, 200))
+    expect(y()).toEqual({ ...axis(0, 200), span: [0, 200] })
 
     await act(async () => root.unmount())
     host.remove()
@@ -1991,7 +2039,7 @@ describe("useTween", () => {
     expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
     expect(y().leaving).toEqual([50])
     await act(() => vi.advanceTimersByTime(400))
-    expect(y()).toEqual(axis(0, 100))
+    expect(y()).toEqual({ ...axis(0, 100), span: [0, 100] })
 
     // A shrink in the middle of a glide fades the ticks of the glide's target
     // out, not those of a spec long gone.
@@ -2001,7 +2049,7 @@ describe("useTween", () => {
     await act(() => vi.advanceTimersByTime(100))
     expect(y().ticks).toEqual([0, 20, 40, 50, 60, 80, 100, 150, 200])
     await act(() => vi.advanceTimersByTime(700))
-    expect(y()).toEqual(axis(0, 100))
+    expect(y()).toEqual({ ...axis(0, 100), span: [0, 100] })
 
     await act(async () => root.unmount())
     host.remove()

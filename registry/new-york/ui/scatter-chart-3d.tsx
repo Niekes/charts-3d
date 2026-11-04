@@ -8,6 +8,7 @@ import {
   Axes3D,
   Marks3D,
   axis,
+  faded,
   useChart3D,
   useTween,
   useTweenAxes,
@@ -66,7 +67,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
   const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
-  const { radii, read, key } = usePointTweens(names, data, fields, series, config, radius)
+  const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
 
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(pointAxes(data, fields))
@@ -86,11 +87,11 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       key: p.name,
       points: [p.projected],
       r: radii[p.name],
-      fill: `var(--color-${key(p.name)})`,
+      fill: faded(`var(--color-${key(p.name)})`, opacity[p.name]),
       // Its group is the point alone, so hovering highlights that point only.
       groups: [p.name],
       // Ringed by the background, so that points in front stand out.
-      stroke: "var(--background)",
+      stroke: faded("var(--background)", opacity[p.name]),
       tooltip: {
         at: p.projected,
         title: series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
@@ -123,9 +124,10 @@ function pointAxes<T extends Record<string, unknown>>(
 
 /**
  * The tweened numbers of the chart, by the name of each entry: the positions
- * glide entry by entry - a gone point stands in place - and the radius enters
- * from 0, so a new point grows and a gone one shrinks away. `read` and `key`
- * look them up, also for a point still leaving.
+ * glide entry by entry - a gone point stands in place - and the radius and
+ * the opacity enter from 0, so a new point grows as it fades in and a gone
+ * one shrinks as it fades away. `read` and `key` look them up, also for a
+ * point still leaving.
  */
 function usePointTweens<T extends Record<string, unknown>>(
   names: string[],
@@ -137,9 +139,11 @@ function usePointTweens<T extends Record<string, unknown>>(
 ) {
   const values = useTween(pointValues(names, data, fields))
   const radii = useTween(Object.fromEntries(names.map((name) => [name, radius])), 0)
+  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
   const fallback = Object.keys(config)[0]
   return {
     radii,
+    opacity,
     read: (name: string, axis: keyof AxesSpec) => values[`${axis}${name}`],
     key: usePointKeys(names, data, series, fallback, radii),
   }

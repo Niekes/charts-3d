@@ -91,7 +91,7 @@ comes with its tests - the coverage gate is 98% in each metric.
   data, so the chart glides.
 - `docs/examples/<name>-chart-3d-enter-demo.tsx` - buttons that add and remove
   entries, so marks enter, move and leave: an entering mark grows from its
-  enter value - or fades in, in place, where motion would mislead, as the
+  enter value as it fades in (`faded`, after `shade`) - or only fades in, in place, where motion would mislead, as the
   surface does - a gone one leaves as the mirror, and the axes make room (see
   Enter in GLOSSARY.md). Fixed values, so the only change is which entries
   are there; see `docs/examples/bar-chart-3d-enter-demo.tsx`.

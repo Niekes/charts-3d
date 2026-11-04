@@ -9,6 +9,7 @@ import {
   axis,
   center,
   cubeMarks,
+  faded,
   pad,
   useChart3D,
   useTween,
@@ -58,9 +59,10 @@ export function BarChart3D<T extends Record<string, unknown>>({
   // grows from the floor, and a gone one shrinks back into it.
   const target = barValues(names, data, series)
   const values = useTween(target, 0)
-  // The rows glide to their new cells when the data reorders; a gone row
-  // stands in its cell while its bars shrink away.
+  // The rows glide to their new cells when the data reorders; a gone row stands
+  // in its cell while its bars shrink and fade away, so a flat bar never pops.
   const rows = useTween(Object.fromEntries(names.map((name, i) => [name, i])))
+  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
   const cells = barCells(rows, series, values)
 
   const box = barBox(data.length, series.length, Object.values(target))
@@ -95,6 +97,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
             title: bar.name,
             label: config[bar.key]?.label ?? bar.key,
             value: bar.value,
+            opacity: opacity[bar.name],
           })
         )}
       />
@@ -199,7 +202,7 @@ function barCorners(
   })
 }
 
-/** The marks of one bar: the faces that look at the camera, shaded, each with its entry and value on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
+/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with its entry and value on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
 function barMarks({
   id,
   faces,
@@ -207,6 +210,7 @@ function barMarks({
   title,
   label,
   value,
+  opacity,
 }: {
   id: string
   faces: CubeFace[]
@@ -214,11 +218,16 @@ function barMarks({
   title: string
   label: React.ReactNode
   value: number
+  opacity: number
 }) {
   const tooltip = {
     at: center(faces.find((face) => face.face === "top")!),
     title,
     items: [{ label, value, color }],
   }
-  return cubeMarks(id, faces, color, tooltip).map((mark) => ({ ...mark, groups: [id] }))
+  return cubeMarks(id, faces, color, tooltip).map((mark) => ({
+    ...mark,
+    fill: faded(mark.fill, opacity),
+    groups: [id],
+  }))
 }

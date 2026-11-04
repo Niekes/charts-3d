@@ -58,10 +58,12 @@ _Avoid_: shape, element, datum
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not
 have, the gridline of that tick. It comes in gradually - a mark grows from
-its enter value, or fades in, in place, where motion would mislead; a part
-of the axes fades in - and leaves as its mirror: a gone mark glides back to
-its enter value or fades out before it goes, a dropped tick fades out, in
-place or as the gliding end sweeps past one beyond the new ends.
+its enter value as it fades in, or only fades in, in place, where motion
+would mislead; a part of the axes fades in, and the line of the axis grows
+to it - and leaves as its mirror: a gone mark glides back to its enter value
+as it fades out, or only fades out, before it goes; a dropped tick fades
+out, in place or as the gliding end sweeps past one beyond the new ends, and
+the line of the axis shrinks from it.
 _Avoid_: appear, pop in
 
 **Scene**:

@@ -142,6 +142,10 @@ describe("ScatterChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(300))
     const shrinking = gone()!
     expect(Number(shrinking.getAttribute("r"))).toBeGreaterThan(0)
+    // It fades as it shrinks, its ring with it; the point that stays is opaque.
+    expect(shrinking.getAttribute("fill")).toMatch(/^color-mix\(in oklab, var\(--color-a\) \d+%/)
+    expect(shrinking.getAttribute("stroke")).toMatch(/^color-mix\(in oklab, var\(--background\)/)
+    expect(host.querySelectorAll('circle[fill="var(--color-a)"]')).toHaveLength(1)
     const at = [shrinking.getAttribute("cx"), shrinking.getAttribute("cy")]
     await act(() => vi.advanceTimersByTime(150))
     expect([gone()!.getAttribute("cx"), gone()!.getAttribute("cy")]).toEqual(at)

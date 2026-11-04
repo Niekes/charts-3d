@@ -324,7 +324,8 @@ describe("BarChart3D transitions", () => {
           </ChartContainer3D>
         )
       )
-    const faces = () => host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')
+    const faces = () => host.querySelectorAll('path[fill*="var(--color-a)"]')
+    const fading = () => host.querySelectorAll('path[fill^="color-mix(in oklab"]')
     const rightEdge = () =>
       Math.max(
         ...[...faces()].flatMap((f) =>
@@ -352,6 +353,8 @@ describe("BarChart3D transitions", () => {
     expect(faces().length).toBe(bars0)
     await act(() => vi.advanceTimersByTime(300))
     expect(faces().length).toBe(bars0)
+    // It fades as it shrinks, so a flat bar never pops out; the others stay opaque.
+    expect(fading().length).toBe(bars0 / 3)
     const edgeMid = rightEdge()
     await act(() => vi.advanceTimersByTime(150))
     const edgeLate = rightEdge()

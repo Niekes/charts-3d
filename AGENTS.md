@@ -225,17 +225,22 @@ How the charts draw, so that a new one draws the same way:
   `useTween`, before it projects - never the projected marks: every frame
   reprojects, and the camera answers at once. A new key starts at `enter`, a
   gone one glides back to it - the mirror of its entering - and leaves when
-  the glide is done. Build the axes from the data the chart glides into
+  the glide is done. A mark that grows from its enter value fades in as it
+  grows and out as it shrinks - its opacity a tween of its own, 1 with the
+  enter value 0, handed to `faded` after `shade` - so a flat bar or a dot
+  never pops in or out at the end of a glide. Build the axes from the data the chart glides into
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a
   tick that stays glides on. Every part of the axes that enters - a label, a
   tick mark, a gridline, a wall - fades in through the `chart-3d-axes-in`
   keyframe, which covers `text`, `line` and `path` of the axes slot; a part
-  a part the data drops leaves as the mirror of its entering (see Enter in
+  the data drops leaves as the mirror of its entering (see Enter in
   GLOSSARY.md): a gone mark glides back to its enter value before it goes,
   and a dropped tick stays until the glide is done and fades out - within
-  the new ends in place, beyond them as the gliding end sweeps past it.
+  the new ends in place, beyond them as the gliding end sweeps past it. The
+  line of an axis is geometry: it runs the gliding span of its outermost
+  ticks, so it grows to a new tick and shrinks from a dropped one.
 - **Motion only where the reader allows it.** `animates()` is true only where
   the browser says `prefers-reduced-motion: no-preference`; elsewhere, on the
   server and in jsdom too, the tweens and the camera jump. A test that wants

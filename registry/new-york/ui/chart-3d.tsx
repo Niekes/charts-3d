@@ -560,32 +560,39 @@ function tweenNumbers({ from, to, t }: Tween, enter?: number) {
   ])
 }
 
-/** An axis gliding into new data: its spec and, beside it, the ticks the data dropped, fading out in place. */
-type GlidingAxis = AxisSpec & { leaving?: number[] }
+/**
+ * An axis gliding into new data: its spec, the ticks the data dropped, fading
+ * out in place, and the gliding `span` of its ticks, which its line runs.
+ */
+type GlidingAxis = AxisSpec & { leaving?: number[]; span?: number[] }
 
 /**
  * `spec` gliding into new data with the marks: the ends of every axis glide
  * as `useTween` glides the numbers, where ends rounded from the numbers on
  * screen would jump from one round number to the next, and the box with
  * them. The ticks stay those of `spec`; labels of ticks outside the gliding
- * ends fade out in `edgeLabels` instead of popping out of the range.
+ * ends fade out in `edgeLabels` instead of popping out of the range. The
+ * outermost ticks glide too, so the line of the axis grows to a new tick and
+ * shrinks from a dropped one instead of jumping when the glide is done.
  */
 function useTweenAxes(spec: AxesSpec): AxesSpec {
   const axes = ["x", "y", "z"] as const
   const last = (domain: number[]) => domain[domain.length - 1]
-  const ends = useTween(
-    Object.fromEntries(
-      axes.flatMap((a) => [
-        [`${a}0`, spec[a].domain[0]],
-        [`${a}1`, last(spec[a].domain)],
-      ])
-    )
+  const target = Object.fromEntries(
+    axes.flatMap((a) => {
+      const { domain, ticks } = spec[a]
+      return [
+        [`${a}0`, domain[0]],
+        [`${a}1`, last(domain)],
+        [`${a}t0`, ticks.at(0) ?? domain[0]],
+        [`${a}t1`, ticks.at(-1) ?? last(domain)],
+      ]
+    })
   )
+  const ends = useTween(target)
   // At the end of a glide useTween hands back the targets themselves, so the
   // ends tell whether the axes still glide.
-  const gliding = axes.some(
-    (a) => ends[`${a}0`] !== spec[a].domain[0] || ends[`${a}1`] !== last(spec[a].domain)
-  )
+  const gliding = Object.keys(target).some((k) => ends[k] !== target[k])
   // The target the glide left, remembered the way useTween keys its numbers,
   // so a retarget in the middle of a glide fades the ticks of that target out.
   const key = JSON.stringify(spec)
@@ -606,7 +613,8 @@ function useTweenAxes(spec: AxesSpec): AxesSpec {
       : []
     const ticks = gone.length ? [...spec[a].ticks, ...gone].sort((t, u) => t - u) : spec[a].ticks
     const leaving = gone.filter((t) => within(Math.min(d0, d1), Math.max(d0, d1), t))
-    return { domain: [lo, hi], ticks, ...(leaving.length ? { leaving } : {}) }
+    const span = [ends[`${a}t0`], ends[`${a}t1`]]
+    return { domain: [lo, hi], ticks, span, ...(leaving.length ? { leaving } : {}) }
   }
   return { x: glided("x"), y: glided("y"), z: glided("z") }
 }
@@ -1796,7 +1804,7 @@ function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, ch
 
 function edgeLabels(
   edge: AxisEdge,
-  { domain, leaving = [] }: GlidingAxis,
+  { domain, leaving = [], span }: GlidingAxis,
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
 ) {
@@ -1828,10 +1836,12 @@ function edgeLabels(
   const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
   const rows = fit(ranged, n, row)
-  // The line of the axis ends at the gliding ends: a tick beyond them would
-  // drag it out of the box, to appear at once instead of gliding in.
-  const start = along(edge, clamp(range.lo, range.hi, edge[0][axis]))
-  const end = along(edge, clamp(range.lo, range.hi, edge[edge.length - 1][axis]))
+  // The line of the axis runs the gliding span of its ticks, within the
+  // gliding ends: a tick beyond them would drag it out of the box, and one
+  // the data adds or drops would make it jump instead of glide.
+  const [s0, s1] = span ?? [edge[0][axis], edge[edge.length - 1][axis]]
+  const start = along(edge, clamp(range.lo, range.hi, s0))
+  const end = along(edge, clamp(range.lo, range.hi, s1))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const head: AxisLabel | undefined = title
     ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
@@ -2082,6 +2092,17 @@ function shade(face: TransformedPoint<unknown>[], color: string) {
   return `color-mix(in oklch, ${color} ${Math.round(65 + 35 * light)}%, black)`
 }
 
+/**
+ * `color` at `opacity`, from 0 to 1: a CSS color-mix with transparent, so a
+ * mark fades on every renderer while its color stays in CSS. Rounded to a
+ * percent, so the renderers that resolve colors cache a bounded few. Fade
+ * after `shade`, which would mix a translucent color back towards opaque.
+ */
+function faded(color: string, opacity: number) {
+  const percent = Math.round(opacity * 100)
+  return percent >= 100 ? color : `color-mix(in oklab, ${color} ${percent}%, transparent)`
+}
+
 /** The mean of the projected points, where a tooltip points at. */
 function center(points: TransformedPoint<unknown>[]): Point2D {
   const sum = points.reduce((s, p) => ({ x: s.x + p.projected.x, y: s.y + p.projected.y }), {
@@ -2116,6 +2137,7 @@ export {
   worldBox,
   intoWorld,
   shade,
+  faded,
   center,
   cubeMarks,
   useTween,

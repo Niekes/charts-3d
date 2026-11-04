@@ -132,11 +132,13 @@ The arrow keys glide the camera to its next view instead of jumping there. Where
 
 A chart glides into new data over the `animationDuration` of its container; 0 makes it jump, and so does a reader who asks for reduced motion. The glide happens in the numbers, before the projection - `useTween` eases them from the ones on screen - so the camera answers at once, mid-glide too. Every key moves as its own mark ([Enter](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md) in the glossary):
 
-- A key the data **brings** starts at its enter value: a new bar grows out of the floor, at its place.
+- A key the data **brings** starts at its enter value: a new bar grows out of the floor, at its place, and fades in as it grows.
 - A key that **stays** glides from where it stands to its new number - also to a new place, when the data reorders.
-- A key the data **drops** glides back to its enter value, the mirror of its entering, and leaves when the glide is done: a removed bar shrinks back into the floor.
+- A key the data **drops** glides back to its enter value, the mirror of its entering, and leaves when the glide is done: a removed bar shrinks back into the floor and fades out as it shrinks, so nothing flat pops away at the end.
 
-The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
+A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that every renderer draws: tween an opacity per key with `useTween` - 1, with 0 as the enter value - and fade the color after `shade`.
+
+The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it - while the line of the axis grows to a new outermost tick and shrinks from a dropped one. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
 
 ## API Reference
 
