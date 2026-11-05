@@ -55,9 +55,8 @@ export type Renderer3D = "svg" | "canvas" | "webgl"
 /** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
 export type World = Record<keyof AxesSpec, (value: number) => number>
 
+/** What a mark says while the pointer is on it, beside the pointer. */
 export type Tooltip3D = {
-  /** The anchor in the units of the view box. */
-  at: Point2D
   title?: React.ReactNode
   items: { label: React.ReactNode; value: React.ReactNode; color?: string }[]
 }
@@ -363,6 +362,12 @@ export type ChartContainer3DProps = {
    * @defaultValue "bottom-left"
    */
   gizmo?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | false
+  /**
+   * The corner beside the pointer the tooltip sits at. Where the tooltip would
+   * leave the chart, it flips to the other side, on each axis alone.
+   * @defaultValue "top-right"
+   */
+  tooltip?: "top-left" | "top-right" | "bottom-left" | "bottom-right"
 }
 
 function ChartContainer3D({
@@ -377,17 +382,18 @@ function ChartContainer3D({
   shortcuts = true,
   keymap = {},
   gizmo = "bottom-left",
+  tooltip = "top-right",
   className,
   children,
   "aria-label": ariaLabel,
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
-  const uniqueId = React.useId()
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus } = useScene(
+  const chartId = chartIdOf(id, React.useId())
+  const { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
     requested,
     width,
-    height
+    height,
+    tooltip
   )
   const keys = keymapOf(keymap, shortcuts)
   const { view, handlers } = useOrbit(defaultView, width, keys, hide, hover)
@@ -417,12 +423,17 @@ function ChartContainer3D({
         </svg>
         <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
         <ChartGizmo3D camera={camera} corner={gizmo} />
-        <ChartTooltip3D tooltip={tooltip} width={width} height={height} />
+        <ChartTooltip3D tip={tip} />
       </div>
       <ChartShortcuts3D {...keys} />
       {legend && <ChartLegend3D config={config} />}
     </div>
   )
+}
+
+/** The id the colors of a chart are scoped to: its own `id`, or the one React made up. */
+function chartIdOf(id: string | undefined, uniqueId: string) {
+  return `chart-${id || uniqueId.replace(/:/g, "")}`
 }
 
 /**
@@ -454,14 +465,69 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
  * The marks of the chart and what reads them: the renderer that draws them,
  * the canvas it paints them on and the hover that shows their tooltips.
  */
-function useScene(requested: Renderer3D, width: number, height: number) {
+function useScene(requested: Renderer3D, width: number, height: number, placement: Placement3D) {
   const scene = React.useRef<Mark3D[]>([])
-  const [tooltip, setTooltip] = React.useState<Tooltip3D | null>(null)
+  const tip = useTip(placement)
   const focus = useFocus()
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width, height, renderer)
-  const { hover, hide, leave } = useHover(scene, width, height, setTooltip, focus)
-  return { scene, renderer, canvas, repaint, hover, hide, leave, tooltip, focus }
+  const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
+  return { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus }
+}
+
+type Tip3D = ReturnType<typeof useTip>
+type Placement3D = NonNullable<ChartContainer3DProps["tooltip"]>
+
+// The room between the pointer and its tooltip, in pixels, and the shift of
+// the tooltip on an axis: before the pointer by its own size and the room, or after it.
+const TIP_GAP = 12
+const shift = (isBefore: boolean) => (isBefore ? `calc(-100% - ${TIP_GAP}px)` : `${TIP_GAP}px`)
+
+/**
+ * Whether a tooltip of `size` goes before the pointer at `at`, on an axis of
+ * `length`: as `preferred`, unless it would leave the chart there and the
+ * other side has more room.
+ */
+function before(at: number, size: number, length: number, preferred: boolean) {
+  const room = preferred ? at : length - at
+  return room < size + TIP_GAP && length - room > room ? !preferred : preferred
+}
+
+/**
+ * The tooltip of the hovered mark and where it sits: beside the pointer, in
+ * the pixels of the chart, at `placement`. `follow` moves it with the pointer
+ * straight in the DOM, so a move within a mark renders nothing; `place` puts
+ * it there again once it shows, or its content changes its size.
+ */
+function useTip(placement: Placement3D) {
+  const [tooltip, set] = React.useState<Tooltip3D | null>(null)
+  const ref = React.useRef<HTMLDivElement>(null)
+  // The pointer in the chart, and the size of the chart.
+  const pointer = React.useRef({ x: 0, y: 0, width: 0, height: 0 })
+  const place = React.useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    // A tooltip that shows jumps into its corner; only one on screen glides when it flips.
+    const shows = !el.dataset.placement
+    if (shows) el.style.transition = "none"
+    const { x, y, width, height } = pointer.current
+    const top = before(y, el.offsetHeight, height, placement.startsWith("top"))
+    const left = before(x, el.offsetWidth, width, placement.endsWith("left"))
+    el.style.left = `${x}px`
+    el.style.top = `${y}px`
+    el.style.translate = `${shift(left)} ${shift(top)}`
+    el.dataset.placement = `${top ? "top" : "bottom"}-${left ? "left" : "right"}`
+    if (shows) {
+      // Lays the corner out while the transition is off, then turns it on again.
+      el.getBoundingClientRect()
+      el.style.transition = ""
+    }
+  }, [placement])
+  const follow = (at: typeof pointer.current) => {
+    pointer.current = at
+    place()
+  }
+  return { tooltip, set, ref, place, follow }
 }
 
 /** The camera of a view. The shapes of the chart hang on it, so a new view re-projects them all. */
@@ -856,7 +922,7 @@ function useHover(
   scene: React.RefObject<Mark3D[]>,
   width: number,
   height: number,
-  setTooltip: (tooltip: Tooltip3D | null) => void,
+  tip: Tip3D,
   focus: Focus3D
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
@@ -865,21 +931,20 @@ function useHover(
     focus.set(mark?.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
-    setTooltip(mark?.tooltip ?? null)
+    tip.set(mark?.tooltip ?? null)
   }
 
   return {
     hover: (e: React.PointerEvent<SVGSVGElement>) => {
       const rect = e.currentTarget.getBoundingClientRect()
-      const at = {
-        x: ((e.clientX - rect.left) / rect.width) * width,
-        y: ((e.clientY - rect.top) / rect.height) * height,
-      }
-      show(hit(scene.current, at))
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      tip.follow({ x, y, width: rect.width, height: rect.height })
+      show(hit(scene.current, { x: (x / rect.width) * width, y: (y / rect.height) * height }))
     },
     hide: () => {
       hovered.current = undefined
-      setTooltip(null)
+      tip.set(null)
     },
     leave: () => show(undefined),
   }
@@ -1450,22 +1515,18 @@ ${colorConfig
   )
 }
 
-function ChartTooltip3D({
-  tooltip,
-  width,
-  height,
-}: {
-  tooltip: Tooltip3D | null
-  width: number
-  height: number
-}) {
+function ChartTooltip3D({ tip }: { tip: Tip3D }) {
+  const { tooltip, ref, place } = tip
+  // Before the browser paints it, so a new tooltip never shows where the last one was.
+  React.useLayoutEffect(place, [tooltip, place])
   if (!tooltip) return null
 
   return (
     <div
+      ref={ref}
       data-slot="chart-3d-tooltip"
-      className="pointer-events-none absolute z-10 grid min-w-32 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl"
-      style={{ left: `${(tooltip.at.x / width) * 100}%`, top: `${(tooltip.at.y / height) * 100}%` }}
+      // As wide as its content wherever it sits, so a tooltip near the right edge is measured whole.
+      className="pointer-events-none absolute z-10 grid w-max min-w-32 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl motion-safe:transition-[translate]"
     >
       {tooltip.title && <div className="font-medium">{tooltip.title}</div>}
       {tooltip.items.map((item, i) => (
@@ -2103,15 +2164,6 @@ function faded(color: string, opacity: number) {
   return percent >= 100 ? color : `color-mix(in oklab, ${color} ${percent}%, transparent)`
 }
 
-/** The mean of the projected points, where a tooltip points at. */
-function center(points: TransformedPoint<unknown>[]): Point2D {
-  const sum = points.reduce((s, p) => ({ x: s.x + p.projected.x, y: s.y + p.projected.y }), {
-    x: 0,
-    y: 0,
-  })
-  return { x: sum.x / points.length, y: sum.y / points.length }
-}
-
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(id: string, faces: CubeFace[], color: string, tooltip: Tooltip3D): Mark3D[] {
   // The faces point outwards: a convex shape shows the ones facing the camera.
@@ -2138,7 +2190,6 @@ export {
   intoWorld,
   shade,
   faded,
-  center,
   cubeMarks,
   useTween,
   useTweenAxes,

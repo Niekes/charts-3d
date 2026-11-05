@@ -113,6 +113,23 @@ The axes in the lower left corner turn with the camera, so a turned chart still 
 
 The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hidden from screen readers. Each axis draws in `currentColor` and carries `data-axis`, so `className="[&_[data-axis=x]]:text-red-500"` on the container colors one axis.
 
+## Tooltip
+
+The tooltip of a mark follows the pointer, above and to its right. Where it would leave the chart it flips to the other side - on each axis alone, and only to a side with more room - and glides there; where the reader asks for reduced motion, it jumps. `tooltip` puts it in another corner of the pointer ([ADR-0005](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0005-tooltip-follows-pointer.md)).
+
+```tsx
+<ChartContainer3D config={chartConfig} tooltip="bottom-left">
+```
+
+The tooltip is `data-slot="chart-3d-tooltip"`, and its `data-placement` names the corner it took, flipped or not - `"top-left"`, `"top-right"`, `"bottom-left"` or `"bottom-right"` - so CSS can style each corner. To square the corner that points at the pointer:
+
+```tsx
+<ChartContainer3D
+  config={chartConfig}
+  className="[&_[data-placement=top-right]]:rounded-bl-none [&_[data-placement=top-left]]:rounded-br-none [&_[data-placement=bottom-right]]:rounded-tl-none [&_[data-placement=bottom-left]]:rounded-tr-none"
+>
+```
+
 ## Focus
 
 A mark or a label can name the groups it belongs to in `groups`. Pointing at a mark fades every mark and label that shares none of its groups to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
