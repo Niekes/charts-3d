@@ -19,6 +19,7 @@ import {
   pad,
   shade,
   useChart3D,
+  useSeries,
   useTween,
   useTweenAxes,
   worldBox,
@@ -1238,7 +1239,7 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  test("webgl paints the marks as fans, in paint order, without a depth test, and the hover still finds them", async () => {
+  test("webgl paints the marks as triangles, in paint order, without a depth test, and the hover still finds them", async () => {
     const { gl, ctx } = stubGL()
     const chart = await mount(
       <ChartContainer3D config={{}} renderer="webgl">
@@ -1249,7 +1250,7 @@ describe("renderer", () => {
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
-    // The square fans into 2 triangles of 3 points, the dot into 12 segments
+    // The square cuts into 2 triangles of 3 points, the dot into 12 segments
     // of 3, and its white ring into a line loop of the 12 ring points.
     expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
       [0, 6],
@@ -1262,6 +1263,54 @@ describe("renderer", () => {
 
     await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
     expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("webgl cuts a concave polygon ear by ear: its triangles cover it exactly, where a fan would spill over its dent", async () => {
+    const { gl } = stubGL()
+    type P = { x: number; y: number }
+    const area = (p: P[]) =>
+      Math.abs(
+        p.reduce(
+          (sum, a, i) => sum + a.x * p[(i + 1) % p.length].y - p[(i + 1) % p.length].x * a.y,
+          0
+        )
+      ) / 2
+    // The front of a ribbon: down from the first point, along the floor, and
+    // back along a line that dips between its two last points.
+    const ribbon = [
+      { x: 100, y: 200 },
+      { x: 100, y: 300 },
+      { x: 400, y: 300 },
+      { x: 400, y: 100 },
+      { x: 300, y: 250 },
+      { x: 200, y: 100 },
+    ]
+    // A star that crosses itself has no inside to cover exactly, but it still paints.
+    const star = [0, 2, 4, 1, 3].map((k) => ({
+      x: 300 + 50 * Math.sin((k * 2 * Math.PI) / 5),
+      y: 200 - 50 * Math.cos((k * 2 * Math.PI) / 5),
+    }))
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D
+          marks={[
+            { key: "ribbon", points: ribbon, fill: "red" },
+            { key: "star", points: star, fill: "blue" },
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    const triangles = (call: number) => {
+      const xy = [...(gl.bufferData.mock.calls[call] as unknown as [number, Float32Array])[1]]
+      return Array.from({ length: xy.length / 6 }, (_, i) =>
+        [0, 1, 2].map((k) => ({ x: xy[6 * i + 2 * k], y: xy[6 * i + 2 * k + 1] }))
+      )
+    }
+    expect(triangles(0)).toHaveLength(ribbon.length - 2)
+    expect(triangles(0).reduce((sum, t) => sum + area(t), 0)).toBeCloseTo(area(ribbon))
+    expect(triangles(1)).toHaveLength(star.length - 2)
 
     await chart.unmount()
   })
@@ -1339,7 +1388,7 @@ describe("parity", () => {
         expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
         expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
       } else if (gl) {
-        // The square fans into 2 triangles of 3 points, the dot into 12 segments
+        // The square cuts into 2 triangles of 3 points, the dot into 12 segments
         // of 3, and its white ring into a line loop of the 12 ring points.
         expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
           [0, 6],
@@ -1431,6 +1480,35 @@ describe("helpers", () => {
       expect(mark.points).toHaveLength(4)
       expect(mark.tooltip).toBe(tooltip)
     }
+  })
+
+  test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {
+    let read: ReturnType<typeof useSeries> | undefined
+    function Probe(props: Parameters<typeof useSeries>[0]) {
+      read = useSeries(props)
+      return null
+    }
+    renderToString(
+      <ChartContainer3D config={{ a: { label: "A", color: "red" }, b: { color: "blue" } }}>
+        <Probe
+          data={[
+            { name: "x", a: 1, b: "n/a" },
+            { name: "y", a: 2, b: 3 },
+          ]}
+          index="name"
+          format={{ x: (name) => name.toUpperCase() }}
+        />
+      </ChartContainer3D>
+    )
+    // The series are the keys of the config; a value that is not a number stands as 0.
+    expect(read!.series).toEqual(["a", "b"])
+    expect(read!.target).toEqual({ "x-a": 1, "x-b": 0, "y-a": 2, "y-b": 3 })
+    expect(read!.values).toEqual(read!.target)
+    expect(read!.rows).toEqual({ x: 0, y: 1 })
+    expect(read!.presence).toEqual({ x: 1, y: 1 })
+    // A tick of x names its entry, one beyond them none; a series without a label shows its key.
+    expect([0, 1, 2].map(read!.labels.x)).toEqual(["X", "Y", ""])
+    expect([0, 1].map(read!.labels.z)).toEqual(["A", "b"])
   })
 })
 

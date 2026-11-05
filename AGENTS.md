@@ -107,7 +107,7 @@ Two consequences worth remembering:
 - **The core knows nothing about the charts.** It holds the container, the
   camera and its shortcuts and gizmo, the axes, the marks and their
   renderers, the tooltip and the helpers (`axis`, `linear`, `worldBox`,
-  `shade`, `faded`).
+  `shade`, `faded`, `useSeries`).
   A helper that two charts need moves here.
 
 ### The chart template
@@ -228,7 +228,9 @@ How the charts draw, so that a new one draws the same way:
   the glide is done. A mark that grows from its enter value fades in as it
   grows and out as it shrinks - its opacity a tween of its own, 1 with the
   enter value 0, handed to `faded` after `shade` - so a flat bar or a dot
-  never pops in or out at the end of a glide. Build the axes from the data the chart glides into
+  never pops in or out at the end of a glide. A point of a line - the area
+  chart - unfolds from its neighbour instead, as far as its presence, and folds
+  back into it, so the line opens and closes without a notch. Build the axes from the data the chart glides into
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a
@@ -270,7 +272,8 @@ every renderer, so text stays sharp and the theme stays in CSS.
   to compile.
 - **WebGL joins the same chain.** `"webgl"` probes
   `getContext("webgl")` and falls back to `"canvas"`. Its paint function
-  triangulates the same marks - a fan per polygon, a fan of 12 segments per
+  triangulates the same marks - a polygon ear by ear, so a concave one such
+  as the front of a ribbon fills as on the canvas, a fan of 12 segments per
   circle - draws them in paint order without a depth test, a stroke as a line
   loop over the outline, and takes its colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
   only once the projection on the CPU is what is slow.
