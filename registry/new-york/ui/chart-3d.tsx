@@ -481,8 +481,7 @@ type Placement3D = NonNullable<ChartContainer3DProps["tooltip"]>
 // The room between the pointer and its tooltip, in pixels, and the shift of
 // the tooltip on an axis: before the pointer by its own size and the room, or after it.
 const TIP_GAP = 12
-const TIP_BEFORE = `calc(-100% - ${TIP_GAP}px)`
-const TIP_AFTER = `${TIP_GAP}px`
+const shift = (isBefore: boolean) => (isBefore ? `calc(-100% - ${TIP_GAP}px)` : `${TIP_GAP}px`)
 
 /**
  * Whether a tooltip of `size` goes before the pointer at `at`, on an axis of
@@ -516,7 +515,7 @@ function useTip(placement: Placement3D) {
     const left = before(x, el.offsetWidth, width, placement.endsWith("left"))
     el.style.left = `${x}px`
     el.style.top = `${y}px`
-    el.style.translate = `${left ? TIP_BEFORE : TIP_AFTER} ${top ? TIP_BEFORE : TIP_AFTER}`
+    el.style.translate = `${shift(left)} ${shift(top)}`
     el.dataset.placement = `${top ? "top" : "bottom"}-${left ? "left" : "right"}`
     if (shows) {
       // Lays the corner out while the transition is off, then turns it on again.
