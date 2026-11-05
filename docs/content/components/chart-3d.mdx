@@ -121,7 +121,14 @@ The tooltip of a mark follows the pointer, above and to its right. Where it woul
 <ChartContainer3D config={chartConfig} tooltip="bottom-left">
 ```
 
-The tooltip is `data-slot="chart-3d-tooltip"`, and its `data-placement` names the corner it took, so CSS can style each corner.
+The tooltip is `data-slot="chart-3d-tooltip"`, and its `data-placement` names the corner it took, flipped or not - `"top-left"`, `"top-right"`, `"bottom-left"` or `"bottom-right"` - so CSS can style each corner. To square the corner that points at the pointer:
+
+```tsx
+<ChartContainer3D
+  config={chartConfig}
+  className="[&_[data-placement=top-right]]:rounded-bl-none [&_[data-placement=top-left]]:rounded-br-none [&_[data-placement=bottom-right]]:rounded-tl-none [&_[data-placement=bottom-left]]:rounded-tr-none"
+>
+```
 
 ## Focus
 

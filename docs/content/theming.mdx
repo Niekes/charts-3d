@@ -40,22 +40,22 @@ Pointing at a mark gives its element an edge - the hover highlight. It draws in 
 Every visible part of a chart carries a `data-slot`, the public hook for your
 stylesheet: restyle it, move it, hide it, without touching the component.
 
-| Slot                         | The part                                                |
-| ---------------------------- | ------------------------------------------------------- |
-| `chart-3d`                   | the container, which also takes `className`             |
-| `chart-3d-canvas`            | the canvas of the canvas and webgl renderers            |
-| `chart-3d-marks`             | the marks, as SVG                                       |
-| `chart-3d-axes`              | the box: walls, gridlines, axis lines, ticks            |
-| `chart-3d-labels`            | the labels beside the marks                             |
-| `chart-3d-tooltip`           | the tooltip (a `tooltip` prop sets its corner)          |
-| `chart-3d-legend`            | the legend below the chart                              |
-| `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner)  |
-| `chart-3d-shortcuts`         | the corner that holds the keyboard button and its panel |
-| `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)       |
-| `chart-3d-shortcuts-panel`   | the shortcut panel                                      |
-| `chart-3d-shortcuts-label`   | the label naming each row of the panel                  |
-| `chart-3d-shortcuts-rule`    | the rule between the keys of a row and its gestures     |
-| `kbd-group`, `kbd`           | the key groups and keys inside the panel                |
+| Slot                         | The part                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| `chart-3d`                   | the container, which also takes `className`                                            |
+| `chart-3d-canvas`            | the canvas of the canvas and webgl renderers                                           |
+| `chart-3d-marks`             | the marks, as SVG                                                                      |
+| `chart-3d-axes`              | the box: walls, gridlines, axis lines, ticks                                           |
+| `chart-3d-labels`            | the labels beside the marks                                                            |
+| `chart-3d-tooltip`           | the tooltip (a `tooltip` prop sets its corner, `data-placement` names the one it took) |
+| `chart-3d-legend`            | the legend below the chart                                                             |
+| `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner)                                 |
+| `chart-3d-shortcuts`         | the corner that holds the keyboard button and its panel                                |
+| `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)                                      |
+| `chart-3d-shortcuts-panel`   | the shortcut panel                                                                     |
+| `chart-3d-shortcuts-label`   | the label naming each row of the panel                                                 |
+| `chart-3d-shortcuts-rule`    | the rule between the keys of a row and its gestures                                    |
+| `kbd-group`, `kbd`           | the key groups and keys inside the panel                                               |
 
 For example, to move the keyboard button and its panel into the lower left corner:
 
