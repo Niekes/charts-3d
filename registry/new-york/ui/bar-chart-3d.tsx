@@ -7,7 +7,6 @@ import {
   Axes3D,
   Marks3D,
   axis,
-  center,
   cubeMarks,
   faded,
   pad,
@@ -221,7 +220,6 @@ function barMarks({
   opacity: number
 }) {
   const tooltip = {
-    at: center(faces.find((face) => face.face === "top")!),
     title,
     items: [{ label, value, color }],
   }

@@ -12,7 +12,6 @@ import {
   Labels3D,
   Marks3D,
   axis,
-  center,
   cubeMarks,
   faded,
   intoWorld,
@@ -23,6 +22,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  type ChartContainer3DProps,
 } from "@/registry/new-york/ui/chart-3d"
 
 // React reports state updates outside act() unless the environment says it supports it.
@@ -56,7 +56,7 @@ const marks = [
       { x: 100, y: 200 },
     ],
     fill: "red",
-    tooltip: { at: { x: 150, y: 150 }, items: [{ label: "Square", value: 1 }] },
+    tooltip: { items: [{ label: "Square", value: 1 }] },
   },
   {
     key: "dot",
@@ -64,7 +64,7 @@ const marks = [
     r: 10,
     fill: "blue",
     stroke: "white",
-    tooltip: { at: { x: 400, y: 100 }, items: [{ label: "Dot", value: 2 }] },
+    tooltip: { items: [{ label: "Dot", value: 2 }] },
   },
 ]
 
@@ -822,7 +822,7 @@ describe("pointer", () => {
   test("a move within a mark keeps its tooltip, leaving the chart takes it away", async () => {
     const said = {
       ...marks[0],
-      tooltip: { at: { x: 0, y: 0 }, items: [{ label: "Note", value: "n/a" }] },
+      tooltip: { items: [{ label: "Note", value: "n/a" }] },
     }
     const chart = await mount(
       <ChartContainer3D config={{}}>
@@ -952,6 +952,118 @@ describe("Marks3D", () => {
     expect(chart.host.textContent).toContain("Dot")
     await move(300, 300)
     expect(chart.host.textContent).not.toMatch(/Square|Dot/)
+
+    await chart.unmount()
+  })
+})
+
+describe("tooltip", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  /** A mark the full height of the chart from `from` to `to`, whose tooltip says `key`. */
+  const column = (key: string, from = 0, to = 640) => ({
+    key,
+    points: [
+      { x: from, y: 0 },
+      { x: to, y: 0 },
+      { x: to, y: 400 },
+      { x: from, y: 400 },
+    ],
+    fill: "red",
+    tooltip: { items: [{ label: key, value: 1 }] },
+  })
+
+  /** Gives every tooltip a size in pixels, as jsdom lays nothing out. */
+  const size = (width: number, height: number) => {
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(width)
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(height)
+  }
+
+  /** Mounts a chart of `marks`, 640 by 400, and hands back where its tooltip sits for the pointer at x, y. */
+  async function tooltipAt(props: Partial<ChartContainer3DProps> = {}, marks = [column("all")]) {
+    const chart = await mount(
+      <ChartContainer3D config={{}} {...props}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const move = async (x: number, y: number) => {
+      await chart.send(pointer("pointermove", x, y))
+      const tip = chart.host.querySelector<HTMLElement>('[data-slot="chart-3d-tooltip"]')!
+      const { left, top, translate } = tip.style
+      return { left, top, translate, placement: tip.dataset.placement }
+    }
+    return { move, unmount: chart.unmount }
+  }
+
+  // The shift of the tooltip on an axis: before the pointer by its size and the gap, or after it.
+  const before = "calc(-100% - 12px)"
+  const after = "12px"
+
+  test("follows the pointer, above and to its right", async () => {
+    const chart = await tooltipAt()
+    expect(await chart.move(150, 150)).toEqual({
+      left: "150px",
+      top: "150px",
+      translate: `${after} ${before}`,
+      placement: "top-right",
+    })
+    // A move within the mark moves the tooltip with it.
+    expect(await chart.move(160, 170)).toMatchObject({ left: "160px", top: "170px" })
+
+    await chart.unmount()
+  })
+
+  test("flips to the other side on each axis alone where it would leave the chart", async () => {
+    size(120, 60)
+    const chart = await tooltipAt()
+    // The tooltip needs 132 by 72 with the gap.
+    expect(await chart.move(600, 200)).toMatchObject({
+      placement: "top-left",
+      translate: `${before} ${before}`,
+    })
+    expect(await chart.move(100, 30)).toMatchObject({
+      placement: "bottom-right",
+      translate: `${after} ${after}`,
+    })
+    expect(await chart.move(600, 30)).toMatchObject({
+      placement: "bottom-left",
+      translate: `${before} ${after}`,
+    })
+    expect(await chart.move(100, 200)).toMatchObject({ placement: "top-right" })
+
+    await chart.unmount()
+  })
+
+  test("a tooltip too wide for either side stays where it has more room", async () => {
+    size(400, 60)
+    const chart = await tooltipAt()
+    // 340 to the right, 300 to the left: neither fits, the right has more.
+    expect(await chart.move(300, 200)).toMatchObject({ placement: "top-right" })
+    expect(await chart.move(400, 200)).toMatchObject({ placement: "top-left" })
+
+    await chart.unmount()
+  })
+
+  test("tooltip sets the placement, which flips the same way", async () => {
+    size(120, 60)
+    const chart = await tooltipAt({ tooltip: "bottom-left" })
+    expect(await chart.move(300, 200)).toMatchObject({ placement: "bottom-left" })
+    expect(await chart.move(50, 200)).toMatchObject({ placement: "bottom-right" })
+    expect(await chart.move(300, 380)).toMatchObject({ placement: "top-left" })
+
+    await chart.unmount()
+  })
+
+  test("a wider tooltip of the next mark flips as soon as it shows", async () => {
+    // Two marks side by side, as on a surface; the tooltip of the right one is wider.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.textContent!.includes("wide") ? 200 : 50
+    })
+    const chart = await tooltipAt({}, [column("narrow", 0, 505), column("wide", 505, 640)])
+    expect(await chart.move(500, 200)).toMatchObject({ placement: "top-right" })
+    expect(await chart.move(510, 200)).toMatchObject({ placement: "top-left" })
 
     await chart.unmount()
   })
@@ -1304,17 +1416,13 @@ describe("helpers", () => {
     expect(shade([...face].reverse(), "red")).toBe(shade(face, "red"))
   })
 
-  test("center is the mean of the projected points", () => {
-    expect(center([point(0, 0, 0), point(2, 4, 0)])).toEqual({ x: 1, y: 2 })
-  })
-
   test("cubeMarks shades the faces of a cube that look at the camera, each with the tooltip", () => {
     // Seen from the front, the left and above.
     const [cube] = cubes3D()
       .rotateY(Math.PI / 6)
       .rotateX(-Math.PI / 6)
       .data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
-    const tooltip = { at: { x: 0, y: 0 }, items: [] }
+    const tooltip = { items: [] }
     const marks = cubeMarks("c", cube.faces, "red", tooltip)
 
     expect(marks.map((m) => m.key).sort()).toEqual(["c-front", "c-left", "c-top"])
@@ -1719,7 +1827,7 @@ describe("focus", () => {
       { x, y: 150 },
     ],
     fill: "red",
-    tooltip: { at: { x: x + 25, y: 125 }, items: [{ label: `tip-${key}`, value: 1 }] },
+    tooltip: { items: [{ label: `tip-${key}`, value: 1 }] },
     groups,
   })
   const squares = [

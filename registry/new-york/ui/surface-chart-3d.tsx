@@ -15,7 +15,6 @@ import {
   Axes3D,
   Marks3D,
   axis,
-  center,
   intoWorld,
   linear,
   pad,
@@ -137,7 +136,7 @@ function quadMark(
       seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
     // Its group is the cell, so hovering it lights the cell alone.
     groups: [quad.plane],
-    tooltip: { at: center(quad), items: [{ label: title ?? "value", value: height }] },
+    tooltip: { items: [{ label: title ?? "value", value: height }] },
   }
 }
 

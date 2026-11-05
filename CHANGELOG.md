@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tooltip` on `ChartContainer3D`: the corner beside the pointer the tooltip
+  sits at, `"top-right"` by default. Where the tooltip would leave the chart
+  it flips to the other side, on each axis alone, and its `data-placement`
+  names the corner it took (ADR-0005).
+
+### Changed
+
+- **Breaking:** the tooltip follows the pointer instead of sitting above an
+  anchor of its mark, so `Tooltip3D` has no `at` any more.
+
+### Removed
+
+- **Breaking:** `center` in the core, which computed the anchor of a tooltip.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

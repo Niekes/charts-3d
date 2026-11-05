@@ -93,7 +93,6 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       // Ringed by the background, so that points in front stand out.
       stroke: faded("var(--background)", opacity[p.name]),
       tooltip: {
-        at: p.projected,
         title: series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
         items: (["x", "y", "z"] as const).map((a) => ({
           label: titles?.[a] ?? fields[a],

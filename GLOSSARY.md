@@ -116,6 +116,19 @@ The pointer over a mark: its tooltip shows and its groups come into focus,
 and both go when the pointer leaves the mark or the chart.
 _Avoid_: mouseover, highlight state
 
+**Tooltip**:
+The box that names the mark under the pointer and its values. It follows
+the pointer at its placement, and comes and goes with the hover, at once.
+_Avoid_: popover, hover card, label (a label sits beside a mark, a tooltip
+beside the pointer)
+
+**Placement**:
+The corner beside the pointer the tooltip sits at - above and to the right,
+unless the chart says otherwise. Where the tooltip would leave the chart it
+flips to the other side, on each axis alone and only where that side has
+more room: past the right edge it sits to the left, past the top below.
+_Avoid_: alignment, anchor, position
+
 **Focus**:
 The element under the pointer, highlighted with an edge in its own color,
 lightened - or in the focus color, where one is set; the fill never changes.
