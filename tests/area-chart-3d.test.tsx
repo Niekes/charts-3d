@@ -295,6 +295,31 @@ describe("AreaChart3D transitions", () => {
     await unfolds([flat[0], flat[1], flat[3]], flat)
   })
 
+  test("an entry that comes or goes never dips below the line it unfolds from", async () => {
+    // Level with the front: the screen follows the height of the line.
+    const level = { yaw: 0, tilt: 0 }
+    const gap = [flat[0], flat[1], flat[3]]
+    const view = await mount(chart(gap, { keys: ["a"] }, level))
+    /** The screen y of the lowest point of the line, the floor of the front left out. */
+    const deepest = () => {
+      const ys = marks(view.host)
+        .find((m) => m.corners.length >= 5)!
+        .corners.map(([, y]) => y)
+      const floor = Math.max(...ys)
+      return Math.max(...ys.filter((y) => y < floor - 0.01))
+    }
+    // p, the lowest entry, stays: r unfolds from q at 11 into 10.5 and folds back.
+    const lowest = deepest()
+    for (const rows of [flat, gap]) {
+      await view.render(chart(rows, { keys: ["a"] }, level))
+      for (const _ of [1, 2, 3, 4, 5, 6, 7]) {
+        await act(() => vi.advanceTimersByTime(100))
+        expect(deepest()).toBeLessThan(lowest + 0.5)
+      }
+    }
+    await view.unmount()
+  })
+
   test("the box deepens with a new series gradually, never at once", async () => {
     // From the side the screen follows the z of the box, so the walls span its depth.
     const side = { yaw: Math.PI / 2, tilt: Math.PI / 6 }

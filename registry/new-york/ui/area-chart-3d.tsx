@@ -113,7 +113,10 @@ type RibbonFace = Polygon<
  * the ones still gliding away among them, at its gliding row and value. An
  * entry that comes or goes unfolds from the point before it - the one after
  * it, at the start of the line - and folds back into it, as far as its
- * `presence`, so the ribbon opens and closes without a step. Every
+ * `presence`, so the ribbon opens and closes without a step. Its value comes
+ * from nothing as its presence grows - the two glide in step - so the part of
+ * its neighbour it has not yet left is added: the point heads straight from
+ * the neighbour to its own, never down towards the floor. Every
  * point stays within the gliding `ends` of the x axis, so a line with no
  * neighbour to unfold from - one that was empty - grows inside the box
  * instead of standing beyond its walls. A point only one of the tweens still
@@ -136,11 +139,11 @@ function linePoints(
   return own
     .map((p) => {
       if (p.seen === 1) anchor = p
-      const { x, value } = anchor ?? p
+      const { x } = anchor ?? p
       return {
         name: p.name,
         x: Math.min(hi, Math.max(lo, x + p.seen * (p.x - x))),
-        value: value + p.seen * (p.value - value),
+        value: p.value + (1 - p.seen) * (anchor?.value ?? 0),
       }
     })
     .sort((a, b) => a.x - b.x)
