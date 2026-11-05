@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `area-chart-3d`: the area under the line of every series, pushed back into a
+  ribbon, one ribbon per series along z. Ribbons are painted back to front by
+  the planes that separate them, so the order stays exact from every angle; an
+  entry that comes or goes unfolds from its neighbour and folds back into it.
+- `useSeries` in the core: the entries of a chart along x and its series along
+  z, as the bar and the area chart lay them out, with their values, rows and
+  presence gliding by name and the labels of their ticks.
 - `tooltip` on `ChartContainer3D`: the corner beside the pointer the tooltip
   sits at, `"top-right"` by default. Where the tooltip would leave the chart
   it flips to the other side, on each axis alone, and its `data-placement`
@@ -16,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The webgl renderer cuts a polygon into triangles ear by ear instead of
+  fanning it out, so a concave mark - the front of a ribbon - fills as it does
+  on SVG and canvas instead of spilling over its dents.
 - **Breaking:** the tooltip follows the pointer instead of sitting above an
   anchor of its mark, so `Tooltip3D` has no `at` any more.
 

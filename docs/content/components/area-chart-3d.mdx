@@ -1,0 +1,123 @@
+---
+title: Area Chart 3D
+description: Areas pushed back into ribbons, one per series.
+---
+
+import AreaChart3DDemo from "@/docs/examples/area-chart-3d-demo"
+import AreaChart3DUpdateDemo from "@/docs/examples/area-chart-3d-update-demo"
+import AreaChart3DEnterDemo from "@/docs/examples/area-chart-3d-enter-demo"
+import AreaChart3DRenderersDemo from "@/docs/examples/area-chart-3d-renderers-demo"
+import AreaChart3DManyDemo from "@/docs/examples/area-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <AreaChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/area-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+Every series is the area under its line, from the floor of the box, pushed
+back into a ribbon: the entries run along x, one ribbon per series along z.
+Pointing at a face highlights that face alone; a face of the top tells the values
+at its two ends.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/area-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `AreaChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array lucide-react
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/area-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/area-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the ribbons morph into new prices over the `animationDuration`
+of their container, and the y axis scales along. The chart glides the prices,
+not the faces, so every frame is projected, culled and ordered anew.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <AreaChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/area-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring, drop and reorder whole entries - a point follows the
+name of its entry, in the `index` field. An added year unfolds from the year
+before it, so the ribbons grow out of their ends while the x axis makes room,
+its line growing to the new tick, its label fading in; a removed one folds
+back into the year before it, the mirror of its entering, while the axis
+closes the gap (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <AreaChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/area-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG. The front of a ribbon is one concave polygon, which WebGL cuts into triangles ear by ear.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <AreaChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/area-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Twelve sensors over two hundred days - about 2,400 faces on the tops of their
+ribbons - and the chart stays interactive. The scene is one list of marks, so the demo starts on
+`"canvas"`, the renderer for many marks, and the select shows the same scene on
+SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <AreaChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/area-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table path="../../../registry/new-york/ui/area-chart-3d.tsx" name="AreaChart3DProps" />

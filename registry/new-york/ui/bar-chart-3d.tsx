@@ -10,6 +10,7 @@ import {
   cubeMarks,
   faded,
   pad,
+  useSeries,
   useChart3D,
   useTween,
   useTweenAxes,
@@ -48,20 +49,20 @@ export function BarChart3D<T extends Record<string, unknown>>({
   index,
   keys,
   barSize = 0.6,
-  format = {},
+  format,
   titles,
 }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const series = keys ?? Object.keys(config)
-  const names = data.map((d) => String(d[index] ?? ""))
   // A value that is not a number stands as no bar, one of height 0; a new one
-  // grows from the floor, and a gone one shrinks back into it.
-  const target = barValues(names, data, series)
-  const values = useTween(target, 0)
-  // The rows glide to their new cells when the data reorders; a gone row stands
-  // in its cell while its bars shrink and fade away, so a flat bar never pops.
-  const rows = useTween(Object.fromEntries(names.map((name, i) => [name, i])))
-  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
+  // grows from the floor, and a gone one shrinks back into it. The rows glide
+  // to their new cells when the data reorders; a gone row stands in its cell
+  // while its bars shrink and fade away, so a flat bar never pops.
+  const { series, target, values, rows, presence, labels } = useSeries({
+    data,
+    index,
+    keys,
+    format,
+  })
   const cells = barCells(rows, series, values)
 
   const box = barBox(data.length, series.length, Object.values(target))
@@ -75,18 +76,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
 
   return (
     <>
-      <Axes3D
-        spec={spec}
-        world={world}
-        titles={titles}
-        format={{
-          // The ticks along x are the indices of the entries; one of a gone
-          // row has no entry any more and fades out unnamed.
-          x: (i) => (format.x ?? String)(String(data[i]?.[index] ?? "")),
-          y: format.y,
-          z: (j) => config[series[j]]?.label ?? series[j],
-        }}
-      />
+      <Axes3D spec={spec} world={world} titles={titles} format={labels} />
       <Marks3D
         marks={bars.flatMap((bar) =>
           barMarks({
@@ -96,7 +86,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
             title: bar.name,
             label: config[bar.key]?.label ?? bar.key,
             value: bar.value,
-            opacity: opacity[bar.name],
+            opacity: presence[bar.name],
           })
         )}
       />
@@ -133,22 +123,6 @@ function barCells(rows: Record<string, number>, series: string[], values: Record
       const value = values[`${name}-${key}`]
       return value === undefined ? [] : [{ name, x, j, key, value }]
     })
-  )
-}
-
-/**
- * The value of every cell of the chart, keyed as its mark: the name of its
- * entry along x and the series `key` along z, standing as 0 where the entry
- * holds none. Keyed by name, not place, so a bar follows its entry when the
- * data reorders.
- */
-function barValues<T extends Record<string, unknown>>(
-  names: string[],
-  data: T[],
-  series: string[]
-) {
-  return Object.fromEntries(
-    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, Number(d[key]) || 0]))
   )
 }
 

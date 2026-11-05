@@ -1150,7 +1150,7 @@ function colorBytes(
 
 /**
  * Paints `marks` on a webgl `canvas`, from the view box of `width`×`height` to
- * the pixels of the canvas: a fan per polygon, a fan of 12 segments per
+ * the pixels of the canvas: a polygon ear by ear, a fan of 12 segments per
  * circle, in paint order and without a depth test, the color of each as bytes.
  */
 function paintGL(
@@ -1208,14 +1208,43 @@ const ringOf = (c: Point2D, r: number) =>
     y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
   }))
 
-/** The triangles of `mark` as view-box points: a fan per polygon, a fan of 12 segments per circle. */
+/** The triangles of `mark` as view-box points: its polygon ear by ear, a fan of 12 segments per circle. */
 function trianglesOf(mark: Mark3D): Point2D[] {
   const { points, r } = mark
-  if (r !== undefined) {
-    const ring = ringOf(points[0], r)
-    return ring.flatMap((p, i) => [points[0], p, ring[(i + 1) % 12]])
+  if (r === undefined) return earsOf(points)
+  const ring = ringOf(points[0], r)
+  return ring.flatMap((p, i) => [points[0], p, ring[(i + 1) % 12]])
+}
+
+/** Twice the signed area of the triangle `a`, `b`, `c`: its sign tells which way it turns, 0 on a line. */
+const turn = (a: Point2D, b: Point2D, c: Point2D) =>
+  (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+
+/**
+ * The triangles of a polygon, cut off ear by ear, so a concave one - the
+ * front of a ribbon - fills as on the canvas, where a fan would spill over
+ * its dents. An ear is a corner that turns the way of the polygon, or not at
+ * all, with no other corner inside it; a simple polygon always has one. One
+ * that crosses itself may have none, and then loses its first corner.
+ */
+function earsOf(points: Point2D[]): Point2D[] {
+  const left = [...points]
+  const way = Math.sign(left.reduce((sum, p, i) => sum + turn(left[0], p, left[i + 1] ?? p), 0))
+  const triangles: Point2D[] = []
+  while (left.length > 3) {
+    const corner = (i: number) => [left.at(i - 1)!, left[i], left[(i + 1) % left.length]]
+    const ear = left.findIndex((_, i) => {
+      const [a, b, c] = corner(i)
+      if (way * turn(a, b, c) < 0) return false
+      return !left.some(
+        (p) => way * turn(a, b, p) > 0 && way * turn(b, c, p) > 0 && way * turn(c, a, p) > 0
+      )
+    })
+    const i = Math.max(0, ear)
+    triangles.push(...corner(i))
+    left.splice(i, 1)
   }
-  return points.slice(1, -1).flatMap((p, i) => [points[0], p, points[i + 2]])
+  return [...triangles, ...left]
 }
 
 /** The outline of `mark` as view-box points: its polygon, or the ring of its circle. */
@@ -2164,6 +2193,51 @@ function faded(color: string, opacity: number) {
   return percent >= 100 ? color : `color-mix(in oklab, ${color} ${percent}%, transparent)`
 }
 
+/**
+ * The entries of `data` and their series, for a chart that lays the entries
+ * out along x and the series along z, as the bar and the area chart do. The
+ * name of every entry comes from its `index` field, the series are `keys` or
+ * the keys of the config, and the `target` of every cell is keyed by the name
+ * of its entry and its series, so it follows its entry when the data
+ * reorders; a value that is not a number stands as 0. Each glides by name:
+ * `values` from 0, `rows` - the place of every entry - to where it stands, and
+ * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
+ * still among them. `labels` name the ticks: the entry at a tick of x, through
+ * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
+ * tick of z.
+ */
+function useSeries<T extends Record<string, unknown>>({
+  data,
+  index,
+  keys,
+  format = {},
+}: {
+  data: T[]
+  index: keyof T & string
+  keys?: string[]
+  format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
+}) {
+  const { config } = useChart3D()
+  const series = keys ?? Object.keys(config)
+  const names = data.map((d) => String(d[index] ?? ""))
+  const target = Object.fromEntries(
+    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, Number(d[key]) || 0]))
+  )
+  const labels = {
+    x: (i: number) => (format.x ?? String)(names[i] ?? ""),
+    y: format.y,
+    z: (j: number) => config[series[j]]?.label ?? series[j],
+  }
+  return {
+    series,
+    target,
+    values: useTween(target, 0),
+    rows: useTween(Object.fromEntries(names.map((name, i) => [name, i]))),
+    presence: useTween(Object.fromEntries(names.map((name) => [name, 1])), 0),
+    labels,
+  }
+}
+
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(id: string, faces: CubeFace[], color: string, tooltip: Tooltip3D): Mark3D[] {
   // The faces point outwards: a convex shape shows the ones facing the camera.
@@ -2190,6 +2264,7 @@ export {
   intoWorld,
   shade,
   faded,
+  useSeries,
   cubeMarks,
   useTween,
   useTweenAxes,
