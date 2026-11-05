@@ -20,6 +20,7 @@ import {
   useSeries,
   shade,
   useChart3D,
+  useTween,
   useTweenAxes,
   worldBox,
   type Mark3D,
@@ -67,8 +68,10 @@ export function AreaChart3D<T extends Record<string, unknown>>({
     format,
   })
   const spec = useTweenAxes(areaAxes(data.length, series.length, Object.values(target)))
-  // The box deepens with the series, so a ribbon stays a ribbon.
-  const world = worldBox(spec, Math.min(1, Math.max(0.25, series.length / 6)))
+  // The box deepens with the series, so a ribbon stays a ribbon, and glides
+  // there with the axes.
+  const depth = useTween({ depth: Math.min(1, Math.max(0.25, series.length / 6)) }).depth
+  const world = worldBox(spec, depth)
   const polygons = intoWorld(polygons3D().camera(camera), world)
   // The x axis keeps half a row beyond the first and the last entry.
   const ends = [spec.x.domain[0] + 0.5, spec.x.domain[1] - 0.5]
@@ -202,8 +205,9 @@ function painted(faces: RibbonFace[], toward: number) {
 /**
  * The marks of one ribbon, shaded in the color of its series. Each face is a
  * group of its own, so hovering highlights the face under the pointer alone.
- * Every face names the series; a segment of the top tells the values at its
- * two ends.
+ * A segment of the top is keyed by the entry it starts at, so it keeps its
+ * mark when entries come or go before it. Every face names the series; a
+ * segment of the top tells the values at its two ends.
  */
 function ribbonMarks(
   key: string,
@@ -214,16 +218,19 @@ function ribbonMarks(
 ): Mark3D[] {
   const color = `var(--color-${key})`
   const spans = (f: RibbonFace) => (f.face === "top" ? [line[f.segment], line[f.segment + 1]] : [])
-  return faces.map((f) => ({
-    key: `${key}-${f.face}-${f.segment}`,
-    points: f.map((p) => p.projected),
-    fill: shade(f, color),
-    groups: [`${key}-${f.face}-${f.segment}`],
-    tooltip: {
-      title: label,
-      items: spans(f).map((p) => ({ label: name(p.name), value: p.value, color })),
-    },
-  }))
+  return faces.map((f) => {
+    const id = f.face === "top" ? `${key}-top-${line[f.segment].name}` : `${key}-${f.face}`
+    return {
+      key: id,
+      points: f.map((p) => p.projected),
+      fill: shade(f, color),
+      groups: [id],
+      tooltip: {
+        title: label,
+        items: spans(f).map((p) => ({ label: name(p.name), value: p.value, color })),
+      },
+    }
+  })
 }
 
 /**

@@ -295,6 +295,49 @@ describe("AreaChart3D transitions", () => {
     await unfolds([flat[0], flat[1], flat[3]], flat)
   })
 
+  test("the box deepens with a new series gradually, never at once", async () => {
+    // From the side the screen follows the z of the box, so the walls span its depth.
+    const side = { yaw: Math.PI / 2, tilt: Math.PI / 6 }
+    const view = await mount(chart(data, { keys: ["a"] }, side))
+    const depth = () => {
+      const xs = [...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')].flatMap(
+        (el) =>
+          [...el.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
+      )
+      return Math.max(...xs) - Math.min(...xs)
+    }
+    const shallow = depth()
+    await view.render(chart(data, { keys: ["a", "b"] }, side))
+    expect(depth()).toBeCloseTo(shallow, 0)
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = depth()
+    await act(() => vi.advanceTimersByTime(400))
+    expect(mid).toBeGreaterThan(shallow + 1)
+    expect(depth()).toBeGreaterThan(mid + 1)
+    await view.unmount()
+  })
+
+  test("a face of the top keeps its mark when an entry is inserted before it", async () => {
+    const view = await mount(chart(flat.slice(1), { keys: ["a"] }))
+    const segment = async (el: Element) => {
+      const [x, y] = middle(marks(view.host).find((m) => m.el === el)!.corners)
+      await view.point([x, y])
+      return view.host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent
+    }
+    // The face of the segment from r to s, found by what it tells.
+    const tops = marks(view.host).filter((m) => m.corners.length === 4)
+    let face: Element | undefined
+    for (const m of tops) if ((await segment(m.el)) === "Ar10.5s11") face = m.el
+    expect(face).toBeDefined()
+
+    await view.render(chart(flat, { keys: ["a"] }))
+    await act(() => vi.advanceTimersByTime(700))
+    // The same element still draws the segment from r to s, not the one before it.
+    expect(face!.isConnected).toBe(true)
+    expect(await segment(face!)).toBe("Ar10.5s11")
+    await view.unmount()
+  })
+
   test("entries and series swapped together: a point only one tween knows stays unseen, no number breaks", async () => {
     const view = await mount(chart(data, { keys: ["a"] }))
     // z leaves while the series swaps from a to b: the leaving entry has no
