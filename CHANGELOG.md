@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tooltip` on every chart: a function of what the mark would say, a title
+  and its items, and of the data behind the mark - the entry and series key
+  of a bar, the entry of a point, the series key and the spanned entries of
+  a face of a ribbon, the row, column and height of a cell - that returns
+  what it says, or `null` for nothing. It runs when the pointer lands on the
+  mark (ADR-0006).
+- `Mark3D.tooltip` may be a function, which the core calls when the pointer
+  lands on the mark, so a chart with thousands of marks pays for one tooltip
+  per hover, not one per mark per frame.
+- `useSeries` hands back `entries`, the entry behind every name in the data.
+
+### Changed
+
+- The tooltip of a mark is built from the data behind it: its values read
+  as the ticks name them through `format`, and the entry of a bar as the
+  ticks of x name it. The core sets the tooltip when the pointer lands on a
+  mark and a glide never updates it, so it used to freeze a mid-glide number.
+- A mark on its way out of the data - a bar, a point, a segment of a ribbon
+  or a cell fading away - says nothing on hover.
+
 ## [0.6.0] - 2026-11-05
 
 ### Added

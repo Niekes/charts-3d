@@ -26,7 +26,11 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   the webgl renderer paint it and the hover hit-tests it, whatever the
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
-- **Hover comes from the core.** Give every mark a `tooltip` and `groups`
+- **Hover comes from the core.** Give every mark a `tooltip` - a function
+  the core calls when the pointer lands on it, built from the data behind the
+  mark as the ticks name it through `format` and passed through the chart's
+  `tooltip` prop with that data, so the reader can say otherwise (ADR-0006);
+  a mark whose entry has left the data gets none - and `groups`
   naming what is highlighted together - the bar alone in the bar chart, the
   single point in the scatter -
   so that in every chart, while the pointer is on a mark, its tooltip shows and

@@ -40,3 +40,7 @@ the theming page grows with it - `evaluate-chart` checks both. The props are
 semver, as AGENTS.md records. The `shortcuts` button corner, the `help` icon,
 a tooltip value formatter and cursor custom properties are the next rungs to
 climb, in that order, when asked.
+
+Amended 2026-11-08: the tooltip followed, as a function per chart of what
+the mark would say and the data behind it (ADR-0006), in place of the value
+formatter: a formatter alone left the labels and the rows fixed.

@@ -117,10 +117,13 @@ and both go when the pointer leaves the mark or the chart.
 _Avoid_: mouseover, highlight state
 
 **Tooltip**:
-The box that names the mark under the pointer and its values. It follows
-the pointer at its placement, and comes and goes with the hover, at once.
+The box that names the mark under the pointer and its values: a title and
+its items, a label and a value each. What it says the chart decides, from
+the data behind the mark, unless the app says otherwise; where it sits is
+its placement. It follows the pointer and comes and goes with the hover, at
+once. A mark on its way out of the data has none.
 _Avoid_: popover, hover card, label (a label sits beside a mark, a tooltip
-beside the pointer)
+beside the pointer), rows (a row is a row of bars)
 
 **Placement**:
 The corner beside the pointer the tooltip sits at - above and to the right,
