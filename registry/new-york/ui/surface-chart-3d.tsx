@@ -152,16 +152,16 @@ function cellTooltip(
     tooltip = (tip) => tip,
   }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  const heights = quad.flatMap((p) => data[p.r]?.[p.c] ?? [])
-  if (heights.length < quad.length) return undefined
-  const value = heights.reduce((sum, y) => sum + y, 0) / heights.length
-  const row = Math.min(...quad.map((p) => p.r))
-  const column = Math.min(...quad.map((p) => p.c))
-  return () =>
-    tooltip(
+  if (quad.some((p) => data[p.r]?.[p.c] === undefined)) return undefined
+  return () => {
+    const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
+    const row = Math.min(...quad.map((p) => p.r))
+    const column = Math.min(...quad.map((p) => p.c))
+    return tooltip(
       { items: [{ label: titles.y ?? "value", value: format.y?.(value) ?? value }] },
       { row, column, value }
     )
+  }
 }
 
 /**

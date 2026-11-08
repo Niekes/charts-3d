@@ -43,4 +43,4 @@ climb, in that order, when asked.
 
 Amended 2026-11-08: the tooltip followed, as a function per chart of what
 the mark would say and the data behind it (ADR-0006), in place of the value
-formatter: a formatter alone left the labels and the rows fixed.
+formatter: a formatter alone left the labels and the items fixed.

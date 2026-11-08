@@ -435,6 +435,34 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("mid-glide, a bar tells the value of the data, not the gliding number", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (a: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={[{ name: "x", a }]} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    await render(100)
+    await act(() => vi.advanceTimersByTime(700))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+
+    await render(40)
+    await act(() => vi.advanceTimersByTime(300))
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, ...lastFace(host) }))
+    )
+    expect(tip(host)).toBe("xA40")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a bar whose entry has left the data says nothing on hover; the others still do", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))

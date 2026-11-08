@@ -1532,6 +1532,10 @@ describe("helpers", () => {
     expect(read!.target).toEqual({ "x-a": 1, "x-b": 0, "y-a": 2, "y-b": 3 })
     expect(read!.values).toEqual(read!.target)
     expect(read!.rows).toEqual({ x: 0, y: 1 })
+    expect([...read!.entries]).toEqual([
+      ["x", { name: "x", a: 1, b: "n/a" }],
+      ["y", { name: "y", a: 2, b: 3 }],
+    ])
     expect(read!.presence).toEqual({ x: 1, y: 1 })
     // A tick of x names its entry, one beyond them none; a series without a label shows its key.
     expect([0, 1, 2].map(read!.labels.x)).toEqual(["X", "Y", ""])

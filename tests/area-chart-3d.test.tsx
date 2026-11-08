@@ -226,10 +226,15 @@ describe("AreaChart3D tooltip", () => {
   test("tooltip makes what a face says from the default and the series and entries behind it", async () => {
     type Entry = (typeof data)[number]
     const seen: { key: string; entries: Entry[] }[] = []
+    const given: { title: unknown; items: unknown[] }[] = []
     const view = await mount(
       chart(data, {
-        tooltip: (tip: { items: unknown[] }, face: { key: string; entries: Entry[] }) => {
+        tooltip: (
+          tip: { title: unknown; items: unknown[] },
+          face: { key: string; entries: Entry[] }
+        ) => {
           seen.push(face)
+          given.push(tip)
           return { title: `${face.key}:${face.entries.map((e) => e.name).join("")}`, items: [] }
         },
       })
@@ -240,6 +245,11 @@ describe("AreaChart3D tooltip", () => {
     expect(seen[0].key).toBe("b")
     expect(seen[0].entries).toHaveLength(2)
     expect(data.indexOf(seen[0].entries[1])).toBe(data.indexOf(seen[0].entries[0]) + 1)
+    // The default it was handed: the series, and an item per spanned entry with its value of b.
+    expect(given[0].title).toBe("B")
+    expect(given[0].items).toEqual(
+      seen[0].entries.map((e) => ({ label: e.name, value: e.b, color: "var(--color-b)" }))
+    )
     expect(tip(view.host)).toBe(`b:${seen[0].entries.map((e) => e.name).join("")}`)
     const [x, y] = middle(front(view.host).corners.slice(1, 3))
     await view.point([x, y - 3])
@@ -416,6 +426,29 @@ describe("AreaChart3D transitions", () => {
     // The same element still draws the segment from r to s, not the one before it.
     expect(face!.isConnected).toBe(true)
     expect(await segment(face!)).toBe("Ar10.5s11")
+    await view.unmount()
+  })
+
+  test("mid-glide, a segment tells the values of the data, not the gliding numbers", async () => {
+    const view = await mount(chart(flat, { keys: ["a"] }))
+    const says = async (el: Element) => {
+      await view.point(middle(marks(view.host).find((m) => m.el === el)!.corners))
+      return view.host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+    }
+    const tops = () => marks(view.host).filter((m) => m.corners.length === 4)
+    let last: Element | undefined
+    for (const m of tops()) if ((await says(m.el)) === "Ar10.5s11") last = m.el
+    expect(last).toBeDefined()
+
+    // s rises to 12: mid-glide the segment tells 12 at once.
+    await view.render(
+      chart(
+        flat.map((p) => (p.name === "s" ? { ...p, a: 12 } : p)),
+        { keys: ["a"] }
+      )
+    )
+    await act(() => vi.advanceTimersByTime(300))
+    expect(await says(last!)).toBe("Ar10.5s12")
     await view.unmount()
   })
 
