@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react"
+import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
@@ -118,6 +118,132 @@ describe("SurfaceChart3D", () => {
         { x: [0, 2], z: [0, 2] }
       )
     ).toBeLessThan(5)
+  })
+})
+
+describe("SurfaceChart3D tooltip", () => {
+  const tip = (host: HTMLElement) =>
+    host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+  const data = [
+    [1, 2],
+    [3, 4],
+  ]
+
+  /** Mounts `element` and puts the pointer on its first cell. */
+  async function hovered(element: ReactElement) {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () => root.render(element))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const quad = [...svg.querySelectorAll("path")].find((p) =>
+      p.getAttribute("fill")?.startsWith("color-mix")
+    )!
+    const corners = quad.getAttribute("d")!.slice(1, -1).split("L")
+    const [clientX, clientY] = [0, 1].map(
+      (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+    )
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    )
+    const unmount = async () => {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+    return { host, unmount }
+  }
+
+  test("tooltip makes what a cell says from the default and the row, column and value behind it", async () => {
+    const seen: { row: number; column: number; value: number }[] = []
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={data}
+          tooltip={(tip, cell) => {
+            seen.push(cell)
+            return { ...tip, title: `${cell.row},${cell.column}` }
+          }}
+        />
+      </ChartContainer3D>
+    )
+    // The one cell spans the four heights, so its value is their mean.
+    expect(seen).toEqual([{ row: 0, column: 0, value: 2.5 }])
+    expect(tip(view.host)).toBe("0,0value2.5")
+    await view.unmount()
+  })
+
+  test("a tooltip of null shows none", async () => {
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D data={data} tooltip={() => null} />
+      </ChartContainer3D>
+    )
+    expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await view.unmount()
+  })
+
+  test("the tooltip names the height of a cell as the ticks of y do, through format", async () => {
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D data={data} titles={{ y: "height" }} format={{ y: (v) => `${v} m` }} />
+      </ChartContainer3D>
+    )
+    expect(tip(view.host)).toBe("height2.5 m")
+    await view.unmount()
+  })
+
+  test("a cell on its way out of the data says nothing on hover; the others still do", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    await render([
+      [1, 2, 3],
+      [2, 3, 4],
+    ])
+    await act(() => vi.advanceTimersByTime(700))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const quads = () =>
+      [...svg.querySelectorAll("path")].filter((p) =>
+        p.getAttribute("fill")?.startsWith("color-mix")
+      )
+    const hover = (quad: Element) => {
+      const corners = quad.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+    const tip = () => host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+
+    // The last column leaves: mid-glide its cell still fades out, and says nothing.
+    await render([
+      [1, 2],
+      [2, 3],
+    ])
+    await act(() => vi.advanceTimersByTime(300))
+    const fading = quads().filter((p) => p.getAttribute("fill")!.includes("transparent"))
+    expect(fading).toHaveLength(1)
+    await hover(fading[0])
+    expect(tip()).toBe("")
+    await hover(quads().find((p) => !fading.includes(p))!)
+    expect(tip()).toBe("value2")
+
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    await act(async () => root.unmount())
+    host.remove()
   })
 })
 

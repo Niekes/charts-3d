@@ -15,6 +15,9 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  type ChartConfig,
+  type Mark3D,
+  type Tooltip3D,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -37,6 +40,13 @@ export type BarChart3DProps<T extends Record<string, unknown> = Record<string, u
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
   /** The titles of the axes. */
   titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
+  /**
+   * What a bar says on hover: `tooltip` is what it would say, its entry and
+   * value as the ticks name them, `data` the entry and the series key behind
+   * it; `null` shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (tooltip: Tooltip3D, data: { entry: T; key: string }) => Tooltip3D | null
 }
 
 /**
@@ -51,13 +61,14 @@ export function BarChart3D<T extends Record<string, unknown>>({
   barSize = 0.6,
   format,
   titles,
+  tooltip,
 }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
   // A value that is not a number stands as no bar, one of height 0; a new one
   // grows from the floor, and a gone one shrinks back into it. The rows glide
   // to their new cells when the data reorders; a gone row stands in its cell
   // while its bars shrink and fade away, so a flat bar never pops.
-  const { series, target, values, rows, presence, labels } = useSeries({
+  const { series, target, entries, values, rows, presence, labels } = useSeries({
     data,
     index,
     keys,
@@ -83,9 +94,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
             id: `${bar.name}-${bar.key}`,
             faces: bar.faces,
             color: `var(--color-${bar.key})`,
-            title: bar.name,
-            label: config[bar.key]?.label ?? bar.key,
-            value: bar.value,
+            tooltip: barTooltip(bar, entries.get(bar.name), target, { config, format, tooltip }),
             opacity: presence[bar.name],
           })
         )}
@@ -175,28 +184,54 @@ function barCorners(
   })
 }
 
-/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with its entry and value on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
+/**
+ * What the bar of `entry` says on hover, made when the pointer lands on it:
+ * the entry as the ticks of x name it and its value as the ticks of y name
+ * it - or what `tooltip` makes of that. A bar whose entry has left the data
+ * says nothing.
+ */
+function barTooltip<T extends Record<string, unknown>>(
+  { name, key }: { name: string; key: string },
+  entry: T | undefined,
+  target: Record<string, number>,
+  {
+    config,
+    format = {},
+    tooltip = (tip) => tip,
+  }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
+): Mark3D["tooltip"] {
+  if (!entry) return undefined
+  const value = target[`${name}-${key}`]
+  return () =>
+    tooltip(
+      {
+        title: (format.x ?? String)(name),
+        items: [
+          {
+            label: config[key]?.label ?? key,
+            value: format.y?.(value) ?? value,
+            color: `var(--color-${key})`,
+          },
+        ],
+      },
+      { entry, key }
+    )
+}
+
+/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
 function barMarks({
   id,
   faces,
   color,
-  title,
-  label,
-  value,
+  tooltip,
   opacity,
 }: {
   id: string
   faces: CubeFace[]
   color: string
-  title: string
-  label: React.ReactNode
-  value: number
+  tooltip: Mark3D["tooltip"]
   opacity: number
 }) {
-  const tooltip = {
-    title,
-    items: [{ label, value, color }],
-  }
   return cubeMarks(id, faces, color, tooltip).map((mark) => ({
     ...mark,
     fill: faded(mark.fill, opacity),

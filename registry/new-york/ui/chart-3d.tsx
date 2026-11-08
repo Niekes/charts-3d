@@ -72,8 +72,12 @@ export type Mark3D = {
   fill: string
   /** The ring around a circle, a CSS color. */
   stroke?: string
-  /** Shown while the pointer is over the mark. */
-  tooltip?: Tooltip3D
+  /**
+   * Shown while the pointer is over the mark. A function is called when the
+   * pointer lands on the mark, so a chart with thousands of marks pays for
+   * one tooltip per hover, not one per mark per frame; `null` shows none.
+   */
+  tooltip?: Tooltip3D | (() => Tooltip3D | null)
   /**
    * The marks of the same element as this one: the faces of a bar, the
    * segments of a flow. Pointing at a mark gives them an edge in the focus
@@ -931,7 +935,8 @@ function useHover(
     focus.set(mark?.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
-    tip.set(mark?.tooltip ?? null)
+    const tooltip = mark?.tooltip
+    tip.set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
   }
 
   return {
@@ -2204,7 +2209,7 @@ function faded(color: string, opacity: number) {
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
  * still among them. `labels` name the ticks: the entry at a tick of x, through
  * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
- * tick of z.
+ * tick of z. `entries` holds the entry behind every name still in the data.
  */
 function useSeries<T extends Record<string, unknown>>({
   data,
@@ -2231,6 +2236,7 @@ function useSeries<T extends Record<string, unknown>>({
   return {
     series,
     target,
+    entries: new Map(data.map((d, i) => [names[i], d])),
     values: useTween(target, 0),
     rows: useTween(Object.fromEntries(names.map((name, i) => [name, i]))),
     presence: useTween(Object.fromEntries(names.map((name) => [name, 1])), 0),
@@ -2239,7 +2245,12 @@ function useSeries<T extends Record<string, unknown>>({
 }
 
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
-function cubeMarks(id: string, faces: CubeFace[], color: string, tooltip: Tooltip3D): Mark3D[] {
+function cubeMarks(
+  id: string,
+  faces: CubeFace[],
+  color: string,
+  tooltip: Mark3D["tooltip"]
+): Mark3D[] {
   // The faces point outwards: a convex shape shows the ones facing the camera.
   return faces
     .filter((face) => face.ccw)

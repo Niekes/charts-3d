@@ -98,6 +98,59 @@ describe("BarChart3D", () => {
     host.remove()
   })
 
+  test("tooltip makes what a bar says from the default and the entry and series behind it", async () => {
+    const seen: { entry: { name: string }; key: string }[] = []
+    const view = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D
+          data={data}
+          index="name"
+          keys={["a"]}
+          tooltip={(tip, bar) => {
+            seen.push(bar)
+            return {
+              ...tip,
+              title: `${bar.entry.name}/${bar.key}`,
+              items: tip.items.map((item) => ({ ...item, value: "n/a" })),
+            }
+          }}
+        />
+      </ChartContainer3D>
+    )
+    await view.send("pointermove", lastFace(view.host))
+    expect(seen).toHaveLength(1)
+    expect(seen[0].key).toBe("a")
+    expect(data).toContain(seen[0].entry)
+    expect(tip(view.host)).toBe(`${seen[0].entry.name}/aAn/a`)
+    await view.unmount()
+  })
+
+  test("a tooltip of null shows none", async () => {
+    const view = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={data} index="name" keys={["a"]} tooltip={() => null} />
+      </ChartContainer3D>
+    )
+    await view.send("pointermove", lastFace(view.host))
+    expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await view.unmount()
+  })
+
+  test("the tooltip names the entry and its value as the ticks do, through format; a series without a label by its key", async () => {
+    const view = await mount(
+      <ChartContainer3D config={{ a: { color: "red" } }}>
+        <BarChart3D
+          data={data}
+          index="name"
+          format={{ x: (label) => label.toUpperCase(), y: (value) => `${value} €` }}
+        />
+      </ChartContainer3D>
+    )
+    await view.send("pointermove", lastFace(view.host))
+    expect(tip(view.host)).toMatch(/^[XY]a[13] €$/)
+    await view.unmount()
+  })
+
   test("a value that is not a number stands as no bar, and the labels fall back to the keys", () => {
     const html = renderToString(
       <ChartContainer3D config={{ a: { color: "red" } }}>
@@ -128,6 +181,19 @@ const demo = {
   desktop: { label: "Desktop", color: "red" },
   mobile: { label: "Mobile", color: "blue" },
 }
+
+/** The middle of the face painted last, which nothing covers. */
+function lastFace(host: HTMLElement) {
+  const face = [...host.querySelectorAll('path[fill^="color-mix"]')].at(-1)!
+  const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+  const [clientX, clientY] = [0, 1].map(
+    (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+  )
+  return { clientX, clientY }
+}
+
+const tip = (host: HTMLElement) =>
+  host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
 
 /** Renders `element` into the document, with an svg of the size of its view box. */
 async function mount(element: ReactElement) {
@@ -364,6 +430,80 @@ describe("BarChart3D transitions", () => {
     // z travels: away from its start mid-glide, and closing on its end late.
     expect(edgeMid).not.toBe(edge0)
     expect(Math.abs(edgeLate - edge1)).toBeLessThan(Math.abs(edgeMid - edge1))
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("mid-glide, a bar tells the value of the data, not the gliding number", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (a: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={[{ name: "x", a }]} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    await render(100)
+    await act(() => vi.advanceTimersByTime(700))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+
+    await render(40)
+    await act(() => vi.advanceTimersByTime(300))
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, ...lastFace(host) }))
+    )
+    expect(tip(host)).toBe("xA40")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a bar whose entry has left the data says nothing on hover; the others still do", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: { name: string; a: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    await render([
+      { name: "x", a: 100 },
+      { name: "y", a: 50 },
+      { name: "z", a: 80 },
+    ])
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const hover = (face: Element) => {
+      const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+
+    // y leaves: mid-glide its bar still stands, fading, and says nothing.
+    await render([
+      { name: "x", a: 100 },
+      { name: "z", a: 80 },
+    ])
+    await act(() => vi.advanceTimersByTime(300))
+    const fading = [...host.querySelectorAll('path[fill^="color-mix(in oklab"]')]
+    expect(fading.length).toBeGreaterThan(0)
+    await hover(fading.at(-1)!)
+    expect(tip(host)).toBe("")
+    await hover([...host.querySelectorAll('path[fill^="color-mix(in oklch"]')].at(-1)!)
+    expect(tip(host)).toMatch(/^[xz]A(100|80)$/)
 
     await act(async () => root.unmount())
     host.remove()

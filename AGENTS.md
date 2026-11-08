@@ -189,6 +189,12 @@ How the charts draw, so that a new one draws the same way:
   a circle, a CSS fill and, if it has one, a tooltip - and hands them to
   `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
+- **Tooltips.** What a mark says is built from the data behind it, its
+  values as the ticks name them through `format`, and handed to the chart's
+  `tooltip` prop with that data, so the reader can say otherwise. A mark
+  carries it as a function the core calls when the pointer lands on it,
+  never built per frame, and a mark whose entry has left the data says
+  nothing (ADR-0006).
 - **Labels.** Text beside a mark, such as the name of a node, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the side of it the
   text lies on, `toward`, a unit vector. The core draws it with every

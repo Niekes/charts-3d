@@ -130,6 +130,20 @@ The tooltip is `data-slot="chart-3d-tooltip"`, and its `data-placement` names th
 >
 ```
 
+What a mark says is built from the data behind it, its values as the ticks name them through `format`, until `tooltip` on the chart says otherwise: a function of what the mark would say - a title and its items, a label and a value each - and of the data behind the mark, in the words of the chart's props: the `entry` and series `key` of a bar, the `entry` of a point, the `key` and the spanned `entries` of a face of a ribbon, the `row`, `column` and `value` of a cell. It runs when the pointer lands on the mark, and `null` shows none ([ADR-0006](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0006-tooltip-content.md)).
+
+```tsx
+<BarChart3D
+  data={data}
+  index="month"
+  tooltip={(tooltip, { entry, key }) => ({
+    ...tooltip,
+    title: `${entry.month} · ${key}`,
+    items: tooltip.items.map((item) => ({ ...item, value: `${entry[key]} €` })),
+  })}
+/>
+```
+
 ## Focus
 
 A mark or a label can name the groups it belongs to in `groups`. Pointing at a mark fades every mark and label that shares none of its groups to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
