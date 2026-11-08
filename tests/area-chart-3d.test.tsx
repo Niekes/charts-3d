@@ -215,6 +215,58 @@ describe("AreaChart3D focus", () => {
   })
 })
 
+describe("AreaChart3D tooltip", () => {
+  const tip = (host: HTMLElement) =>
+    host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+  const tops = (host: HTMLElement) =>
+    marks(host).filter((m) => m.series === "b" && m.corners.length === 4)
+  const front = (host: HTMLElement) =>
+    marks(host).find((m) => m.series === "b" && m.corners.length === 5)!
+
+  test("tooltip makes what a face says from the default and the series and entries behind it", async () => {
+    type Entry = (typeof data)[number]
+    const seen: { key: string; entries: Entry[] }[] = []
+    const view = await mount(
+      chart(data, {
+        tooltip: (tip: { items: unknown[] }, face: { key: string; entries: Entry[] }) => {
+          seen.push(face)
+          return { title: `${face.key}:${face.entries.map((e) => e.name).join("")}`, items: [] }
+        },
+      })
+    )
+    // A segment of the top spans two entries in a row, a side none.
+    await view.point(middle(tops(view.host)[1].corners))
+    expect(seen).toHaveLength(1)
+    expect(seen[0].key).toBe("b")
+    expect(seen[0].entries).toHaveLength(2)
+    expect(data.indexOf(seen[0].entries[1])).toBe(data.indexOf(seen[0].entries[0]) + 1)
+    expect(tip(view.host)).toBe(`b:${seen[0].entries.map((e) => e.name).join("")}`)
+    const [x, y] = middle(front(view.host).corners.slice(1, 3))
+    await view.point([x, y - 3])
+    expect(seen[1]).toEqual({ key: "b", entries: [] })
+    expect(tip(view.host)).toBe("b:")
+    await view.unmount()
+  })
+
+  test("a tooltip of null shows none", async () => {
+    const view = await mount(chart(data, { tooltip: () => null }))
+    await view.point(middle(tops(view.host)[1].corners))
+    expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await view.unmount()
+  })
+
+  test("the tooltip names the entries and their values as the ticks do, through format", async () => {
+    const view = await mount(
+      chart(data, {
+        format: { x: (label: string) => label.toUpperCase(), y: (value: number) => `${value}%` },
+      })
+    )
+    await view.point(middle(tops(view.host)[1].corners))
+    expect(tip(view.host)).toMatch(/^B([XYZ]\d%){2}$/)
+    await view.unmount()
+  })
+})
+
 describe("AreaChart3D transitions", () => {
   // A browser that says the reader has not asked for reduced motion, so the chart may glide.
   beforeEach(() => {
@@ -360,6 +412,28 @@ describe("AreaChart3D transitions", () => {
     // The same element still draws the segment from r to s, not the one before it.
     expect(face!.isConnected).toBe(true)
     expect(await segment(face!)).toBe("Ar10.5s11")
+    await view.unmount()
+  })
+
+  test("a segment whose entry has left the data says nothing on hover; the others still do", async () => {
+    const view = await mount(chart(flat, { keys: ["a"] }))
+    const says = async (el: Element) => {
+      await view.point(middle(marks(view.host).find((m) => m.el === el)!.corners))
+      return view.host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+    }
+    const tops = () => marks(view.host).filter((m) => m.corners.length === 4)
+    let last: Element | undefined
+    for (const m of tops()) if ((await says(m.el)) === "Ar10.5s11") last = m.el
+    expect(last).toBeDefined()
+
+    // s leaves: mid-glide its segment still folds back into r, and says nothing.
+    await view.render(chart(flat.slice(0, 3), { keys: ["a"] }))
+    await act(() => vi.advanceTimersByTime(300))
+    expect(last!.isConnected).toBe(true)
+    expect(await says(last!)).toBe("")
+    const told = []
+    for (const m of tops()) told.push(await says(m.el))
+    expect(told).toContain("Ap10q11")
     await view.unmount()
   })
 
