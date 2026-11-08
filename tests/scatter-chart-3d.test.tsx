@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react"
+import { act, type ReactElement } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
@@ -64,6 +64,81 @@ describe("ScatterChart3D", () => {
 
     await act(async () => root.unmount())
     host.remove()
+  })
+})
+
+describe("ScatterChart3D tooltip", () => {
+  const tip = (host: HTMLElement) =>
+    host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+  const data = [{ id: "p", x: 1, y: 2, z: 3, kind: "b" }]
+
+  /** Mounts `element` and puts the pointer on its first point. */
+  async function hovered(element: ReactElement) {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () => root.render(element))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const point = host.querySelector("circle")!
+    const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    )
+    const unmount = async () => {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+    return { host, unmount }
+  }
+
+  test("tooltip makes what a point says from the default and the entry behind it", async () => {
+    const seen: { entry: (typeof data)[number] }[] = []
+    const view = await hovered(
+      <ChartContainer3D config={{ ...config, b: { label: "B", color: "blue" } }}>
+        <ScatterChart3D
+          data={data}
+          id="id"
+          x="x"
+          y="y"
+          z="z"
+          series="kind"
+          tooltip={(tip, point) => {
+            seen.push(point)
+            return { ...tip, title: `${tip.title}/${point.entry.id}`, items: tip.items.slice(0, 1) }
+          }}
+        />
+      </ChartContainer3D>
+    )
+    expect(seen).toEqual([{ entry: data[0] }])
+    expect(tip(view.host)).toBe("B/px1")
+    await view.unmount()
+  })
+
+  test("a tooltip of null shows none", async () => {
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D data={data} x="x" y="y" z="z" tooltip={() => null} />
+      </ChartContainer3D>
+    )
+    expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await view.unmount()
+  })
+
+  test("the tooltip names the values of a point as the ticks of each axis do, through format", async () => {
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={data}
+          x="x"
+          y="y"
+          z="z"
+          titles={{ y: "height" }}
+          format={{ x: (v) => `x=${v}`, y: (v) => `${v}m`, z: (v) => `z${v}` }}
+        />
+      </ChartContainer3D>
+    )
+    expect(tip(view.host)).toBe("xx=1height2mzz3")
+    await view.unmount()
   })
 })
 
@@ -159,6 +234,46 @@ describe("ScatterChart3D transitions", () => {
     expect(radii().filter((r) => r > 0 && r < 4)).toHaveLength(1)
     await act(() => vi.advanceTimersByTime(400))
     expect(radii()).toEqual([4, 4])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+  test("a point whose entry has left the data says nothing on hover; the others still do", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { id: string; x: number; y: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} id="id" x="x" y="y" z="z" />
+          </ChartContainer3D>
+        )
+      )
+    const p = { id: "p", x: 0, y: 0, z: 0 }
+    const q = { id: "q", x: 10, y: 10, z: 10 }
+    await render([p, q])
+    await act(() => vi.advanceTimersByTime(700))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const hover = (circle: Element) => {
+      const [clientX, clientY] = ["cx", "cy"].map((a) => Number(circle.getAttribute(a)))
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+    const tip = () => host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+
+    // q leaves: mid-glide its point still shrinks away, and says nothing.
+    await render([p])
+    await act(() => vi.advanceTimersByTime(300))
+    const circles = [...host.querySelectorAll("circle")]
+    const gone = circles.find((c) => Number(c.getAttribute("r")) < 4)!
+    expect(gone).toBeDefined()
+    await hover(gone)
+    expect(tip()).toBe("")
+    await hover(circles.find((c) => c !== gone)!)
+    expect(tip()).toBe("x0y0z0")
 
     await act(async () => root.unmount())
     host.remove()
