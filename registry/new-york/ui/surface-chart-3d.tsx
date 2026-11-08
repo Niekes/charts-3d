@@ -23,6 +23,8 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  type Mark3D,
+  type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type SurfaceChart3DProps = {
@@ -44,6 +46,16 @@ export type SurfaceChart3DProps = {
   format?: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>
   /** The titles of the axes. */
   titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
+  /**
+   * What a cell says on hover: `tooltip` is what it would say, its height as
+   * the ticks of y name it, `data` the row and column the cell starts at and
+   * its height, the mean of its four corners; `null` shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (
+    tooltip: Tooltip3D,
+    data: { row: number; column: number; value: number }
+  ) => Tooltip3D | null
 }
 
 /**
@@ -52,7 +64,14 @@ export type SurfaceChart3DProps = {
  * `colors` at the lowest height to the second at the highest; both are keys
  * of the chart config, by default its first two.
  */
-export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: SurfaceChart3DProps) {
+export function SurfaceChart3D({
+  data,
+  domain = {},
+  colors,
+  format,
+  titles,
+  tooltip,
+}: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
   const [floor = 0, peak = 0] = extent(data.flat())
@@ -98,7 +117,14 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
   const marks = grid
     .data(points)
     .sort(sort)
-    .map((quad) => quadMark(quad, fade, { lo, hi, low, high }, titles?.y))
+    .map((quad) =>
+      quadMark(
+        quad,
+        fade,
+        { lo, hi, low, high },
+        cellTooltip(quad, data, { format, titles, tooltip })
+      )
+    )
 
   return (
     <>
@@ -112,6 +138,33 @@ export function SurfaceChart3D({ data, domain = {}, colors, format, titles }: Su
 type GridPoint = Point3D & { r: number; c: number }
 
 /**
+ * What a cell says on hover, made when the pointer lands on it: its height,
+ * the mean of its four corners in the data, as the ticks of y name it - or
+ * what `tooltip` makes of that. A cell on its way out of the data says
+ * nothing.
+ */
+function cellTooltip(
+  quad: GridPlane<GridPoint>,
+  data: number[][],
+  {
+    format = {},
+    titles = {},
+    tooltip = (tip) => tip,
+  }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
+): Mark3D["tooltip"] {
+  const heights = quad.flatMap((p) => data[p.r]?.[p.c] ?? [])
+  if (heights.length < quad.length) return undefined
+  const value = heights.reduce((sum, y) => sum + y, 0) / heights.length
+  const row = Math.min(...quad.map((p) => p.r))
+  const column = Math.min(...quad.map((p) => p.c))
+  return () =>
+    tooltip(
+      { items: [{ label: titles.y ?? "value", value: format.y?.(value) ?? value }] },
+      { row, column, value }
+    )
+}
+
+/**
  * The mark of one cell: its quad, shaded by the color ramp at its height and
  * faded in place by `fade` while the cell enters or leaves.
  */
@@ -119,7 +172,7 @@ function quadMark(
   quad: GridPlane<GridPoint>,
   fade: Record<string, number>,
   ramp: { lo: number; hi: number; low: string; high: string },
-  title: React.ReactNode
+  tooltip: Mark3D["tooltip"]
 ) {
   const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
   const t = Math.round(((height - ramp.lo) / (ramp.hi - ramp.lo || 1)) * 100)
@@ -136,7 +189,7 @@ function quadMark(
       seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
     // Its group is the cell, so hovering it lights the cell alone.
     groups: [quad.plane],
-    tooltip: { items: [{ label: title ?? "value", value: height }] },
+    tooltip,
   }
 }
 
