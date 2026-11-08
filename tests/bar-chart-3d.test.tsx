@@ -136,19 +136,18 @@ describe("BarChart3D", () => {
     await view.unmount()
   })
 
-  test("the tooltip names the entry and its value as the ticks do, through format", async () => {
+  test("the tooltip names the entry and its value as the ticks do, through format; a series without a label by its key", async () => {
     const view = await mount(
-      <ChartContainer3D config={config}>
+      <ChartContainer3D config={{ a: { color: "red" } }}>
         <BarChart3D
           data={data}
           index="name"
-          keys={["a"]}
           format={{ x: (label) => label.toUpperCase(), y: (value) => `${value} €` }}
         />
       </ChartContainer3D>
     )
     await view.send("pointermove", lastFace(view.host))
-    expect(tip(view.host)).toMatch(/^[XY]A[13] €$/)
+    expect(tip(view.host)).toMatch(/^[XY]a[13] €$/)
     await view.unmount()
   })
 

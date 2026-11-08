@@ -93,6 +93,7 @@ describe("ScatterChart3D tooltip", () => {
 
   test("tooltip makes what a point says from the default and the entry behind it", async () => {
     const seen: { entry: (typeof data)[number] }[] = []
+    const titles: unknown[] = []
     const view = await hovered(
       <ChartContainer3D config={{ ...config, b: { label: "B", color: "blue" } }}>
         <ScatterChart3D
@@ -104,13 +105,16 @@ describe("ScatterChart3D tooltip", () => {
           series="kind"
           tooltip={(tip, point) => {
             seen.push(point)
-            return { ...tip, title: `${tip.title}/${point.entry.id}`, items: tip.items.slice(0, 1) }
+            titles.push(tip.title)
+            return { ...tip, title: point.entry.id, items: tip.items.slice(0, 1) }
           }}
         />
       </ChartContainer3D>
     )
     expect(seen).toEqual([{ entry: data[0] }])
-    expect(tip(view.host)).toBe("B/px1")
+    // The default names the series, where one does.
+    expect(titles).toEqual(["B"])
+    expect(tip(view.host)).toBe("px1")
     await view.unmount()
   })
 

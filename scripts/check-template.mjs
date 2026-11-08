@@ -142,6 +142,13 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   if (!new RegExp(`export\\s+type\\s+${component}Props\\b`).test(source)) {
     fail(`${UI}/${file}: must export the type '${component}Props'`)
   }
+  // What a mark says on hover is the reader's: a chart takes `tooltip`, a
+  // function of what the mark would say and the data behind it (ADR-0006).
+  if (!/\btooltip\?:\s*\(/.test(source)) {
+    fail(
+      `${UI}/${file}: a chart takes 'tooltip', a function of what a mark would say and the data behind it`
+    )
+  }
 
   for (const [, specifier] of source.matchAll(/from\s+"([^"]+)"/g)) {
     if (specifier !== CORE_IMPORT && !allowed.has(specifier)) {

@@ -255,14 +255,18 @@ describe("AreaChart3D tooltip", () => {
     await view.unmount()
   })
 
-  test("the tooltip names the entries and their values as the ticks do, through format", async () => {
+  test("the tooltip names the entries and their values as the ticks do, through format; a series without a label by its key", async () => {
     const view = await mount(
-      chart(data, {
-        format: { x: (label: string) => label.toUpperCase(), y: (value: number) => `${value}%` },
-      })
+      <ChartContainer3D config={{ b: { color: "blue" } }}>
+        <AreaChart3D
+          data={data}
+          index="name"
+          format={{ x: (label) => label.toUpperCase(), y: (value) => `${value}%` }}
+        />
+      </ChartContainer3D>
     )
     await view.point(middle(tops(view.host)[1].corners))
-    expect(tip(view.host)).toMatch(/^B([XYZ]\d%){2}$/)
+    expect(tip(view.host)).toMatch(/^b([XYZ]\d%){2}$/)
     await view.unmount()
   })
 })
