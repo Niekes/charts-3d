@@ -956,6 +956,33 @@ describe("Marks3D", () => {
 
     await chart.unmount()
   })
+  test("a tooltip given as a function is made when the pointer lands on the mark; null shows none", async () => {
+    const lazy = vi.fn(() => ({ items: [{ label: "Lazy", value: 1 }] }))
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D
+          marks={[
+            { ...marks[0], tooltip: lazy },
+            { ...marks[1], tooltip: () => null },
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    const move = (clientX: number, clientY: number) =>
+      chart.send(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    const tip = () => chart.host.querySelector('[data-slot="chart-3d-tooltip"]')
+
+    // Rendering never calls it; the hover does, once per mark it lands on.
+    expect(lazy).not.toHaveBeenCalled()
+    await move(150, 150)
+    await move(160, 160)
+    expect(lazy).toHaveBeenCalledTimes(1)
+    expect(tip()?.textContent).toContain("Lazy")
+    await move(405, 100)
+    expect(tip()).toBeNull()
+
+    await chart.unmount()
+  })
 })
 
 describe("tooltip", () => {
