@@ -1,6 +1,6 @@
 ---
 title: Globe Chart 3D
-description: A globe of tiles, each rising to its value.
+description: A globe of tiles on the land, each rising to its value.
 ---
 
 import GlobeChart3DDemo from "@/docs/examples/globe-chart-3d-demo"
@@ -19,14 +19,28 @@ import GlobeChart3DManyDemo from "@/docs/examples/globe-chart-3d-many-demo"
 </Tabs>
 
 The globe is a grid of tiles between meridians and parallels, `step` degrees
-wide. An entry names a place, in the `lon` and `lat` fields, and the tile that
-holds it rises to the entry's `value`, in the color of its `series`; a tile
-without an entry lies flat in the wall color. Aggregation happens before the
-chart: round a list of places to the grid, or hand the chart a grid it already
-has, one entry per tile - where two entries fall on one tile, the last one
-wins. The tile is the identity of a mark: an entry that moves to another tile
-leaves there and enters here, and a tile that changes its series leaves as
-one and enters as the other.
+wide, on the land. An entry names a place, in the `lon` and `lat` fields, and
+the tile that holds it rises to the entry's `value`, in the color of its
+`series`; a tile without an entry is not drawn. Aggregation happens before
+the chart: round a list of places to the grid, or hand the chart a grid it
+already has, one entry per tile - where two entries fall on one tile, the
+last one wins. The tile is the identity of a mark: an entry that moves to
+another tile leaves there and enters here, and a tile that changes its series
+leaves as one and enters as the other.
+
+The `land` is a GeoJSON feature collection, the regions of the earth: d3-geo
+cuts them at the horizon and lays them on the ocean disc, flat in the colors
+of the walls, and they turn, pan and zoom with the tiles. The land is scenery:
+it never enters, glides or answers the pointer. The demos take the land of
+[world-atlas](https://github.com/topojson/world-atlas) at 110m, its
+`countries`, converted from TopoJSON with
+[topojson-client](https://github.com/topojson/topojson-client),
+as `docs/examples/land.ts` shows; the chart takes GeoJSON alone. Mind the
+winding: d3-geo reads a region wound clockwise, the opposite of RFC 7946, and
+a region wound the other way fills the globe around it - `topojson-client`
+winds them right, a GeoJSON file from elsewhere may not. The globe is
+orthographic, as d3-geo projects it, so it ignores the `perspective` of the
+camera.
 
 ## Installation
 
@@ -48,7 +62,7 @@ one and enters as the other.
     Install the dependencies:
 
     ```package-install
-    npm install d3-3d d3-array lucide-react
+    npm install d3-3d d3-array d3-geo lucide-react
     ```
 
     Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/globe-chart-3d.tsx`:
@@ -107,8 +121,8 @@ The same chart on every renderer, side by side. The marks are data the chart han
 
 ## Many marks
 
-Tiles of 3°, seven thousand of them and thousands rising - and the chart
-stays interactive. The scene is one list of marks, so the demo starts on
+Tiles of 3°, a thousand of them rising over the land - and the chart stays
+interactive. The scene is one list of marks, so the demo starts on
 `"canvas"`, the renderer for many marks, and the select shows the same scene
 on SVG and WebGL.
 

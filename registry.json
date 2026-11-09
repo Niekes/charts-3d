@@ -50,8 +50,10 @@
       "name": "globe-chart-3d",
       "type": "registry:ui",
       "title": "Globe Chart 3D",
-      "description": "A globe of tiles, each rising to its value.",
+      "description": "A globe of tiles on the land, each rising to its value.",
       "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "dependencies": ["d3-geo@^3.1.2"],
+      "devDependencies": ["@types/d3-geo", "@types/geojson"],
       "files": [
         {
           "path": "registry/new-york/ui/globe-chart-3d.tsx",

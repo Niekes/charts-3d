@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
+import { land } from "@/docs/examples/land"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // Where people live, roughly: a center per populous region, with its weight
@@ -57,6 +58,7 @@ export default function GlobeChart3DDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer} legend>
         <GlobeChart3D
           data={chartData}
+          land={land}
           lon="lon"
           lat="lat"
           value="population"

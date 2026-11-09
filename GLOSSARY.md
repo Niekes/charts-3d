@@ -58,9 +58,23 @@ _Avoid_: shape, element, datum
 **Tile**:
 The piece of the globe between two meridians and two parallels, a fixed
 number of degrees wide. A tile with an entry rises from the globe to its
-value; an empty one lies flat in the wall color, so the tiles together are
-the globe.
+value; one without an entry is not drawn.
 _Avoid_: cell, hexbin, bin, patch
+
+**Land**:
+The regions of the earth under the tiles, drawn from the GeoJSON the chart
+is given, in the color of a gridline. It is scenery: it neither enters nor
+answers the pointer.
+_Avoid_: countries, map, features, background
+
+**Ocean**:
+The disc of the globe the land lies on, in the color of a wall.
+_Avoid_: sea, sphere, backdrop
+
+**Horizon**:
+The edge of the ocean disc, where the land is cut and a tile beyond it is
+hidden.
+_Avoid_: silhouette, limb, clip
 
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not

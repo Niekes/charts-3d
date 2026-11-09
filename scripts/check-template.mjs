@@ -120,18 +120,23 @@ for (const file of files) {
 }
 
 /**
- * The core declares the npm packages; a chart imports only those, React and
- * the core, and depends on the core in the registry.
+ * The core declares the npm packages every chart may import; a chart that
+ * needs one of its own, as the globe needs d3-geo, declares it on its item,
+ * so it lands only where that chart installs. A chart imports only those,
+ * React and the core, and depends on the core in the registry.
  */
-const allowed = new Set([
-  "react",
-  ...(core?.dependencies ?? []).map((d) => d.replace(/@[^@/]*$/, "")),
-])
+const unversioned = (dependencies) => dependencies.map((d) => d.replace(/@[^@/]*$/, ""))
+const coreDependencies = unversioned(core?.dependencies ?? [])
 
 for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   const name = basename(file, ".tsx")
   const component = pascalCase(name)
   const source = read(`${UI}/${file}`)
+  const allowed = new Set([
+    "react",
+    ...coreDependencies,
+    ...unversioned(items.get(name)?.dependencies ?? []),
+  ])
 
   if (!name.endsWith("-chart-3d")) {
     fail(`${UI}/${file}: a chart is named '<name>-chart-3d.tsx'`)
@@ -211,9 +216,6 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     fail(
       `registry.json: '${name}' must depend on '${CORE_DEPENDENCY}', or on '${RELEASE_DEPENDENCY}' in a release, and nothing else`
     )
-  }
-  if (items.get(name)?.dependencies?.length) {
-    fail(`registry.json: '${name}' must leave its npm dependencies to '${CORE}'`)
   }
 }
 

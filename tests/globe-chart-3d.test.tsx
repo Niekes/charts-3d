@@ -13,32 +13,46 @@ const config = {
   population: { label: "Population", color: "red" },
   quake: { label: "Earthquake", color: "blue" },
 }
-/** The flat tiles of the globe, in the wall color. */
-const tiles = (html: string) => html.match(/fill="color-mix\(in oklch, var\(--muted\)/g) ?? []
+/** A square of land, `size` degrees wide, from its south-west corner, wound clockwise as d3-geo reads a region. */
+const square = (lon: number, lat: number, size = 30): GeoJSON.Feature => ({
+  type: "Feature",
+  properties: {},
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      [
+        [lon, lat],
+        [lon, lat + size],
+        [lon + size, lat + size],
+        [lon + size, lat],
+        [lon, lat],
+      ],
+    ],
+  },
+})
+/** One square of land, east of the prime meridian on the equator, in front of the default camera. */
+const land: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [square(0, 0)] }
+const none: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
+/** The rings of the land, in the color of a gridline. */
+const landOf = (html: string) => html.match(/fill="var\(--border\)"/g) ?? []
+/** The ocean disc, in the color of a wall. */
+const oceanOf = (html: string) => html.match(/fill="var\(--muted\)"/g) ?? []
 /** The faces of the tiles that rise, in the color of their series. */
 const faces = (html: string, key = "population") =>
   html.match(new RegExp(`fill="[^"]*var\\(--color-${key}\\)`, "g")) ?? []
 
 describe("GlobeChart3D", () => {
   // The charts are plain SVG, so they render on the server without a DOM.
-  test("draws the tiles of the grid that face the camera, flat in the wall color", () => {
+  test("draws the land on an ocean disc, flat in the colors of the walls, cut at the horizon", () => {
     const html = renderToString(
-      <ChartContainer3D config={config}>
-        <GlobeChart3D data={[]} lon="lon" lat="lat" value="population" step={30} />
-      </ChartContainer3D>
-    )
-    // 12 × 6 tiles of 30°, about half of them turned to the camera.
-    expect(tiles(html).length).toBeGreaterThanOrEqual(30)
-    expect(tiles(html).length).toBeLessThanOrEqual(42)
-    expect(faces(html)).toHaveLength(0)
-    expect(html).not.toContain("NaN")
-  })
-
-  test("the tile that holds an entry rises: its top and the sides that face the camera, in the series color", () => {
-    const html = renderToString(
-      <ChartContainer3D config={config}>
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
         <GlobeChart3D
-          data={[{ lon: 15, lat: 45, population: 10 }]}
+          data={[]}
+          land={{
+            type: "FeatureCollection",
+            // Facing the camera, across the horizon, and on the far side.
+            features: [square(0, 0), square(75, 0), square(150, 0)],
+          }}
           lon="lon"
           lat="lat"
           value="population"
@@ -46,27 +60,136 @@ describe("GlobeChart3D", () => {
         />
       </ChartContainer3D>
     )
-    // The top and one to three sides of the prism; the flat tile stays beneath it.
+    // The square across the horizon draws its near half, the far one nothing.
+    expect(landOf(html)).toHaveLength(2)
+    expect(oceanOf(html)).toHaveLength(1)
+    expect(faces(html)).toHaveLength(0)
+    expect(html).not.toContain("NaN")
+  })
+
+  test("the tile that holds an entry rises over the land: its top and the sides that face the camera, in the series color", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[{ lon: 15, lat: 45, population: 10 }]}
+          land={land}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    // The top and one to three sides of the prism, painted after the land.
     expect(faces(html).length).toBeGreaterThanOrEqual(2)
     expect(faces(html).length).toBeLessThanOrEqual(4)
-    expect(tiles(html).length).toBeGreaterThanOrEqual(30)
+    expect(html.indexOf("var(--border)")).toBeLessThan(html.indexOf("var(--color-population)"))
     expect(html).toContain("color-mix(in oklch, var(--color-population)")
     expect(html).not.toContain("NaN")
+  })
+
+  // Turned and tilted, so a wrong sign in either angle shows; with a
+  // perspective too, which the globe ignores, so the tiles stay on the land.
+  test.each([
+    { yaw: 0.7, tilt: 0.4 },
+    { yaw: 0.7, tilt: 0.4, perspective: 3 },
+  ])(
+    "the land and the tiles share the camera: a tile of no height lies on the square of land below it, corner on corner, at %o",
+    (view) => {
+      const html = renderToString(
+        <ChartContainer3D config={config} defaultView={view}>
+          <GlobeChart3D
+            data={[{ lon: 15, lat: 45, population: 0 }]}
+            land={{ type: "FeatureCollection", features: [square(0, 30)] }}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={30}
+          />
+        </ChartContainer3D>
+      )
+      const points = (fill: string) =>
+        [...html.matchAll(new RegExp(` d="M([^"]+)Z" fill="${fill}`, "g"))].flatMap((m) =>
+          m[1].split("L").map((c) => c.split(",").map(Number))
+        )
+      // d3-3d projects the four corners of the top; d3-geo the square, resampled, through its corners.
+      const top = points("color-mix\\(in oklch, var\\(--color-population\\)")
+      const ring = points("var\\(--border\\)")
+      expect(top).toHaveLength(4)
+      expect(ring.length).toBeGreaterThan(4)
+      for (const [x, y] of top) {
+        expect(Math.min(...ring.map(([rx, ry]) => Math.hypot(rx - x, ry - y)))).toBeLessThan(0.02)
+      }
+    }
+  )
+
+  test("a tile on the far side of the globe is hidden by it: not even a side that turns to the camera shows through the ocean", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <GlobeChart3D
+          data={[
+            { lon: 165, lat: 15, population: 10 },
+            { lon: -165, lat: -15, population: 10 },
+            { lon: 15, lat: 15, population: 10 },
+          ]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    // The one tile in front: its top and at most three sides.
+    expect(faces(html).length).toBeGreaterThanOrEqual(1)
+    expect(faces(html).length).toBeLessThanOrEqual(4)
+  })
+
+  test("a point in the land is not a region: it draws nothing", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <GlobeChart3D
+          data={[]}
+          land={{
+            type: "FeatureCollection",
+            features: [
+              square(0, 0),
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "Point", coordinates: [10, 10] },
+              },
+            ],
+          }}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(landOf(html)).toHaveLength(1)
   })
 })
 
 describe("GlobeChart3D paint order", () => {
-  test("tiles of the same depth paint in grid order, west before east, so the server and the client agree", () => {
-    // Level with the prime meridian, every tile has a mirror image at the same
-    // depth. Node and the browser round sine and cosine differently in the
-    // last bit, so a depth-only sort paints such a pair in either order and
-    // the hydration of the server HTML fails: the grid order has to decide.
+  test("faces of the same depth paint in grid order, west before east, so the server and the client agree", () => {
+    // Level with the prime meridian and every tile raised, every face has a
+    // mirror image at the same depth. Node and the browser round sine and
+    // cosine differently in the last bit, so a depth-only sort paints such a
+    // pair in either order and the hydration of the server HTML fails: the
+    // grid order has to decide.
+    const data = Array.from({ length: 18 * 9 }, (_, i) => ({
+      lon: -170 + (i % 18) * 20,
+      lat: -80 + Math.floor(i / 18) * 20,
+      population: 10,
+    }))
     const html = renderToString(
       <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
-        <GlobeChart3D data={[]} lon="lon" lat="lat" value="population" step={10} />
+        <GlobeChart3D data={data} land={none} lon="lon" lat="lat" value="population" step={20} />
       </ChartContainer3D>
     )
-    const paths = [...html.matchAll(/ d="M([^"]+)Z"/g)].map((m) => m[1].split("L"))
+    const paths = [...html.matchAll(/ d="M([^"]+)Z" fill="color-mix/g)].map((m) => m[1].split("L"))
     const key = (corners: string[], mirror: boolean) =>
       corners
         .map((c) => c.split(",").map(Number))
@@ -79,7 +202,7 @@ describe("GlobeChart3D paint order", () => {
       const left = Math.min(...corners.map((c) => Number(c.split(",")[0])))
       return twin !== undefined && twin !== i && left < 320 ? [[i, twin]] : []
     })
-    expect(pairs.length).toBeGreaterThan(100)
+    expect(pairs.length).toBeGreaterThan(40)
     expect(pairs.filter(([west, east]) => west > east)).toHaveLength(0)
   })
 })
@@ -88,7 +211,7 @@ describe("GlobeChart3D props", () => {
   const html = (data: Record<string, unknown>[], props: Record<string, unknown> = {}) =>
     renderToString(
       <ChartContainer3D config={config}>
-        <GlobeChart3D data={data} lon="lon" lat="lat" value="n" step={30} {...props} />
+        <GlobeChart3D data={data} land={none} lon="lon" lat="lat" value="n" step={30} {...props} />
       </ChartContainer3D>
     )
 
@@ -155,6 +278,7 @@ describe("GlobeChart3D hover", () => {
       <ChartContainer3D config={config}>
         <GlobeChart3D
           data={data}
+          land={land}
           lon="lon"
           lat="lat"
           value="population"
@@ -174,10 +298,10 @@ describe("GlobeChart3D hover", () => {
     await chart.unmount()
   })
 
-  test("hovering a tile highlights its faces together with an edge, never a flat tile, which says nothing; the fill never changes; leaving clears it", async () => {
+  test("hovering a tile highlights its faces together with an edge, never the land, which says nothing; the fill never changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
-        <GlobeChart3D data={data} lon="lon" lat="lat" value="population" step={30} />
+        <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="population" step={30} />
       </ChartContainer3D>
     )
     const paths = () => [...chart.svg.querySelectorAll('[data-slot="chart-3d-marks"] path')]
@@ -195,11 +319,8 @@ describe("GlobeChart3D hover", () => {
     await chart.send("pointermove", { clientX: 5, clientY: 5 })
     expect(edged()).toHaveLength(0)
 
-    // On a flat tile, the one painted last: the globe itself says nothing.
-    const flat = paths()
-      .filter((p) => p.getAttribute("fill")!.includes("--muted"))
-      .at(-1)!
-    const [fx, fy] = center(flat)
+    // On the land, east of the tile: the earth itself says nothing.
+    const [fx, fy] = center(paths().find((p) => p.getAttribute("fill") === "var(--border)")!)
     await chart.send("pointermove", { clientX: fx, clientY: fy })
     expect(edged()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("Population")
@@ -218,6 +339,7 @@ describe("GlobeChart3D labels", () => {
       <ChartContainer3D config={config}>
         <GlobeChart3D
           data={[{ lon: 15, lat: 45, n: 3, type: "wildfire" }]}
+          land={none}
           lon="lon"
           lat="lat"
           value="n"
@@ -257,7 +379,14 @@ describe("GlobeChart3D transitions", () => {
       act(async () =>
         root.render(
           <ChartContainer3D config={config}>
-            <GlobeChart3D data={data} lon="lon" lat="lat" value="population" step={30} />
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="population"
+              step={30}
+            />
           </ChartContainer3D>
         )
       )
@@ -303,7 +432,14 @@ describe("GlobeChart3D transitions", () => {
       act(async () =>
         root.render(
           <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
-            <GlobeChart3D data={data} lon="lon" lat="lat" value="population" step={30} />
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="population"
+              step={30}
+            />
           </ChartContainer3D>
         )
       )
@@ -411,6 +547,7 @@ describe("GlobeChart3D renderer switch", () => {
           <ChartContainer3D config={config} renderer={renderer}>
             <GlobeChart3D
               data={[{ lon: 15, lat: 45, population: 10 }]}
+              land={land}
               lon="lon"
               lat="lat"
               value="population"

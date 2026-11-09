@@ -1,7 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { polygons3D, sort, type Point3D, type Polygon } from "d3-3d"
+import {
+  camera3D,
+  polygons3D,
+  sort,
+  type Camera3DInstance,
+  type Point2D,
+  type Point3D,
+  type Polygon,
+} from "d3-3d"
+import { geoOrthographic, geoPath, type GeoPermissibleObjects } from "d3-geo"
 
 import {
   Marks3D,
@@ -17,6 +26,13 @@ import {
 export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per tile: the tile that holds an entry rises to its value, and the last entry on a tile wins. */
   data: T[]
+  /**
+   * The regions of the earth under the tiles, a GeoJSON feature collection,
+   * cut at the horizon. d3-geo reads a region wound clockwise, the opposite
+   * of RFC 7946: topojson-client's `feature` winds it so, and a region
+   * wound the other way fills the globe around it.
+   */
+  land: GeoJSON.FeatureCollection
   /** The field of the longitude of an entry, in degrees east. */
   lon: keyof T & string
   /** The field of the latitude of an entry, in degrees north. */
@@ -41,8 +57,8 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
 const RADIUS = 1.15
 const HEIGHT = 0.4
 
-/** One face of the globe: the corners of a tile, flat or lifted, with the id of the tile it belongs to. */
-type Face = Point3D[] & { id: string; part: "tile" | "top" | `side${number}` }
+/** One face of a tile that rises: its corners, lifted, with the id of the tile it belongs to. */
+type Face = Point3D[] & { id: string; part: "top" | `side${number}` }
 
 /** The fields of an entry: its place, its value and, if the chart has one, its series. */
 type Fields<T> = {
@@ -53,13 +69,13 @@ type Fields<T> = {
 }
 
 /**
- * A globe of tiles between meridians and parallels, `step` degrees wide. The
- * tile that holds an entry rises from the globe to the entry's value, in the
- * color of its series; an empty tile lies flat in the wall color, so the
- * tiles together are the globe.
+ * A globe of tiles between meridians and parallels, `step` degrees wide, on
+ * the land. The tile that holds an entry rises from the globe to the entry's
+ * value, in the color of its series; one without an entry is not drawn.
  */
 export function GlobeChart3D<T extends Record<string, unknown>>({
   data,
+  land,
   lon,
   lat,
   value,
@@ -79,9 +95,10 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   const peak = Object.values(target).reduce((max, v) => Math.max(max, v), 0)
   const { ceiling } = useTween({ ceiling: axis(0, peak).domain[1] })
 
-  const marks = polygons3D<Point3D>()
-    .camera(camera)
-    .data<Face>([...gridFaces(step), ...prismFaces(heights, ceiling, step)])
+  const eye = orthographic(camera)
+  const prisms = polygons3D<Point3D>()
+    .camera(eye)
+    .data<Face>(prismFaces(heights, ceiling, step))
     // Mirror tiles share a depth to the last bit, which the server and the
     // browser round differently: rounded, they tie, and the grid order paints
     // west before east on both, so the server HTML hydrates.
@@ -89,15 +106,73 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
       Object.assign(face, { centroid: { ...face.centroid, z: +face.centroid.z.toFixed(9) } })
     )
     .sort(sort)
-    // The faces point outwards: the globe shows the ones facing the camera.
-    .filter((face) => face.ccw)
-    .map((face) =>
-      face.part === "tile"
-        ? tileMark(face)
-        : prismMark(face, heights[face.id], presence[face.id], { config, fields, format })
-    )
+    // The faces point outwards: the globe shows the ones facing the camera,
+    // and hides what lies behind its center plane, as the ocean disc is drawn
+    // first and a side of a far tile turned to the camera would show through.
+    .filter((face) => face.ccw && face.centroid.z > 0)
+    .map((face) => prismMark(face, heights[face.id], presence[face.id], { config, fields, format }))
 
-  return <Marks3D marks={marks} />
+  return <Marks3D marks={[...earth(land, eye), ...prisms]} />
+}
+
+/**
+ * The camera without its perspective, a copy, since d3-3d shares the view of
+ * a camera it is handed: d3-geo has no perspective, so the globe projects its
+ * tiles without one too, and they stay on the land.
+ */
+function orthographic(camera: Camera3DInstance) {
+  return camera3D()
+    .origin(camera.origin())
+    .scale(camera.scale())
+    .rotateX(camera.rotateX())
+    .rotateY(camera.rotateY())
+}
+
+/**
+ * The ocean and the land as marks, flat in the colors of the walls. d3-geo's
+ * orthographic projection cuts every region at the horizon; built from the
+ * camera, it turns, pans and zooms with the tiles.
+ */
+function earth(land: GeoJSON.FeatureCollection, camera: Camera3DInstance) {
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  const { x, y } = camera.origin()
+  const projection = geoOrthographic()
+    .rotate([degrees(camera.rotateY()), degrees(camera.rotateX())])
+    .scale(camera.scale() * RADIUS)
+    .translate([x, y])
+  const sink = ringSink()
+  const path = geoPath(projection, sink)
+  const marksOf = (object: GeoPermissibleObjects, key: string, fill: string) => {
+    sink.beginPath()
+    path(object)
+    return sink.rings.map((points, i) => ({ key: `${key}-${i}`, points, fill }))
+  }
+  return [
+    ...marksOf({ type: "Sphere" }, "ocean", "var(--muted)"),
+    ...land.features.flatMap((feature, i) => marksOf(feature, `land-${i}`, "var(--border)")),
+  ]
+}
+
+/** Stands in for a canvas under `geoPath`: collects every ring it draws as points. */
+function ringSink() {
+  const rings: Point2D[][] = []
+  return {
+    rings,
+    beginPath: () => {
+      rings.length = 0
+    },
+    moveTo: (x: number, y: number) => {
+      rings.push([{ x, y }])
+    },
+    lineTo: (x: number, y: number) => {
+      rings.at(-1)!.push({ x, y })
+    },
+    closePath: () => {},
+    // A point is not land: the ring its moveTo began goes.
+    arc: () => {
+      rings.pop()
+    },
+  }
 }
 
 /**
@@ -134,19 +209,6 @@ function tile(id: string) {
   return { lon: Number(lon), lat: Number(lat), key: key.join(",") }
 }
 
-/** The flat tiles of the whole grid, `step` degrees wide, west to east and south to north. */
-function gridFaces(step: number): Face[] {
-  const rows = Math.round(180 / step)
-  return Array.from({ length: Math.round(360 / step) * rows }, (_, i) => {
-    const lon = -180 + (Math.floor(i / rows) + 0.5) * step
-    const lat = -90 + ((i % rows) + 0.5) * step
-    return Object.assign(corners(lon, lat, step, RADIUS), {
-      id: `${lon},${lat}`,
-      part: "tile" as const,
-    })
-  })
-}
-
 /** The faces of every tile that rises - its top and its four sides - the gone ones still shrinking among them. */
 function prismFaces(heights: Record<string, number>, ceiling: number, step: number): Face[] {
   return Object.entries(heights).flatMap(([id, value]) => {
@@ -167,15 +229,6 @@ function prismFaces(heights: Record<string, number>, ceiling: number, step: numb
 function corners(lon: number, lat: number, step: number, radius: number): Point3D[] {
   const [w, e, s, n] = [lon - step / 2, lon + step / 2, lat - step / 2, lat + step / 2]
   return [globe(w, s, radius), globe(e, s, radius), globe(e, n, radius), globe(w, n, radius)]
-}
-
-/** The mark of a flat tile: the wall color, lit from the upper left, nothing on hover. */
-function tileMark(face: Polygon<Point3D, Face>) {
-  return {
-    key: `${face.id}-${face.part}`,
-    points: face.map((p) => p.projected),
-    fill: shade(face, "var(--muted)"),
-  }
 }
 
 /**

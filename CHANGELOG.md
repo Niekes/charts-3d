@@ -10,13 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `globe-chart-3d`: a globe of tiles between meridians and parallels, `step`
-  degrees wide. The tile that holds an entry rises to its value in the color
-  of its series, an empty one lies flat in the wall color, so the tiles
-  together are the globe; a new tile grows from the globe as it fades in and
-  a gone one shrinks back. Regions and hexagons are out of scope by decision
+  degrees wide, on the land. The tile that holds an entry rises to its value
+  in the color of its series; a new tile grows from the globe as it fades in
+  and a gone one shrinks back. The `land` is a GeoJSON feature collection,
+  cut at the horizon by d3-geo and laid on the ocean disc, flat in the colors
+  of the walls. Regions as the data and hexagons are out of scope by decision
   (ADR-0006).
 - `globe` in the core: the point at a longitude and latitude on a sphere in
   the world box, since a chart may not do trigonometry of its own.
+- A chart may declare npm dependencies of its own on its registry item, which
+  land only where that chart installs: the globe's `d3-geo` is the first.
 
 ## [0.6.0] - 2026-11-05
 

@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
+import { land } from "@/docs/examples/land"
 import { chartConfig, chartData } from "@/docs/examples/globe-chart-3d-demo"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
@@ -13,7 +14,7 @@ export default function GlobeChart3DUpdateDemo() {
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer3D config={chartConfig} renderer={renderer}>
-        <GlobeChart3D data={data} lon="lon" lat="lat" value="population" />
+        <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="population" />
       </ChartContainer3D>
       <button
         type="button"

@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
+import { land } from "@/docs/examples/land"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // A year of disasters with fixed numbers, so the only change is which of
@@ -43,6 +44,7 @@ export default function GlobeChart3DEnterDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer} legend>
         <GlobeChart3D
           data={events.slice(0, count)}
+          land={land}
           lon="lon"
           lat="lat"
           value="strength"
