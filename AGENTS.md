@@ -154,7 +154,8 @@ The rules that `scripts/check-template.mjs` enforces:
   `registry.json`, and the core as `@/registry/new-york/ui/chart-3d`, which
   the shadcn CLI rewrites to the `ui` alias of the project;
 - a chart renders no SVG or HTML elements of its own: it draws through
-  `Axes3D` and `Marks3D`, so every renderer can draw it;
+  `Axes3D` and `Marks3D` - through `Marks3D` alone where it has no axes, as
+  the globe (ADR-0006) - so every renderer can draw it;
 - a chart depends on `niekes/charts-3d/chart-3d` in the registry and leaves
   the npm dependencies to the core. On `master` the dependency is unpinned;
   only the release commit, which the release workflow makes beside `master`,

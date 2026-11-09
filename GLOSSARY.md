@@ -56,7 +56,7 @@ the chart box, in paint order.
 _Avoid_: shape, element, datum
 
 **Tile**:
-One patch of the globe between two meridians and two parallels, a fixed
+The piece of the globe between two meridians and two parallels, a fixed
 number of degrees wide. A tile with an entry rises from the globe to its
 value; an empty one lies flat in the wall color, so the tiles together are
 the globe.

@@ -133,15 +133,20 @@ describe("GlobeChart3D hover", () => {
   const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
   const data = [{ lon: 15, lat: 45, population: 10 }]
 
+  /** The center of a face on screen. */
+  function center(face: Element) {
+    const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+    return [0, 1].map(
+      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+    )
+  }
+
   /** The faces of the tile that rises, as elements, and the center of the one painted last. */
   function prism(svg: SVGSVGElement) {
     const faces = [...svg.querySelectorAll("path")].filter((p) =>
       p.getAttribute("fill")!.includes("var(--color-population)")
     )
-    const corners = faces.at(-1)!.getAttribute("d")!.slice(1, -1).split("L")
-    const [x, y] = [0, 1].map(
-      (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
-    )
+    const [x, y] = center(faces.at(-1)!)
     return { faces, x, y }
   }
 
@@ -169,7 +174,7 @@ describe("GlobeChart3D hover", () => {
     await chart.unmount()
   })
 
-  test("hovering a tile highlights its faces together with an edge, never a flat tile; the fill never changes; leaving clears it", async () => {
+  test("hovering a tile highlights its faces together with an edge, never a flat tile, which says nothing; the fill never changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <GlobeChart3D data={data} lon="lon" lat="lat" value="population" step={30} />
@@ -189,6 +194,15 @@ describe("GlobeChart3D hover", () => {
     // Off the globe, still inside the chart: no edge.
     await chart.send("pointermove", { clientX: 5, clientY: 5 })
     expect(edged()).toHaveLength(0)
+
+    // On a flat tile, the one painted last: the globe itself says nothing.
+    const flat = paths()
+      .filter((p) => p.getAttribute("fill")!.includes("--muted"))
+      .at(-1)!
+    const [fx, fy] = center(flat)
+    await chart.send("pointermove", { clientX: fx, clientY: fy })
+    expect(edged()).toHaveLength(0)
+    expect(chart.host.textContent).not.toContain("Population")
 
     await chart.send("pointermove", { clientX: x, clientY: y })
     expect(edged()).toHaveLength(faces.length)

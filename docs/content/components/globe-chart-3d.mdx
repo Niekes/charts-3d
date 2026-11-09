@@ -23,7 +23,10 @@ wide. An entry names a place, in the `lon` and `lat` fields, and the tile that
 holds it rises to the entry's `value`, in the color of its `series`; a tile
 without an entry lies flat in the wall color. Aggregation happens before the
 chart: round a list of places to the grid, or hand the chart a grid it already
-has, one entry per tile.
+has, one entry per tile - where two entries fall on one tile, the last one
+wins. The tile is the identity of a mark: an entry that moves to another tile
+leaves there and enters here, and a tile that changes its series leaves as
+one and enters as the other.
 
 ## Installation
 

@@ -41,10 +41,16 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
 const RADIUS = 1.15
 const HEIGHT = 0.4
 
-/** One face of the globe: the corners of a tile, flat or lifted, with the tile it belongs to. */
-type Face = Point3D[] & { id: string; part: string }
+/** One face of the globe: the corners of a tile, flat or lifted, with the id of the tile it belongs to. */
+type Face = Point3D[] & { id: string; part: "tile" | "top" | `side${number}` }
 
-type Fields<T> = { lon: keyof T & string; lat: keyof T & string; value: keyof T & string }
+/** The fields of an entry: its place, its value and, if the chart has one, its series. */
+type Fields<T> = {
+  lon: keyof T & string
+  lat: keyof T & string
+  value: keyof T & string
+  series?: keyof T & string
+}
 
 /**
  * A globe of tiles between meridians and parallels, `step` degrees wide. The
@@ -62,15 +68,16 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   format,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const fields = { lon, lat, value }
+  const fields = { lon, lat, value, series }
   // The value of every tile with an entry, keyed by the tile and its series,
   // so a tile that changes color leaves as one and enters as the other.
-  const target = tileValues(data, fields, series, step, Object.keys(config)[0])
+  const target = tileValues(data, fields, step, Object.keys(config)[0])
   // A tile grows from the globe as it fades in and shrinks back as it fades
   // out; the ceiling glides with the data, so the tallest tile never jumps.
   const heights = useTween(target, 0)
   const presence = useTween(Object.fromEntries(Object.keys(target).map((k) => [k, 1])), 0)
-  const ceiling = useTween({ c: axis(0, Math.max(0, ...Object.values(target))).domain[1] }).c
+  const peak = Object.values(target).reduce((max, v) => Math.max(max, v), 0)
+  const { ceiling } = useTween({ ceiling: axis(0, peak).domain[1] })
 
   const marks = polygons3D<Point3D>()
     .camera(camera)
@@ -100,7 +107,6 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
 function tileValues<T extends Record<string, unknown>>(
   data: T[],
   fields: Fields<T>,
-  series: (keyof T & string) | undefined,
   step: number,
   fallback: string
 ) {
@@ -109,9 +115,9 @@ function tileValues<T extends Record<string, unknown>>(
     const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     // An entry without a place on the globe has no tile.
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue
-    const tile = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
-    const key = series ? String(d[series]) : fallback
-    tiles.set(tile, [`${tile},${key}`, Math.max(0, Number(d[fields.value]) || 0)])
+    const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
+    const key = fields.series ? String(d[fields.series]) : fallback
+    tiles.set(center, [`${center},${key}`, Math.max(0, Number(d[fields.value]) || 0)])
   }
   return Object.fromEntries(tiles.values())
 }
@@ -122,27 +128,36 @@ function snap(v: number, lo: number, hi: number, step: number) {
   return lo + (index + 0.5) * step
 }
 
+/** The center and the config key of a tile that rises, read back from its id. */
+function tile(id: string) {
+  const [lon, lat, ...key] = id.split(",")
+  return { lon: Number(lon), lat: Number(lat), key: key.join(",") }
+}
+
 /** The flat tiles of the whole grid, `step` degrees wide, west to east and south to north. */
 function gridFaces(step: number): Face[] {
   const rows = Math.round(180 / step)
   return Array.from({ length: Math.round(360 / step) * rows }, (_, i) => {
     const lon = -180 + (Math.floor(i / rows) + 0.5) * step
     const lat = -90 + ((i % rows) + 0.5) * step
-    return Object.assign(corners(lon, lat, step, RADIUS), { id: `${lon},${lat}`, part: "tile" })
+    return Object.assign(corners(lon, lat, step, RADIUS), {
+      id: `${lon},${lat}`,
+      part: "tile" as const,
+    })
   })
 }
 
 /** The faces of every tile that rises - its top and its four sides - the gone ones still shrinking among them. */
 function prismFaces(heights: Record<string, number>, ceiling: number, step: number): Face[] {
   return Object.entries(heights).flatMap(([id, value]) => {
-    const [lon, lat] = id.split(",").map(Number)
+    const { lon, lat } = tile(id)
     const bottom = corners(lon, lat, step, RADIUS)
     const top = corners(lon, lat, step, RADIUS + (value / ceiling) * HEIGHT)
     return [
-      Object.assign(top, { id, part: "top" }),
+      Object.assign(top, { id, part: "top" as const }),
       ...bottom.map((b, i) => {
         const j = (i + 1) % 4
-        return Object.assign([b, bottom[j], top[j], top[i]], { id, part: `side${i}` })
+        return Object.assign([b, bottom[j], top[j], top[i]], { id, part: `side${i}` as const })
       }),
     ]
   })
@@ -179,8 +194,7 @@ function prismMark<T extends Record<string, unknown>>(
     format,
   }: { config: ChartConfig; fields: Fields<T>; format?: (value: number) => React.ReactNode }
 ) {
-  const [lon, lat, ...rest] = face.id.split(",")
-  const key = rest.join(",")
+  const { lon, lat, key } = tile(face.id)
   const color = `var(--color-${key})`
   return {
     key: `${face.id}-${face.part}`,
@@ -191,8 +205,8 @@ function prismMark<T extends Record<string, unknown>>(
       title: config[key]?.label ?? key,
       items: [
         { label: fields.value, value: format ? format(value) : value, color },
-        { label: fields.lat, value: Number(lat) },
-        { label: fields.lon, value: Number(lon) },
+        { label: fields.lat, value: lat },
+        { label: fields.lon, value: lon },
       ],
     },
   }

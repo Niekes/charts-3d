@@ -80,7 +80,8 @@ events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
 least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
 webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
-chart clears both; new data glides in (`useTween`); the axes follow. New code
+chart clears both; new data glides in (`useTween`); the axes follow, where the
+chart has axes - the globe has none (ADR-0006). New code
 comes with its tests - the coverage gate is 98% in each metric.
 
 ## 4. Docs
