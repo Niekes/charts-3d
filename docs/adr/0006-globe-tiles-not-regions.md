@@ -57,3 +57,8 @@ canvas stays the renderer for many marks. Charts may not call `Math.sin` or
 `Math.cos`, so the mapping from lon/lat to the sphere is a core helper,
 `globe`, exported and part of the npm API. Holes in a region, such as a lake,
 fill in the land color; world-atlas at 110m has none.
+
+Amended 2026-11-09: the ocean and the land draw in `--chart-3d-ocean` and
+`--chart-3d-land` where those are set, and in the colors of the walls
+otherwise - looks are CSS (ADR-0004), and the globe demos set them for a globe
+at night.

@@ -63,12 +63,13 @@ _Avoid_: cell, hexbin, bin, patch
 
 **Land**:
 The regions of the earth under the tiles, drawn from the GeoJSON the chart
-is given, in the color of a gridline. It is scenery: it neither enters nor
-answers the pointer.
+is given, in the color of a gridline unless the theme gives it one. It is
+scenery: it neither enters nor answers the pointer.
 _Avoid_: countries, map, features, background
 
 **Ocean**:
-The disc of the globe the land lies on, in the color of a wall.
+The disc of the globe the land lies on, in the color of a wall unless the
+theme gives it one.
 _Avoid_: sea, sphere, backdrop
 
 **Horizon**:

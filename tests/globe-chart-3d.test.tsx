@@ -33,10 +33,13 @@ const square = (lon: number, lat: number, size = 30): GeoJSON.Feature => ({
 /** One square of land, east of the prime meridian on the equator, in front of the default camera. */
 const land: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [square(0, 0)] }
 const none: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
-/** The rings of the land, in the color of a gridline. */
-const landOf = (html: string) => html.match(/fill="var\(--border\)"/g) ?? []
-/** The ocean disc, in the color of a wall. */
-const oceanOf = (html: string) => html.match(/fill="var\(--muted\)"/g) ?? []
+/** The rings of the land: their token, falling back to the color of a gridline. */
+const LAND = "var(--chart-3d-land, var(--border))"
+const landOf = (html: string) => html.match(new RegExp(`fill="${literal(LAND)}"`, "g")) ?? []
+/** The ocean disc: its token, falling back to the color of a wall. */
+const OCEAN = "var(--chart-3d-ocean, var(--muted))"
+const oceanOf = (html: string) => html.match(new RegExp(`fill="${literal(OCEAN)}"`, "g")) ?? []
+const literal = (s: string) => s.replace(/[()]/g, "\\$&")
 /** The faces of the tiles that rise, in the color of their series. */
 const faces = (html: string, key = "population") =>
   html.match(new RegExp(`fill="[^"]*var\\(--color-${key}\\)`, "g")) ?? []
@@ -114,7 +117,7 @@ describe("GlobeChart3D", () => {
         )
       // d3-3d projects the four corners of the top; d3-geo the square, resampled, through its corners.
       const top = points("color-mix\\(in oklch, var\\(--color-population\\)")
-      const ring = points("var\\(--border\\)")
+      const ring = points(literal(LAND))
       expect(top).toHaveLength(4)
       expect(ring.length).toBeGreaterThan(4)
       for (const [x, y] of top) {
@@ -320,7 +323,7 @@ describe("GlobeChart3D hover", () => {
     expect(edged()).toHaveLength(0)
 
     // On the land, east of the tile: the earth itself says nothing.
-    const [fx, fy] = center(paths().find((p) => p.getAttribute("fill") === "var(--border)")!)
+    const [fx, fy] = center(paths().find((p) => p.getAttribute("fill") === LAND)!)
     await chart.send("pointermove", { clientX: fx, clientY: fy })
     expect(edged()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("Population")

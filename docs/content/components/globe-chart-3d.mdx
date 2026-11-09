@@ -28,10 +28,22 @@ last one wins. The tile is the identity of a mark: an entry that moves to
 another tile leaves there and enters here, and a tile that changes its series
 leaves as one and enters as the other.
 
+The demos show the earthquakes of 2025 of magnitude 5 and up, from the
+[catalog of the USGS](https://earthquake.usgs.gov/fdsnws/event/1/), on tiles
+of 2°: a tile rises to the strongest quake on it, and its color is that
+quake's class, magnitude by depth, in a bivariate scheme of nine colors - the
+legend below the chart runs magnitude to the right and depth upwards. The
+classes, the schemes and the legend live in `docs/examples/bivariate.tsx`, not
+in the chart: the chart takes a `series` per tile and a config entry per
+class, as any chart does.
+
 The `land` is a GeoJSON feature collection, the regions of the earth: d3-geo
 cuts them at the horizon and lays them on the ocean disc, flat in the colors
-of the walls, and they turn, pan and zoom with the tiles. The land is scenery:
-it never enters, glides or answers the pointer. The demos take the land of
+of the walls - or in `--chart-3d-ocean` and `--chart-3d-land` where you set
+them, as the demos do for a globe at night, see
+[Theming](/docs/theming#the-chart-tokens) - and they turn, pan and zoom with
+the tiles. The land is scenery: it never enters, glides or answers the
+pointer. The demos take the land of
 [world-atlas](https://github.com/topojson/world-atlas) at 110m, its
 `countries`, converted from TopoJSON with
 [topojson-client](https://github.com/topojson/topojson-client),
@@ -76,8 +88,9 @@ camera.
 
 ## Update
 
-Press Update: every tile glides to its new value over the `animationDuration`
-of its container, and the ceiling - the height of the tallest tile - glides
+Press the button: every tile glides from the magnitude of its strongest quake
+to the number of quakes it holds, and back, over the `animationDuration` of
+its container, and the ceiling - the height of the tallest tile - glides
 along, so no tile jumps.
 
 <Tabs items={["Preview", "Code"]}>
@@ -91,11 +104,13 @@ along, so no tile jumps.
 
 ## Enter and leave
 
-New data may also bring and drop tiles. An added event grows out of the globe
-and fades in; a removed one shrinks back into it and fades out, the mirror
-of its entering (see Enter in the
+New data may also bring and drop tiles. A quake that arrives grows out of the
+globe and fades in; one that goes shrinks back into it and fades out, the
+mirror of its entering (see Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
-Here each event is a tile of its type, `series`, and its strength the height.
+Here the year arrives month by month; a tile that was there already grows
+when a stronger quake of its class joins it, and leaves as one class to enter
+as another when the stronger quake is of a different one.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -121,10 +136,10 @@ The same chart on every renderer, side by side. The marks are data the chart han
 
 ## Many marks
 
-Tiles of 3°, a thousand of them rising over the land - and the chart stays
-interactive. The scene is one list of marks, so the demo starts on
-`"canvas"`, the renderer for many marks, and the select shows the same scene
-on SVG and WebGL.
+Tiles of 1°, nearly every quake of the year its own spike, thousands of faces
+over the land - and the chart stays interactive. The scene is one list of
+marks, so the demo starts on `"canvas"`, the renderer for many marks, and the
+select shows the same scene on SVG and WebGL.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

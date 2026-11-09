@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the world box, since a chart may not do trigonometry of its own.
 - A chart may declare npm dependencies of its own on its registry item, which
   land only where that chart installs: the globe's `d3-geo` is the first.
+- `--chart-3d-ocean` and `--chart-3d-land`: the colors of the ocean and the
+  land of the globe, falling back to `--muted` and `--border`. The globe demos
+  set them for a globe at night and show the earthquakes of 2025 from the
+  USGS catalog in a bivariate scheme, magnitude by depth.
 
 ## [0.6.0] - 2026-11-05
 

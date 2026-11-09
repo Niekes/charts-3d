@@ -147,9 +147,12 @@ function earth(land: GeoJSON.FeatureCollection, camera: Camera3DInstance) {
     path(object)
     return sink.rings.map((points, i) => ({ key: `${key}-${i}`, points, fill }))
   }
+  // Their tokens, falling back to the colors of the walls.
   return [
-    ...marksOf({ type: "Sphere" }, "ocean", "var(--muted)"),
-    ...land.features.flatMap((feature, i) => marksOf(feature, `land-${i}`, "var(--border)")),
+    ...marksOf({ type: "Sphere" }, "ocean", "var(--chart-3d-ocean, var(--muted))"),
+    ...land.features.flatMap((feature, i) =>
+      marksOf(feature, `land-${i}`, "var(--chart-3d-land, var(--border))")
+    ),
   ]
 }
 
