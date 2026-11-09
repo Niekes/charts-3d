@@ -14,6 +14,7 @@ import {
   axis,
   cubeMarks,
   faded,
+  globe,
   intoWorld,
   linear,
   pad,
@@ -1457,6 +1458,19 @@ describe("helpers", () => {
     expect(faded("color-mix(in oklch, red 80%, black)", 0.25)).toBe(
       "color-mix(in oklab, color-mix(in oklch, red 80%, black) 25%, transparent)"
     )
+  })
+
+  test("globe puts a lon/lat on the sphere: the prime meridian faces the viewer, east is right, north is up", () => {
+    // Rounded, and -0 made 0, so the points compare as plain numbers.
+    const at = (lon: number, lat: number, radius?: number) =>
+      Object.fromEntries(
+        Object.entries(globe(lon, lat, radius)).map(([a, v]) => [a, Math.round(v * 1e6) / 1e6 + 0])
+      )
+    expect(at(0, 0)).toEqual({ x: 0, y: 0, z: 1 })
+    expect(at(90, 0)).toEqual({ x: 1, y: 0, z: 0 })
+    // The box counts y downwards, so up is -y.
+    expect(at(0, 90)).toEqual({ x: 0, y: -1, z: 0 })
+    expect(at(180, -90, 2)).toEqual({ x: 0, y: 2, z: 0 })
   })
 
   test("shade does not depend on the winding of the face", () => {

@@ -2153,6 +2153,19 @@ function worldBox(spec: AxesSpec, depth = 1): World {
 }
 
 /**
+ * The point at `lon` and `lat`, in degrees, on the sphere of `radius` around
+ * the center of the world box: the prime meridian faces the viewer at yaw 0,
+ * east lies to the right and the north pole is up - towards -y, as the box
+ * counts y. The globe chart builds its tiles from it, since a chart may not
+ * do trigonometry of its own.
+ */
+function globe(lon: number, lat: number, radius = 1): Point3D {
+  const [theta, phi] = [lon, lat].map((degrees) => (degrees * Math.PI) / 180)
+  const flat = radius * Math.cos(phi)
+  return { x: flat * Math.sin(theta), y: -radius * Math.sin(phi), z: flat * Math.cos(theta) }
+}
+
+/**
  * Hands the projection its accessors into the world box, so every chart maps
  * its shapes onto the screen the same way.
  */
@@ -2261,6 +2274,7 @@ export {
   pad,
   linear,
   worldBox,
+  globe,
   intoWorld,
   shade,
   faded,

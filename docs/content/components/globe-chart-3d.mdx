@@ -1,0 +1,123 @@
+---
+title: Globe Chart 3D
+description: A globe of tiles, each rising to its value.
+---
+
+import GlobeChart3DDemo from "@/docs/examples/globe-chart-3d-demo"
+import GlobeChart3DUpdateDemo from "@/docs/examples/globe-chart-3d-update-demo"
+import GlobeChart3DEnterDemo from "@/docs/examples/globe-chart-3d-enter-demo"
+import GlobeChart3DRenderersDemo from "@/docs/examples/globe-chart-3d-renderers-demo"
+import GlobeChart3DManyDemo from "@/docs/examples/globe-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <GlobeChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/globe-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The globe is a grid of tiles between meridians and parallels, `step` degrees
+wide. An entry names a place, in the `lon` and `lat` fields, and the tile that
+holds it rises to the entry's `value`, in the color of its `series`; a tile
+without an entry lies flat in the wall color. Aggregation happens before the
+chart: round a list of places to the grid, or hand the chart a grid it already
+has, one entry per tile.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/globe-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `GlobeChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array lucide-react
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/globe-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/globe-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: every tile glides to its new value over the `animationDuration`
+of its container, and the ceiling - the height of the tallest tile - glides
+along, so no tile jumps.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <GlobeChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/globe-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring and drop tiles. An added event grows out of the globe
+and fades in; a removed one shrinks back into it and fades out, the mirror
+of its entering (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Here each event is a tile of its type, `series`, and its strength the height.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <GlobeChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/globe-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <GlobeChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/globe-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Tiles of 3°, seven thousand of them and thousands rising - and the chart
+stays interactive. The scene is one list of marks, so the demo starts on
+`"canvas"`, the renderer for many marks, and the select shows the same scene
+on SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <GlobeChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/globe-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table path="../../../registry/new-york/ui/globe-chart-3d.tsx" name="GlobeChart3DProps" />

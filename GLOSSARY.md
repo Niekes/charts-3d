@@ -55,6 +55,13 @@ One shape of a chart - a bar, a point, a face of a flow - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
 
+**Tile**:
+One patch of the globe between two meridians and two parallels, a fixed
+number of degrees wide. A tile with an entry rises from the globe to its
+value; an empty one lies flat in the wall color, so the tiles together are
+the globe.
+_Avoid_: cell, hexbin, bin, patch
+
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not
 have, the gridline of that tick. It comes in gradually - a mark grows from

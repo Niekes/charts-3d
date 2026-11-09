@@ -40,6 +40,10 @@
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/surface-chart-3d"><img src="assets/examples/surface-chart-3d.png" alt="Surface Chart 3D"></a></td>
         <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/area-chart-3d"><img src="assets/examples/area-chart-3d.png" alt="Area Chart 3D"></a></td>
     </tr>
+    <tr style="background-color: #f6f8fa">
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/globe-chart-3d"><img src="assets/examples/globe-chart-3d.png" alt="Globe Chart 3D"></a></td>
+        <td></td>
+    </tr>
 </table>
 
 Copy-paste components or an npm package, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn on drag and on the arrow keys.

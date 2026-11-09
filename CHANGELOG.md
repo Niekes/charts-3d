@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `globe-chart-3d`: a globe of tiles between meridians and parallels, `step`
+  degrees wide. The tile that holds an entry rises to its value in the color
+  of its series, an empty one lies flat in the wall color, so the tiles
+  together are the globe; a new tile grows from the globe as it fades in and
+  a gone one shrinks back. Regions and hexagons are out of scope by decision
+  (ADR-0006).
+- `globe` in the core: the point at a longitude and latitude on a sphere in
+  the world box, since a chart may not do trigonometry of its own.
+
 ## [0.6.0] - 2026-11-05
 
 ### Added

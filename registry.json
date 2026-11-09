@@ -47,6 +47,20 @@
       "categories": ["charts", "3d"]
     },
     {
+      "name": "globe-chart-3d",
+      "type": "registry:ui",
+      "title": "Globe Chart 3D",
+      "description": "A globe of tiles, each rising to its value.",
+      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "files": [
+        {
+          "path": "registry/new-york/ui/globe-chart-3d.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "categories": ["charts", "3d"]
+    },
+    {
       "name": "scatter-chart-3d",
       "type": "registry:ui",
       "title": "Scatter Chart 3D",
