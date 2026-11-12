@@ -25,9 +25,9 @@ The container turns every key into a CSS variable, `--color-desktop` and `--colo
 
 The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`.
 
-## The focus edge
+## The focus color
 
-Pointing at a mark gives its element an edge - the hover highlight. It draws in `--chart-3d-focus` where you set it, and otherwise in the mark's own fill, lightened with `color-mix`, so the highlight carries the color of what it highlights. The core resolves it for every renderer; set the property on the chart, or any ancestor, for one color instead:
+Pointing at a mark lights the fill of its element - the hover highlight. It takes `--chart-3d-focus` where you set it, and otherwise the mark's own fill, lightened with `color-mix`, so the highlight carries the color of what it highlights; a stroke of the mark's own, such as the ring of a scatter point, stays. The core resolves it for every renderer; set the property on the chart, or any ancestor, for one color instead:
 
 ```css
 [data-slot="chart-3d"] {

@@ -1,5 +1,9 @@
 # Hover highlights the single element with an edge only - no fill change
 
+Status: superseded in part by [ADR-0007](0007-hover-lights-the-fill.md) -
+the highlight is the fill, not an edge; the single element, its `groups` and
+the no-fade rule stand.
+
 Context: on hover, a chart marks what the pointer is on. Earlier versions faded
 everything else darker; that was a fill change and read as brightness, not as a
 highlight, and groups made whole series or whole node neighborhoods light up.

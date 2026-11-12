@@ -93,7 +93,7 @@ _Avoid_: mark kind, mark type
 **Parity**:
 The same chart behaves the same on every renderer: every mark draws, and
 hover, tooltip and focus act alike. Only the pixels may differ, such as the
-width of the focus edge.
+width of a ring.
 _Avoid_: pixel identity, visual equality
 
 **Renderer demo**:
@@ -139,11 +139,11 @@ more room: past the right edge it sits to the left, past the top below.
 _Avoid_: alignment, anchor, position
 
 **Focus**:
-The element under the pointer, highlighted with an edge in its own color,
-lightened - or in the focus color, where one is set; the fill never changes.
-Every chart's marks carry their `groups`, naming the marks highlighted
-together: one bar, one point, one cell.
-_Avoid_: selection, active state, fade
+The element under the pointer, lit: its fill in its own color lightened - or
+in the focus color, where one is set; a stroke of its own stays. Every
+chart's marks carry their `groups`, naming the marks lit together: one bar,
+one point, one cell.
+_Avoid_: selection, active state, fade, edge
 
 ## Navigation
 

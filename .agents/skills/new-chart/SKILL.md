@@ -34,10 +34,10 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   naming what is highlighted together - the bar alone in the bar chart, the
   single point in the scatter -
   so that in every chart, while the pointer is on a mark, its tooltip shows and
-  exactly those marks get an edge in `var(--foreground)` (white in the dark
-  theme, black in the light; the fill never changes); when the pointer leaves
-  the mark or the chart, the edge clears. A chart never highlights anything
-  itself and has no pointer handlers.
+  exactly those marks light up: their fill takes the focus color -
+  `--chart-3d-focus`, or their own fill lightened - and a stroke of their own
+  stays (ADR-0007); when the pointer leaves the mark or the chart, the focus
+  clears. A chart never highlights anything itself and has no pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - the platform

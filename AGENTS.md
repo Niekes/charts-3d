@@ -201,12 +201,13 @@ How the charts draw, so that a new one draws the same way:
   renderer, ringed by the background. Give a direction that turns with the
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
-- **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md)). A mark names the marks of the same element in `groups`: the
-  faces of a bar. Pointing at a mark, the core gives
-  exactly those an edge in the focus color - `--chart-3d-focus`, or their own
-  fill lightened - until the pointer leaves the mark; the fill never
-  changes on hover, with every renderer, and a chart never highlights anything
-  itself.
+- **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md),
+  [ADR-0007](docs/adr/0007-hover-lights-the-fill.md)). A mark names the marks
+  of the same element in `groups`: the faces of a bar. Pointing at a mark, the
+  core fills exactly those with the focus color - `--chart-3d-focus`, or their
+  own fill lightened - until the pointer leaves the mark; a stroke of their
+  own stays and nothing else changes, with every renderer, and a chart never
+  highlights anything itself.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
   axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
   axis fades from one edge to the next. `fit` gives the tick labels of an
@@ -272,7 +273,7 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **Parity is behavioural and gated**
   ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). Every mark of the
   scene draws on every renderer, and hover, tooltip and focus act the same;
-  pixels may differ, such as the width of the focus edge (ADR-0002). The parity test in
+  pixels may differ, such as the width of a ring (ADR-0002). The parity test in
   `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
   and a circle - over all three renderers. A third mark shape turns `Mark3D`
   into a discriminated union with an exhaustive switch everywhere the core
@@ -344,7 +345,7 @@ chooses a rung:
   owned registry copy, not a prop.
 
 A knob nobody turns is API debt: motion constants, camera steps and limits,
-tick density, the walls and gridlines, and the focus edge stay fixed until a
+tick density, the walls and gridlines, and the focus color stay fixed until a
 user asks.
 
 ### Code style

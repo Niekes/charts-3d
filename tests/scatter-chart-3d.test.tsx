@@ -285,9 +285,10 @@ describe("ScatterChart3D transitions", () => {
 })
 
 describe("ScatterChart3D focus", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
 
-  test("hovering a point highlights that point alone with an edge; the fill never changes; leaving clears it", async () => {
+  test("hovering a point lights the fill of that point alone, under its ring; leaving clears it", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
@@ -311,8 +312,7 @@ describe("ScatterChart3D focus", () => {
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     const circles = () => [...svg.querySelectorAll("circle")]
     const fills = () => circles().map((c) => c.getAttribute("fill")!)
-    const edged = () =>
-      circles().filter((c) => c.getAttribute("stroke") === edge(c.getAttribute("fill")!))
+    const litOnes = () => circles().filter((c) => isLit(c.getAttribute("fill")!))
     const move = (clientX: number, clientY: number) =>
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
@@ -322,23 +322,26 @@ describe("ScatterChart3D focus", () => {
     const before = fills()
 
     await move(clientX, clientY)
-    // The single point alone gets the edge - not its series - and no fill changes.
-    expect(edged()).toHaveLength(1)
-    expect(fills()).toEqual(before)
+    // The single point alone lights up - not its series - its own fill lightened under its
+    // ring; every other fill stays.
+    expect(litOnes()).toHaveLength(1)
+    expect(litOnes()[0].getAttribute("stroke")).toContain("var(--background)")
+    const after = fills()
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f) : f)))
 
-    // Off the point, still inside the chart: no edge.
+    // Off the point, still inside the chart: nothing lit.
     await move(5, 5)
-    expect(edged()).toHaveLength(0)
+    expect(fills()).toEqual(before)
 
     // Hover again, then leave the chart.
     await move(clientX, clientY)
-    expect(edged()).toHaveLength(1)
+    expect(litOnes()).toHaveLength(1)
     await act(() =>
       svg.dispatchEvent(
         new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
       )
     )
-    expect(edged()).toHaveLength(0)
+    expect(fills()).toEqual(before)
 
     await act(async () => root.unmount())
     host.remove()
