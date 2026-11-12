@@ -62,10 +62,23 @@ value; one without an entry is not drawn.
 _Avoid_: cell, hexbin, bin, patch
 
 **Land**:
-The regions of the earth under the tiles, drawn from the GeoJSON the chart
-is given, in the color of a gridline unless the theme gives it one. It is
-scenery: it neither enters nor answers the pointer.
+The regions of the earth under the marks of a globe, drawn from the GeoJSON
+the chart is given, in the color of a gridline unless the theme gives it
+one. It is scenery: it neither enters nor answers the pointer.
 _Avoid_: countries, map, features, background
+
+**Region**:
+A part of the land with an entry, colored over the land in the color of its
+class - the mark of the choropleth. It fades in and out, since on a map a
+shape that grows would mislead, and answers the pointer with its name and
+its value.
+_Avoid_: country, polygon, area, feature
+
+**Dot**:
+A circle on the land at a place, its area the value of the place - the mark
+of the places chart. It grows from nothing as it fades in, and a dot on the
+far side of the globe is hidden by it.
+_Avoid_: bubble, marker, pin, point
 
 **Ocean**:
 The disc of the globe the land lies on, in the color of a wall unless the

@@ -2,45 +2,35 @@ import { useState } from "react"
 
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
-import {
-  BivariateLegend,
-  SchemeSelect,
-  bivariateConfig,
-  night,
-  quakeTiles,
-  type Scheme,
-} from "@/docs/examples/bivariate"
 import { land } from "@/docs/examples/land"
+import { compact, night, placeTiles, populationConfig } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
-// The earthquakes of 2025 on tiles of 2°: the strongest quake of a tile is
-// its height, and its class, magnitude by depth, is its color.
+// The populated places of the world on tiles of 2°: a tile rises to the
+// people of its metro areas and takes the color of their class. Thousands
+// of tiles turn smoothly on canvas, not on SVG, so the demo starts there.
 export const step = 2
-export const chartData = quakeTiles(step)
+export const chartData = placeTiles(step)
 
 export default function GlobeChart3DDemo() {
-  const [renderer, setRenderer] = useState<Renderer3D>("svg")
-  const [scheme, setScheme] = useState<Scheme>("BuPu")
+  const [renderer, setRenderer] = useState<Renderer3D>("canvas")
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={bivariateConfig(scheme)} renderer={renderer} style={night}>
+      <ChartContainer3D config={populationConfig} renderer={renderer} style={night} legend>
         <GlobeChart3D
           data={chartData}
           land={land}
           lon="lon"
           lat="lat"
-          value="magnitude"
+          value="metro"
           series="class"
+          label="place"
           step={step}
-          format={(magnitude) => magnitude.toFixed(1)}
+          format={compact}
         />
       </ChartContainer3D>
-      <BivariateLegend scheme={scheme} />
-      <div className="flex justify-center gap-4">
-        <SchemeSelect scheme={scheme} onChange={setScheme} />
-        <RendererSelect renderer={renderer} onChange={setRenderer} />
-      </div>
+      <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
 }

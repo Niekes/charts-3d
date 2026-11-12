@@ -72,8 +72,11 @@ export type Mark3D = {
   fill: string
   /** The ring around a circle, a CSS color. */
   stroke?: string
-  /** Shown while the pointer is over the mark. */
-  tooltip?: Tooltip3D
+  /**
+   * Shown while the pointer is over the mark. A function builds it when the
+   * pointer arrives, so a chart of thousands of marks pays for one.
+   */
+  tooltip?: Tooltip3D | (() => Tooltip3D)
   /**
    * The marks of the same element as this one: the faces of a bar, the
    * segments of a flow. Pointing at a mark gives them an edge in the focus
@@ -547,16 +550,22 @@ function useCamera(view: View3D, width: number, height: number) {
 const clamp = (lo: number, hi: number, value: number) => Math.max(lo, Math.min(hi, value))
 const ZERO = { x: 0, y: 0 }
 
-/** `view` moved by one step. The tilt stops at the zenith and the nadir, the zoom at 1/4 and 8. */
+/**
+ * `view` moved by one step. The tilt stops at the zenith and the nadir, the
+ * zoom at 1/4 and 8, and a turn is divided by the zoom: zoomed in, a drag
+ * moves the picture under the pointer as far as zoomed out, and a key turns
+ * it as far on screen.
+ */
 function moved(view: View3D, move: Move, initial: View3D): View3D {
   if (move.reset) return initial
   const step = { yaw: 0, tilt: 0, zoom: 1, pan: { x: 0, y: 0 }, ...move }
   const pan = view.pan ?? { x: 0, y: 0 }
+  const zoom = view.zoom ?? 1
   return {
     ...view,
-    yaw: view.yaw + step.yaw,
-    tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt),
-    zoom: clamp(0.25, 8, (view.zoom ?? 1) * step.zoom),
+    yaw: view.yaw + step.yaw / zoom,
+    tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt / zoom),
+    zoom: clamp(0.25, 8, zoom * step.zoom),
     pan: { x: pan.x + step.pan.x, y: pan.y + step.pan.y },
   }
 }
@@ -931,7 +940,8 @@ function useHover(
     focus.set(mark?.groups)
     if (mark?.key === hovered.current?.key) return
     hovered.current = mark
-    tip.set(mark?.tooltip ?? null)
+    const tooltip = mark?.tooltip
+    tip.set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
   }
 
   return {
@@ -1438,11 +1448,13 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
             strokeLinejoin="round"
           />
         ) : (
+          // Rounded like a path, so the server and the browser, whose last
+          // bits of a sine differ, write the same HTML.
           <circle
             key={key}
-            cx={points[0].x}
-            cy={points[0].y}
-            r={r}
+            cx={+points[0].x.toFixed(2)}
+            cy={+points[0].y.toFixed(2)}
+            r={+r.toFixed(2)}
             fill={fill}
             stroke={stroke}
             strokeWidth={stroke ? 1 : undefined}
@@ -1678,7 +1690,10 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
 
 function ChartLegend3D({ config }: { config: ChartConfig }) {
   return (
-    <div data-slot="chart-3d-legend" className="flex items-center justify-center gap-4 pt-3">
+    <div
+      data-slot="chart-3d-legend"
+      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3"
+    >
       {Object.entries(config).map(([key, item]) => (
         <div key={key} className="flex items-center gap-1.5">
           {item.icon ? (
@@ -2165,6 +2180,104 @@ function globe(lon: number, lat: number, radius = 1): Point3D {
   return { x: flat * Math.sin(theta), y: -radius * Math.sin(phi), z: flat * Math.cos(theta) }
 }
 
+/** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
+const GLOBE_RADIUS = 1.15
+
+/**
+ * The camera without its perspective, a copy, since d3-3d shares the view of
+ * a camera it is handed: d3-geo has no perspective, so a geo chart projects
+ * its marks without one too, and they stay on the land.
+ */
+function orthographic(camera: Camera3DInstance) {
+  return camera3D()
+    .origin(camera.origin())
+    .scale(camera.scale())
+    .rotateX(camera.rotateX())
+    .rotateY(camera.rotateY())
+}
+
+/** What `earth` sets on a projection of d3-geo: the three setters it needs, each returning the projection. */
+export type GeoProjectionLike<P> = {
+  rotate(angles: [number, number]): P
+  scale(scale: number): P
+  translate(point: [number, number]): P
+}
+
+/**
+ * Sets a projection of d3-geo to the camera: its rotation in degrees, its
+ * scale at the radius of the globe and its origin, so the land turns, pans
+ * and zooms with the marks.
+ */
+function geoView<P extends GeoProjectionLike<P>>(camera: Camera3DInstance, projection: P) {
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  const { x, y } = camera.origin()
+  return projection
+    .rotate([degrees(camera.rotateY()), degrees(camera.rotateX())])
+    .scale(camera.scale() * GLOBE_RADIUS)
+    .translate([x, y])
+}
+
+/**
+ * Stands in for a canvas under d3-geo's `geoPath`: `marks(draw, key, fill)`
+ * runs `draw` and returns every ring it drew, cut at the horizon as d3-geo
+ * cuts it, as a polygon mark keyed `key-i`. A point is not a region: the ring
+ * its `moveTo` began goes with its `arc`.
+ */
+function ringSink() {
+  const rings: Point2D[][] = []
+  return {
+    beginPath: () => {
+      rings.length = 0
+    },
+    moveTo: (x: number, y: number) => {
+      rings.push([{ x, y }])
+    },
+    lineTo: (x: number, y: number) => {
+      rings.at(-1)!.push({ x, y })
+    },
+    closePath: () => {},
+    arc: () => {
+      rings.pop()
+    },
+    marks: (draw: () => void, key: string, fill: string): Mark3D[] => {
+      rings.length = 0
+      draw()
+      return rings.map((points, i) => ({ key: `${key}-${i}`, points, fill }))
+    },
+  }
+}
+
+/**
+ * The earth under the marks of a geo chart: the ocean and the land as marks,
+ * flat in `--chart-3d-ocean` and `--chart-3d-land`, falling back to the
+ * colors of the walls - scenery, grouped by nothing, with no tooltip, that
+ * neither enters nor glides. The chart hands in d3-geo's `geoOrthographic()`
+ * and `geoPath`, so the core carries no d3-geo; `earth` sets the projection
+ * to the camera and draws through a sink that collects every ring, cut at
+ * the horizon, as a polygon. `path` and `sink` come along for a chart that
+ * draws regions of its own: `sink.marks(() => path(feature), key, fill)`.
+ */
+function earth<
+  Feature,
+  P extends GeoProjectionLike<P>,
+  Path extends (object: Feature | { type: "Sphere" }) => unknown,
+>(
+  land: { features: Feature[] },
+  camera: Camera3DInstance,
+  projection: P,
+  geoPath: (projection: P, sink: ReturnType<typeof ringSink>) => Path
+) {
+  const sink = ringSink()
+  const path = geoPath(geoView(camera, projection), sink)
+  const marks = [
+    ...sink.marks(() => path({ type: "Sphere" }), "ocean", "var(--chart-3d-ocean, var(--muted))"),
+    ...land.features.flatMap((feature, i) =>
+      sink.marks(() => path(feature), `land-${i}`, "var(--chart-3d-land, var(--border))")
+    ),
+  ]
+  return { marks, path, sink }
+}
+
 /**
  * Hands the projection its accessors into the world box, so every chart maps
  * its shapes onto the screen the same way.
@@ -2275,6 +2388,9 @@ export {
   linear,
   worldBox,
   globe,
+  GLOBE_RADIUS,
+  orthographic,
+  earth,
   intoWorld,
   shade,
   faded,

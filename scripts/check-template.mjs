@@ -177,12 +177,17 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     .filter((name) => name && !name.startsWith("type "))
   const generator = names.find((name) => GENERATORS.has(name))
   const body = source.replace(/import\s*{[^}]*}\s*from\s+"d3-3d"/, "")
-  if (!generator || !new RegExp(`${generator}\\s*[<(]`).test(body)) {
+  // The one other projection is d3-geo's (ADR-0006): a chart of regions
+  // alone, as the choropleth, projects with `geoPath` - handed to the core's
+  // `earth` - and has no shapes of d3-3d to sort.
+  const geo = /import\s*{[^}]*\bgeoPath\b[^}]*}\s*from\s+"d3-geo"/.test(source)
+  const regions = !generator && geo && /\bgeoPath\b/.test(body.replace(/import[^\n]*/g, ""))
+  if (!regions && (!generator || !new RegExp(`${generator}\\s*[<(]`).test(body))) {
     fail(
       `${UI}/${file}: a chart projects with a d3-3d shape generator (${[...GENERATORS].join(", ")}), imported from "d3-3d" and called`
     )
   }
-  if (!names.includes("sort") || !/\bsort\b/.test(body)) {
+  if (!regions && (!names.includes("sort") || !/\bsort\b/.test(body))) {
     fail(`${UI}/${file}: a chart sorts its projected shapes with d3-3d's 'sort'`)
   }
 

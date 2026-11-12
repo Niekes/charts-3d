@@ -26,16 +26,24 @@ the chart: round a list of places to the grid, or hand the chart a grid it
 already has, one entry per tile - where two entries fall on one tile, the
 last one wins. The tile is the identity of a mark: an entry that moves to
 another tile leaves there and enters here, and a tile that changes its series
-leaves as one and enters as the other.
+leaves as one and enters as the other. `label` names a field whose value, of
+the last entry on a tile, titles its tooltip. For regions colored by a value
+see the [choropleth](/docs/components/choropleth-chart-3d), for a dot at
+every place the [places chart](/docs/components/places-chart-3d): the three
+share the land.
 
-The demos show the earthquakes of 2025 of magnitude 5 and up, from the
-[catalog of the USGS](https://earthquake.usgs.gov/fdsnws/event/1/), on tiles
-of 2°: a tile rises to the strongest quake on it, and its color is that
-quake's class, magnitude by depth, in a bivariate scheme of nine colors - the
-legend below the chart runs magnitude to the right and depth upwards. The
-classes, the schemes and the legend live in `docs/examples/bivariate.tsx`, not
-in the chart: the chart takes a `series` per tile and a config entry per
-class, as any chart does.
+The demos show the populated places of the world, the 7,332 cities and towns
+of [Natural Earth](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/)
+with the people of their metro areas, summed on tiles of 2°: a tile rises to
+the people on it, and its color is their class, nine steps of the square root
+up to 10 million in YlOrRd, as the
+[world population of globe.gl](https://globe.gl/example/world-population/)
+colors its hexagons; the `legend` of the container lists the classes. Most
+tiles are flat sparks, a few dozen are towers. The classes and the sums live
+in `docs/examples/population.ts`, not in the chart: the chart takes a
+`series` per tile and a config entry per class, as any chart does. Thousands
+of tiles are too many for SVG while the camera turns, so every demo starts on
+`"canvas"`.
 
 The `land` is a GeoJSON feature collection, the regions of the earth: d3-geo
 cuts them at the horizon and lays them on the ocean disc, flat in the colors
@@ -88,10 +96,11 @@ camera.
 
 ## Update
 
-Press the button: every tile glides from the magnitude of its strongest quake
-to the number of quakes it holds, and back, over the `animationDuration` of
+Press the button: every tile glides from the people of its metro areas to
+the people of its cities proper, and back, over the `animationDuration` of
 its container, and the ceiling - the height of the tallest tile - glides
-along, so no tile jumps.
+along, so no tile jumps. The class of a tile stays that of its metro areas,
+so every tile glides and none leaves.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -108,9 +117,10 @@ New data may also bring and drop tiles. A quake that arrives grows out of the
 globe and fades in; one that goes shrinks back into it and fades out, the
 mirror of its entering (see Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
-Here the year arrives month by month; a tile that was there already grows
-when a stronger quake of its class joins it, and leaves as one class to enter
-as another when the stronger quake is of a different one.
+Here the world arrives place by place: lowering the bar from the megacities
+to every place, the smaller places enter and light up; raising it, they sink
+back. A tile that was there already grows as a place joins it, and leaves as
+one class to enter as another where the newcomers lift it over a bound.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -136,10 +146,11 @@ The same chart on every renderer, side by side. The marks are data the chart han
 
 ## Many marks
 
-Tiles of 1°, nearly every quake of the year its own spike, thousands of faces
-over the land - and the chart stays interactive. The scene is one list of
-marks, so the demo starts on `"canvas"`, the renderer for many marks, and the
-select shows the same scene on SVG and WebGL.
+Tiles of 1°, nearly every place its own spark, five thousand tiles over the
+land - and the chart stays interactive. A tile thinner than a pixel draws its
+top alone, so the globe projects a face per flat tile, not five. The scene is
+one list of marks, so the demo starts on `"canvas"`, the renderer for many
+marks, and the select shows the same scene on SVG and WebGL.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

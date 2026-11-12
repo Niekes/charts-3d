@@ -1,0 +1,135 @@
+---
+title: Places Chart 3D
+description: Dots on the land of a globe, one per place, sized by value.
+---
+
+import PlacesChart3DDemo from "@/docs/examples/places-chart-3d-demo"
+import PlacesChart3DUpdateDemo from "@/docs/examples/places-chart-3d-update-demo"
+import PlacesChart3DEnterDemo from "@/docs/examples/places-chart-3d-enter-demo"
+import PlacesChart3DRenderersDemo from "@/docs/examples/places-chart-3d-renderers-demo"
+import PlacesChart3DManyDemo from "@/docs/examples/places-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <PlacesChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/places-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The places chart puts a dot on the globe for every entry, at its `lon` and
+`lat`, in the color of its `series`. With a `value`, the area of a dot is its
+share of the largest value, so a place of four times the people gets a dot of
+twice the radius; without one, every dot is as large as `radius`. A dot on the
+far side is hidden by the globe. `id` names an entry: the name is the title of
+its tooltip and its identity through updates, so a dot follows its name when
+the data changes. Without `id`, the tooltip shows the series and the place.
+
+The demos show the populated places of
+[Natural Earth](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/),
+public domain, with the people of their metro areas, a capital in its own
+color. The `land` under the dots is the one every globe takes, cut at the
+horizon by d3-geo; see the [globe](/docs/components/globe-chart-3d) for where
+it comes from and how its regions must be wound. The dots are few, so the
+demos start on `"svg"`, and the many demo on `"canvas"`.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/places-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `PlacesChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array d3-geo lucide-react
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/places-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/places-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press the button: every dot glides from the people of its metro area to the
+people of its city proper, and back, over the `animationDuration` of its
+container. The largest value glides along, so no dot jumps.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <PlacesChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/places-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring and drop places. A place that arrives grows out of
+the globe from nothing as it fades in; one that goes shrinks back and fades
+out, the mirror of its entering (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Here the bar moves from the megacities down to every place.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <PlacesChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/places-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <PlacesChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/places-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Every place of Natural Earth, seven thousand dots over the land, the smallest
+a speck - and the chart stays interactive. The scene is one list of marks, so
+the demo starts on `"canvas"`, the renderer for many marks, and the select
+shows the same scene on SVG and WebGL.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <PlacesChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/places-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/places-chart-3d.tsx"
+  name="PlacesChart3DProps"
+/>

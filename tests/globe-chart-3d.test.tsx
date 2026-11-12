@@ -91,6 +91,27 @@ describe("GlobeChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
+  test("a tile thinner than a pixel on screen draws its top alone: a side that thin draws nothing, and on a globe of flat tiles the sides are most of the faces", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[
+            { lon: 15, lat: 45, people: 1000, kind: "population" },
+            { lon: 15, lat: 15, people: 1, kind: "quake" },
+          ]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          value="people"
+          series="kind"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(faces(html).length).toBeGreaterThanOrEqual(2)
+    expect(faces(html, "quake")).toHaveLength(1)
+  })
+
   // Turned and tilted, so a wrong sign in either angle shows; with a
   // perspective too, which the globe ignores, so the tiles stay on the land.
   test.each([
@@ -298,6 +319,32 @@ describe("GlobeChart3D hover", () => {
     // The center of the 30° tile that holds 15°E 45°N, labeled by the fields.
     expect(text).toMatch(/lat\s*45/)
     expect(text).toMatch(/lon\s*15/)
+    await chart.unmount()
+  })
+
+  test("label names the tile after its last entry in the title of the tooltip, in place of the series", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[
+            { lon: 10, lat: 40, population: 3, name: "Rome" },
+            { lon: 20, lat: 50, population: 10, name: "Prague" },
+          ]}
+          land={land}
+          lon="lon"
+          lat="lat"
+          value="population"
+          label="name"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    const { x, y } = prism(chart.svg)
+    await chart.send("pointermove", { clientX: x, clientY: y })
+    const text = chart.host.textContent!
+    expect(text).toContain("Prague")
+    expect(text).not.toContain("Rome")
+    expect(text).not.toContain("Population")
     await chart.unmount()
   })
 

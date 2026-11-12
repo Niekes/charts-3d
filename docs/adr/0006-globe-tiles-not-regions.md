@@ -62,3 +62,24 @@ Amended 2026-11-09: the ocean and the land draw in `--chart-3d-ocean` and
 `--chart-3d-land` where those are set, and in the colors of the walls
 otherwise - looks are CSS (ADR-0004), and the globe demos set them for a globe
 at night.
+
+Amended 2026-11-09: a tile thinner than a pixel on screen draws its top alone.
+Its sides would draw nothing, and on a globe of thousands of flat tiles - the
+places of the world, summed per tile - they are most of the faces d3-3d
+projects and sorts, so leaving them out turns the globe about twice as fast.
+The sides join as the tile grows past a pixel, too small to see.
+
+Amended 2026-11-09: the choropleth and the places chart join the globe on the
+same land - the regions colored by class, deferred above, and dots at places,
+their area a value. What the three share moved to the core, without d3-geo:
+`orthographic`, the camera without its perspective; `earth`, which takes the
+chart's `geoOrthographic()` and `geoPath`, sets the projection to the camera
+and returns the ocean and the land as marks, with the path and the sink that
+collects rings for a chart that draws regions of its own; and `GLOBE_RADIUS`.
+Each chart imports d3-geo itself and declares it on its own item, so the core
+still carries none. The template check lets a chart of regions alone project with
+`geoPath` instead of a d3-3d generator, since it has no shapes of d3-3d to
+sort. The globe also projects the centers of its tiles first and builds the
+faces of those in front of the center plane only: the faces of the others
+are behind it too, and projecting them only to cull them cost half the
+frame.

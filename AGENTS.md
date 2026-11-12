@@ -165,7 +165,9 @@ The rules that `scripts/check-template.mjs` enforces:
   `#v<version>`, the version in `package.json`;
 - a chart projects its data with a d3-3d generator (`points3D`, `cubes3D`,
   `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
-  projected shapes with d3-3d's `sort`;
+  projected shapes with d3-3d's `sort`; a chart of regions alone, as the
+  choropleth, projects with d3-geo's `geoPath` instead and has nothing of
+  d3-3d to sort;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
   and `docs/examples/<item>-demo.tsx`; a chart also has the four other demos:
   `-update-demo` (data gliding in), `-enter-demo` (marks entering and
@@ -192,8 +194,9 @@ How the charts draw, so that a new one draws the same way:
   earn its place; one that a single chart needs goes on that chart's item
   instead, as the globe's `d3-geo` (ADR-0006).
 - **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
-  a circle, a CSS fill and, if it has one, a tooltip - and hands them to
-  `Marks3D`. The core draws them and finds the one under the pointer, so a
+  a circle, a CSS fill and, if it has one, a tooltip, or a function that
+  builds it when the pointer arrives, so a chart of thousands of marks pays
+  for one - and hands them to `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
 - **Labels.** Text beside a mark, such as the name of a node, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the side of it the
@@ -301,7 +304,9 @@ gesture is a new action, so the panel never misses one.
   modifier the binding lacks goes to the browser.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
-  zoom stop at their limits there and nowhere else.
+  zoom stop at their limits there and nowhere else, and a turn - a key or a
+  drag - is divided by the zoom there, so the picture moves as far under the
+  pointer zoomed in as out.
 - **The gestures follow the 3D viewers of the browser, gated by the platform
   modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
   Windows and Linux, and a drag rotates; a plain drag only inspects, with the

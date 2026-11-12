@@ -2,58 +2,41 @@ import { useState } from "react"
 
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
-import { BivariateLegend, bivariateConfig, night, quakeTiles } from "@/docs/examples/bivariate"
 import { land } from "@/docs/examples/land"
+import {
+  PlaceSelect,
+  compact,
+  night,
+  placeTiles,
+  populationConfig,
+} from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-const button =
-  "inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
 const step = 2
 
-// The year month by month: the quakes of a month enter as it is added and
-// leave as it is taken away, and a tile that was there already grows.
+// The world place by place: lowering the bar, the smaller places enter and
+// light up; raising it, they sink back into the globe. A tile that was
+// there already grows as a place joins it.
 export default function GlobeChart3DEnterDemo() {
-  const [months, setMonths] = useState(3)
-  const [renderer, setRenderer] = useState<Renderer3D>("svg")
+  const [min, setMin] = useState(1e6)
+  const [renderer, setRenderer] = useState<Renderer3D>("canvas")
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={bivariateConfig("BuPu")} renderer={renderer} style={night}>
+      <ChartContainer3D config={populationConfig} renderer={renderer} style={night} legend>
         <GlobeChart3D
-          data={quakeTiles(step, months)}
+          data={placeTiles(step, min)}
           land={land}
           lon="lon"
           lat="lat"
-          value="magnitude"
+          value="metro"
           series="class"
+          label="place"
           step={step}
-          format={(magnitude) => magnitude.toFixed(1)}
+          format={compact}
         />
       </ChartContainer3D>
-      <BivariateLegend scheme="BuPu" />
-      <div className="flex items-center gap-2 self-center text-xs text-muted-foreground">
-        <button
-          type="button"
-          disabled={months <= 1}
-          onClick={() => setMonths((m) => Math.max(1, m - 1))}
-          className={button}
-        >
-          − Month
-        </button>
-        <span className="w-20 text-center">
-          {months === 1 ? "Jan" : `Jan – ${MONTHS[months - 1]}`}
-        </span>
-        <button
-          type="button"
-          disabled={months >= 12}
-          onClick={() => setMonths((m) => Math.min(12, m + 1))}
-          className={button}
-        >
-          + Month
-        </button>
-      </div>
+      <PlaceSelect min={min} onChange={setMin} />
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )
