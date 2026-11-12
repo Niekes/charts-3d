@@ -226,6 +226,11 @@ function drawn(host: HTMLElement) {
       const [dx = 0, dy = 0] = (el.style.translate || "0px").split(" ").map(parseFloat)
       const h = el.classList.contains("text-[10px]") ? 10 : 12
       const w = el.textContent!.length * h * 0.6
+      // A title turned along its edge lies aslant.
+      const turn =
+        (Number(/rotate\((-?[\d.]+)/.exec(el.getAttribute("transform") ?? "")?.[1] ?? 0) *
+          Math.PI) /
+        180
       const anchor = { start: 0.5, middle: 0, end: -0.5 }[
         el.getAttribute("text-anchor") ?? "start"
       ]!
@@ -239,14 +244,26 @@ function drawn(host: HTMLElement) {
         y: Number(el.getAttribute("y")) + dy,
         w,
         h,
+        turn,
         opacity: Number(el.style.opacity || 1),
       }
     }
   )
 }
 
-const apart = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
-  Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2)
+type Box = { x: number; y: number; w: number; h: number; turn: number }
+
+/** The space between two labels, negative where they overlap: the widest gap along a side of either box, as a title lies aslant. */
+const apart = (a: Box, b: Box) =>
+  Math.max(
+    ...[a.turn, a.turn + Math.PI / 2, b.turn, b.turn + Math.PI / 2].map((t) => {
+      const e = { x: Math.cos(t), y: Math.sin(t) }
+      const reach = (l: Box) =>
+        (l.w / 2) * Math.abs(Math.cos(l.turn) * e.x + Math.sin(l.turn) * e.y) +
+        (l.h / 2) * Math.abs(Math.cos(l.turn) * e.y - Math.sin(l.turn) * e.x)
+      return Math.abs((a.x - b.x) * e.x + (a.y - b.y) * e.y) - reach(a) - reach(b)
+    })
+  )
 
 const chart = (
   defaultView: { yaw: number; tilt: number },
@@ -720,16 +737,17 @@ describe("BarChart3D transitions", () => {
 })
 
 describe("BarChart3D focus", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
+  // The faces of the bars: shaded, or lit.
   const barFaces = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].flatMap((p) => {
       const f = p.getAttribute("fill")
-      return f?.startsWith("color-mix") ? [p] : []
+      return f?.startsWith("color-mix") || (f && isLit(f)) ? [p] : []
     })
-  const edged = (svg: SVGSVGElement) =>
-    barFaces(svg).filter((p) => p.getAttribute("stroke") === edge(p.getAttribute("fill")!))
+  const fills = (svg: SVGSVGElement) => barFaces(svg).map((p) => p.getAttribute("fill")!)
 
-  test("hovering a bar highlights that bar alone with an edge; the fill never changes; leaving clears it", async () => {
+  test("hovering a bar lights the fill of that bar alone; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <BarChart3D data={data} index="name" />
@@ -738,7 +756,7 @@ describe("BarChart3D focus", () => {
     const svg = chart.host.querySelector("svg")!
     const move = (clientX: number, clientY: number) =>
       chart.send("pointermove", { clientX, clientY })
-    const before = barFaces(svg).map((p) => p.getAttribute("fill"))
+    const before = fills(svg)
     // The centroid of a face of a bar of series a.
     const face = barFaces(svg).find((p) => p.getAttribute("fill")!.includes("var(--color-a)"))!
     const corners = face.getAttribute("d")!.slice(1, -1).split("L")
@@ -747,19 +765,21 @@ describe("BarChart3D focus", () => {
     )
 
     await move(x, y)
-    // One bar alone is highlighted, with an edge; no fill changes.
-    expect(edged(svg).length).toBeGreaterThan(0)
-    expect(barFaces(svg).map((p) => p.getAttribute("fill"))).toEqual(before)
+    // The faces of one bar alone light up, each its own fill lightened; every other fill stays.
+    const after = fills(svg)
+    expect(after.filter(isLit).length).toBeGreaterThan(0)
+    expect(after.filter(isLit).length).toBeLessThanOrEqual(3)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f) : f)))
 
-    // Off the bar, still inside the chart: no edge.
+    // Off the bar, still inside the chart: nothing lit.
     await move(5, 5)
-    expect(edged(svg)).toHaveLength(0)
+    expect(fills(svg)).toEqual(before)
 
     // Hover again, then leave the chart.
     await move(x, y)
-    expect(edged(svg).length).toBeGreaterThan(0)
+    expect(fills(svg).filter(isLit).length).toBeGreaterThan(0)
     await chart.send("pointerout", { relatedTarget: document.body })
-    expect(edged(svg)).toHaveLength(0)
+    expect(fills(svg)).toEqual(before)
 
     await chart.unmount()
   })

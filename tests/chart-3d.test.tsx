@@ -1314,6 +1314,21 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
+  test("webgl strokes a polygon that carries a stroke as a line loop over its corners", async () => {
+    const { gl } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={[{ ...marks[0], stroke: "white" }]} />
+      </ChartContainer3D>
+    )
+    // The square's 2 triangles, then its outline as a loop of its 4 corners.
+    expect(gl.drawArrays.mock.calls.map(([mode, first, count]) => [mode, first, count])).toEqual([
+      [gl.TRIANGLES, 0, 6],
+      [gl.LINE_LOOP, 0, 4],
+    ])
+    await chart.unmount()
+  })
+
   test("webgl cuts a concave polygon ear by ear: its triangles cover it exactly, where a fan would spill over its dent", async () => {
     const { gl } = stubGL()
     type P = { x: number; y: number }
@@ -1447,29 +1462,29 @@ describe("parity", () => {
         expect(chart.svg.querySelector('circle[fill="blue"]')).not.toBeNull()
       }
 
-      // The pointer on the square: the same tooltip, and the same focus edge in
-      // the scene, on every renderer (webgl draws fills only, see ADR-0002).
+      // The pointer on the square: the same tooltip, and the same lit fill in
+      // the scene, on every renderer (ADR-0008).
       const painted = ctx ? ctx.fill.mock.calls.length : gl ? gl.drawArrays.mock.calls.length : 0
       await chart.send(pointer("pointermove", 150, 150))
       expect(chart.host.textContent).toContain("Square")
-      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
+      expect(read.current.map((mark) => mark.fill)).toEqual([
         "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))",
-        "white",
+        "blue",
       ])
-      // The hover reaches the reader: a canvas repaints, the SVG strokes the edge.
+      // The hover reaches the reader: a canvas repaints, the SVG fills the square lit.
       if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
       else if (gl) expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(painted)
       else
         expect(
           chart.svg.querySelector(
-            'path[stroke="var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"]'
+            'path[fill="var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"]'
           )
         ).not.toBeNull()
 
-      // Off the marks, tooltip and edge clear the same everywhere.
+      // Off the marks, tooltip and focus clear the same everywhere.
       await chart.send(pointer("pointermove", 300, 300))
       expect(chart.host.textContent).not.toMatch(/Square|Dot/)
-      expect(read.current.map((mark) => mark.stroke ?? mark.fill)).toEqual(["red", "white"])
+      expect(read.current.map((mark) => mark.fill)).toEqual(["red", "blue"])
 
       await chart.unmount()
       vi.restoreAllMocks()
@@ -1879,6 +1894,31 @@ describe("Axes3D", () => {
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
   })
 
+  test("runs the title of an axis along its edge, never upside down", () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    // The turn of the title that shows, with the camera at `yaw`.
+    const turn = (yaw: number, title: string) => {
+      const html = renderToString(
+        <ChartContainer3D config={{}} defaultView={{ yaw, tilt: Math.PI / 6 }}>
+          <Axes3D spec={spec} world={worldBox(spec)} titles={{ x: "Width", y: "Height" }} />
+        </ChartContainer3D>
+      )
+      const shown = [...html.matchAll(new RegExp(`<text([^>]*)>${title}</text>`, "g"))]
+        .map((m) => m[1])
+        .filter((attrs) => attrs.includes("opacity:1;"))
+      expect(shown).toHaveLength(1)
+      return Number(/rotate\((-?[\d.]+)/.exec(shown[0])?.[1] ?? 0)
+    }
+    // The y axis stands vertical from every side and reads bottom-to-top.
+    expect(turn(Math.PI / 4, "Height")).toBe(-90)
+    expect(turn((5 * Math.PI) / 4, "Height")).toBe(-90)
+    // Seen from behind, the x axis points left: its title turns round to read, leaning as from the front.
+    const [front, behind] = [turn(Math.PI / 4, "Width"), turn((5 * Math.PI) / 4, "Width")]
+    expect(Math.abs(front)).toBeGreaterThan(0)
+    expect(Math.abs(front)).toBeLessThan(90)
+    expect(behind).toBe(front)
+  })
+
   test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
     const chart = await mount(
@@ -1982,7 +2022,7 @@ describe("focus", () => {
     { key: "la", at: { x: 0, y: 300 }, text: "A", anchor: "start" as const },
     { key: "lb", at: { x: 100, y: 300 }, text: "B", anchor: "start" as const },
   ]
-  const edge = "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"
+  const lit = "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))"
   const fills = (svg: SVGSVGElement) =>
     [...svg.querySelectorAll("path")].map((path) => path.getAttribute("fill"))
   const strokes = (svg: SVGSVGElement) =>
@@ -1990,7 +2030,7 @@ describe("focus", () => {
   const move = (clientX: number, clientY: number) =>
     new MouseEvent("pointermove", { bubbles: true, clientX, clientY })
 
-  test("the pointer on a mark gives the marks that share its groups an edge; the fill never changes", async () => {
+  test("the pointer on a mark lights the fill of the marks that share its groups; off the mark it clears", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -2002,23 +2042,24 @@ describe("focus", () => {
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
-    // a and ab share group "a" with the hovered mark and get the edge; b and the groupless one do not.
-    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
-    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
+    // a and ab share group "a" with the hovered mark and light up; b and the groupless one do
+    // not. The seam of a lit mark follows its fill.
+    expect(fills(chart.svg)).toEqual([lit, "red", lit, "red"])
+    expect(strokes(chart.svg)).toEqual([lit, "red", lit, "red"])
 
-    // Off the mark the tooltip and the edge go with it; leaving the chart does the same.
+    // Off the mark the tooltip and the focus go with it; leaving the chart does the same.
     await chart.send(move(25, 350))
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
     await chart.send(move(25, 125))
-    expect(strokes(chart.svg)).toEqual([edge, "red", edge, "red"])
+    expect(fills(chart.svg)).toEqual([lit, "red", lit, "red"])
     await chart.send(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }))
-    expect(strokes(chart.svg)).toEqual(["red", "red", "red", "red"])
+    expect(fills(chart.svg)).toEqual(["red", "red", "red", "red"])
 
     await chart.unmount()
   })
 
-  test("the scene, which the canvas paints and the hover reads, has the edged marks too", async () => {
+  test("the scene, which the canvas paints and the hover reads, has the lit marks too", async () => {
     let scene: { current: { fill: string; stroke?: string }[] } = { current: [] }
     function Scene() {
       scene = useChart3D().scene
@@ -2031,16 +2072,11 @@ describe("focus", () => {
       </ChartContainer3D>
     )
     await chart.send(move(25, 125))
-    expect(scene.current.map((mark) => mark.stroke ?? mark.fill)).toEqual([
-      edge,
-      "red",
-      edge,
-      "red",
-    ])
+    expect(scene.current.map((mark) => mark.fill)).toEqual([lit, "red", lit, "red"])
     await chart.unmount()
   })
 
-  test("a drag that turns the chart drops the tooltip and keeps the edge", async () => {
+  test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={squares} />
@@ -2056,7 +2092,7 @@ describe("focus", () => {
     await chart.send(press("pointermove", 75))
     expect(chart.svg.setPointerCapture).toHaveBeenCalled()
     expect(chart.host.textContent).not.toContain("tip-a")
-    expect(strokes(chart.svg)).toContain(edge)
+    expect(fills(chart.svg)).toContain(lit)
 
     await chart.unmount()
   })
@@ -2076,10 +2112,10 @@ describe("focus", () => {
     const svg = host.querySelector("svg")!
     svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
     await act(() => svg.dispatchEvent(move(25, 125)))
-    expect(strokes(svg)).toContain(edge)
+    expect(fills(svg)).toContain(lit)
 
     await render([square("b", 100, ["b"]), square("c", 200, ["c"])])
-    expect(strokes(svg)).toEqual(["red", "red"])
+    expect(fills(svg)).toEqual(["red", "red"])
 
     await act(async () => root.unmount())
     host.remove()
