@@ -36,7 +36,7 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   so that in every chart, while the pointer is on a mark, its tooltip shows and
   exactly those marks light up: their fill takes the focus color -
   `--chart-3d-focus`, or their own fill lightened - and a stroke of their own
-  stays (ADR-0007); when the pointer leaves the mark or the chart, the focus
+  stays (ADR-0008); when the pointer leaves the mark or the chart, the focus
   clears. A chart never highlights anything itself and has no pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of

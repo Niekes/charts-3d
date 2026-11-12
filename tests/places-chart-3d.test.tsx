@@ -143,7 +143,8 @@ describe("PlacesChart3D", () => {
 })
 
 describe("PlacesChart3D hover", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
   const data = [
     { lon: 15, lat: 15, people: 100, name: "Rome", kind: "capital" },
     { lon: 15, lat: 45, people: 50, name: "Oslo", kind: "city" },
@@ -182,15 +183,14 @@ describe("PlacesChart3D hover", () => {
     await chart.unmount()
   })
 
-  test("without id the tooltip is titled by the series and shows the place alone without a value; hovering edges the dot, never the land, and leaving clears it", async () => {
+  test("without id the tooltip is titled by the series and shows the place alone without a value; hovering lights the dot, never the land, and leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <PlacesChart3D data={data} land={land} lon="lon" lat="lat" series="kind" />
       </ChartContainer3D>
     )
     const marks = () => [...chart.svg.querySelectorAll('[data-slot="chart-3d-marks"] *')]
-    const edged = () =>
-      marks().filter((m) => m.getAttribute("stroke") === edge(m.getAttribute("fill")!))
+    const litOnes = () => marks().filter((m) => isLit(m.getAttribute("fill")!))
     const { circle, x, y } = dot(chart.svg, "city")
     const before = marks().map((m) => m.getAttribute("fill"))
 
@@ -200,11 +200,12 @@ describe("PlacesChart3D hover", () => {
     expect(text).not.toContain("Oslo")
     expect(text).not.toContain("people")
     expect(text).toMatch(/lat\s*45/)
-    expect(edged()).toEqual([circle])
-    expect(marks().map((m) => m.getAttribute("fill"))).toEqual(before)
+    expect(litOnes()).toEqual([circle])
+    const after = marks().map((m) => m.getAttribute("fill")!)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f!) : f)))
 
     await chart.send("pointerout", { relatedTarget: document.body })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("City")
     await chart.unmount()
   })

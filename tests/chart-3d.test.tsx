@@ -1463,7 +1463,7 @@ describe("parity", () => {
       }
 
       // The pointer on the square: the same tooltip, and the same lit fill in
-      // the scene, on every renderer (ADR-0007).
+      // the scene, on every renderer (ADR-0008).
       const painted = ctx ? ctx.fill.mock.calls.length : gl ? gl.drawArrays.mock.calls.length : 0
       await chart.send(pointer("pointermove", 150, 150))
       expect(chart.host.textContent).toContain("Square")

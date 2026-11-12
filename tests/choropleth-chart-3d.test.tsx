@@ -121,7 +121,8 @@ describe("ChoroplethChart3D", () => {
 })
 
 describe("ChoroplethChart3D hover", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
 
   /** The rings of the region in `key`, as elements, and the center of the first on screen. */
   function region(svg: SVGSVGElement, key = "population") {
@@ -193,22 +194,24 @@ describe("ChoroplethChart3D hover", () => {
     await chart.unmount()
   })
 
-  test("hovering a region edges its rings, never the land, which says nothing; the fill never changes; leaving clears it", async () => {
+  test("hovering a region lights its rings, never the land, which says nothing; nothing else changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <ChoroplethChart3D data={[{ code: "a", n: 5 }]} land={land} id="code" value="n" />
       </ChartContainer3D>
     )
     const paths = () => [...chart.svg.querySelectorAll('[data-slot="chart-3d-marks"] path')]
-    const edged = () =>
-      paths().filter((p) => p.getAttribute("stroke") === edge(p.getAttribute("fill")!))
+    const litOnes = () => paths().filter((p) => isLit(p.getAttribute("fill")!))
     const { rings, x, y } = region(chart.svg)
     const before = paths().map((p) => p.getAttribute("fill"))
 
     await chart.send("pointermove", { clientX: x, clientY: y })
-    expect(edged()).toHaveLength(rings.length)
-    expect(edged().every((p) => p.getAttribute("fill")!.includes("--color-population"))).toBe(true)
-    expect(paths().map((p) => p.getAttribute("fill"))).toEqual(before)
+    expect(litOnes()).toHaveLength(rings.length)
+    expect(litOnes().every((p) => p.getAttribute("fill")!.includes("--color-population"))).toBe(
+      true
+    )
+    const after = paths().map((p) => p.getAttribute("fill")!)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f!) : f)))
 
     // On the land of b, which has no entry - the only land ring left, since
     // a is drawn in its color alone: the earth itself says nothing.
@@ -220,13 +223,13 @@ describe("ChoroplethChart3D hover", () => {
       (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
     )
     await chart.send("pointermove", { clientX: bx, clientY: by })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("Population")
 
     await chart.send("pointermove", { clientX: x, clientY: y })
-    expect(edged()).toHaveLength(rings.length)
+    expect(litOnes()).toHaveLength(rings.length)
     await chart.send("pointerout", { relatedTarget: document.body })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("Population")
     await chart.unmount()
   })

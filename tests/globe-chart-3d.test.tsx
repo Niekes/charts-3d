@@ -277,7 +277,8 @@ describe("GlobeChart3D props", () => {
 })
 
 describe("GlobeChart3D hover", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
   const data = [{ lon: 15, lat: 45, population: 10 }]
 
   /** The center of a face on screen. */
@@ -348,37 +349,39 @@ describe("GlobeChart3D hover", () => {
     await chart.unmount()
   })
 
-  test("hovering a tile highlights its faces together with an edge, never the land, which says nothing; the fill never changes; leaving clears it", async () => {
+  test("hovering a tile lights its faces together, never the land, which says nothing; nothing else changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="population" step={30} />
       </ChartContainer3D>
     )
     const paths = () => [...chart.svg.querySelectorAll('[data-slot="chart-3d-marks"] path')]
-    const edged = () =>
-      paths().filter((p) => p.getAttribute("stroke") === edge(p.getAttribute("fill")!))
+    const litOnes = () => paths().filter((p) => isLit(p.getAttribute("fill")!))
     const { faces, x, y } = prism(chart.svg)
     const before = paths().map((p) => p.getAttribute("fill"))
 
     await chart.send("pointermove", { clientX: x, clientY: y })
-    expect(edged()).toHaveLength(faces.length)
-    expect(edged().every((p) => p.getAttribute("fill")!.includes("--color-population"))).toBe(true)
-    expect(paths().map((p) => p.getAttribute("fill"))).toEqual(before)
+    expect(litOnes()).toHaveLength(faces.length)
+    expect(litOnes().every((p) => p.getAttribute("fill")!.includes("--color-population"))).toBe(
+      true
+    )
+    const after = paths().map((p) => p.getAttribute("fill")!)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f!) : f)))
 
-    // Off the globe, still inside the chart: no edge.
+    // Off the globe, still inside the chart: nothing lit.
     await chart.send("pointermove", { clientX: 5, clientY: 5 })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
 
     // On the land, east of the tile: the earth itself says nothing.
     const [fx, fy] = center(paths().find((p) => p.getAttribute("fill") === LAND)!)
     await chart.send("pointermove", { clientX: fx, clientY: fy })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
     expect(chart.host.textContent).not.toContain("Population")
 
     await chart.send("pointermove", { clientX: x, clientY: y })
-    expect(edged()).toHaveLength(faces.length)
+    expect(litOnes()).toHaveLength(faces.length)
     await chart.send("pointerout", { relatedTarget: document.body })
-    expect(edged()).toHaveLength(0)
+    expect(litOnes()).toHaveLength(0)
     await chart.unmount()
   })
 

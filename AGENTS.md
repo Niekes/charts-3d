@@ -211,7 +211,7 @@ How the charts draw, so that a new one draws the same way:
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
 - **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md),
-  [ADR-0007](docs/adr/0007-hover-lights-the-fill.md)). A mark names the marks
+  [ADR-0008](docs/adr/0008-hover-lights-the-fill.md)). A mark names the marks
   of the same element in `groups`: the faces of a bar. Pointing at a mark, the
   core fills exactly those with the focus color - `--chart-3d-focus`, or their
   own fill lightened - until the pointer leaves the mark; a stroke of their

@@ -1,6 +1,6 @@
 # Hover highlights the single element with an edge only - no fill change
 
-Status: superseded in part by [ADR-0007](0007-hover-lights-the-fill.md) -
+Status: superseded in part by [ADR-0008](0008-hover-lights-the-fill.md) -
 the highlight is the fill, not an edge; the single element, its `groups` and
 the no-fade rule stand.
 
