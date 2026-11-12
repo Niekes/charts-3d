@@ -151,17 +151,23 @@ The rules that `scripts/check-template.mjs` enforces:
 - a chart exports `<Name>Chart3D` with `export function` and the type
   `<Name>Chart3DProps`;
 - a chart imports only React, the npm packages that `chart-3d` declares in
-  `registry.json`, and the core as `@/registry/new-york/ui/chart-3d`, which
-  the shadcn CLI rewrites to the `ui` alias of the project;
+  `registry.json` or its own item declares there, and the core as
+  `@/registry/new-york/ui/chart-3d`, which the shadcn CLI rewrites to the
+  `ui` alias of the project;
 - a chart renders no SVG or HTML elements of its own: it draws through
-  `Axes3D` and `Marks3D`, so every renderer can draw it;
+  `Axes3D` and `Marks3D` - through `Marks3D` alone where it has no axes, as
+  the globe (ADR-0007) - so every renderer can draw it;
 - a chart depends on `niekes/charts-3d/chart-3d` in the registry and leaves
-  the npm dependencies to the core. On `master` the dependency is unpinned;
-  only the release commit, which the release workflow makes beside `master`,
-  pins it to `#v<version>`, the version in `package.json`;
+  the npm dependencies to the core, unless it alone needs one: then its item
+  declares it, as the globe declares `d3-geo`, and it lands only where that
+  chart installs. On `master` the dependency is unpinned; only the release
+  commit, which the release workflow makes beside `master`, pins it to
+  `#v<version>`, the version in `package.json`;
 - a chart projects its data with a d3-3d generator (`points3D`, `cubes3D`,
   `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
-  projected shapes with d3-3d's `sort`;
+  projected shapes with d3-3d's `sort`; a chart of regions alone, as the
+  choropleth, projects with d3-geo's `geoPath` instead and has nothing of
+  d3-3d to sort;
 - every item has `tests/<item>.test.tsx`, `docs/content/components/<item>.mdx`
   and `docs/examples/<item>-demo.tsx`; a chart also has the four other demos:
   `-update-demo` (data gliding in), `-enter-demo` (marks entering and
@@ -180,14 +186,17 @@ How the charts draw, so that a new one draws the same way:
   ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). A chart projects
   with a d3-3d generator, never with mathematics of its own: fallow forbids a
   chart trigonometry, the DOM, a canvas and the event loop - the core owns
-  them. The import whitelist is the ladder: reach for a core helper first,
+  them. The one other projection is d3-geo's, for the land of the globe,
+  built from the same camera (ADR-0007). The import whitelist is the ladder: reach for a core helper first,
   then for d3-3d or an allowed d3 module, and never write your own. A new d3
   module is a deliberate change to the dependencies of `chart-3d` in
   `registry.json`, and it lands in every installing project, so it has to
-  earn its place.
+  earn its place; one that a single chart needs goes on that chart's item
+  instead, as the globe's `d3-geo` (ADR-0007).
 - **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
-  a circle, a CSS fill and, if it has one, a tooltip - and hands them to
-  `Marks3D`. The core draws them and finds the one under the pointer, so a
+  a circle, a CSS fill and, if it has one, a tooltip, or a function that
+  builds it when the pointer arrives, so a chart of thousands of marks pays
+  for one - and hands them to `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
 - **Tooltips.** What a mark says is built from the data behind it, its
   values as the ticks name them through `format`, and handed to the chart's
@@ -304,7 +313,9 @@ gesture is a new action, so the panel never misses one.
   modifier the binding lacks goes to the browser.
 
 - **A step is a `Move`.** `moved(view, move)` applies it; the tilt and the
-  zoom stop at their limits there and nowhere else.
+  zoom stop at their limits there and nowhere else, and a turn - a key or a
+  drag - is divided by the zoom there, so the picture moves as far under the
+  pointer zoomed in as out.
 - **The gestures follow the 3D viewers of the browser, gated by the platform
   modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
   Windows and Linux, and a drag rotates; a plain drag only inspects, with the
@@ -382,7 +393,10 @@ the client. The npm dependencies stay external.
 
 - **The dependencies are the runtime of the package.** `dependencies` holds
   what the registry files import at runtime, `react` is a peer dependency,
-  and everything the docs and the tests need is a devDependency.
+  and everything the docs and the tests need is a devDependency. One
+  exception: a `@types` package whose global namespace the public types name,
+  as `@types/geojson` for the `land` of the globe, is a dependency too, or
+  the published `index.d.ts` cannot resolve it.
 - **The props are semver.** Users of the registry own their copy, users of the
   package depend on the API: a change to a prop or an export of `index.ts`
   is a breaking change and needs a major version. Before 1.0.0 the minor

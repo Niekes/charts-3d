@@ -120,18 +120,23 @@ for (const file of files) {
 }
 
 /**
- * The core declares the npm packages; a chart imports only those, React and
- * the core, and depends on the core in the registry.
+ * The core declares the npm packages every chart may import; a chart that
+ * needs one of its own, as the globe needs d3-geo, declares it on its item,
+ * so it lands only where that chart installs. A chart imports only those,
+ * React and the core, and depends on the core in the registry.
  */
-const allowed = new Set([
-  "react",
-  ...(core?.dependencies ?? []).map((d) => d.replace(/@[^@/]*$/, "")),
-])
+const unversioned = (dependencies) => dependencies.map((d) => d.replace(/@[^@/]*$/, ""))
+const coreDependencies = unversioned(core?.dependencies ?? [])
 
 for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   const name = basename(file, ".tsx")
   const component = pascalCase(name)
   const source = read(`${UI}/${file}`)
+  const allowed = new Set([
+    "react",
+    ...coreDependencies,
+    ...unversioned(items.get(name)?.dependencies ?? []),
+  ])
 
   if (!name.endsWith("-chart-3d")) {
     fail(`${UI}/${file}: a chart is named '<name>-chart-3d.tsx'`)
@@ -182,12 +187,17 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     .filter((name) => name && !name.startsWith("type "))
   const generator = names.find((name) => GENERATORS.has(name))
   const body = source.replace(/import\s*{[^}]*}\s*from\s+"d3-3d"/, "")
-  if (!generator || !new RegExp(`${generator}\\s*[<(]`).test(body)) {
+  // The one other projection is d3-geo's (ADR-0007): a chart of regions
+  // alone, as the choropleth, projects with `geoPath` - handed to the core's
+  // `earth` - and has no shapes of d3-3d to sort.
+  const geo = /import\s*{[^}]*\bgeoPath\b[^}]*}\s*from\s+"d3-geo"/.test(source)
+  const regions = !generator && geo && /\bgeoPath\b/.test(body.replace(/import[^\n]*/g, ""))
+  if (!regions && (!generator || !new RegExp(`${generator}\\s*[<(]`).test(body))) {
     fail(
       `${UI}/${file}: a chart projects with a d3-3d shape generator (${[...GENERATORS].join(", ")}), imported from "d3-3d" and called`
     )
   }
-  if (!names.includes("sort") || !/\bsort\b/.test(body)) {
+  if (!regions && (!names.includes("sort") || !/\bsort\b/.test(body))) {
     fail(`${UI}/${file}: a chart sorts its projected shapes with d3-3d's 'sort'`)
   }
 
@@ -221,9 +231,6 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     fail(
       `registry.json: '${name}' must depend on '${CORE_DEPENDENCY}', or on '${RELEASE_DEPENDENCY}' in a release, and nothing else`
     )
-  }
-  if (items.get(name)?.dependencies?.length) {
-    fail(`registry.json: '${name}' must leave its npm dependencies to '${CORE}'`)
   }
 }
 

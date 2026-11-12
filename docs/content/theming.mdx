@@ -23,7 +23,14 @@ The container turns every key into a CSS variable, `--color-desktop` and `--colo
 
 ## The chart tokens
 
-The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`.
+The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`. The ocean and the land of the globe draw in `--chart-3d-ocean` and `--chart-3d-land` where you set them, and otherwise in `--muted` and `--border`; set them on the chart, or any ancestor, for a globe at night:
+
+```css
+.globe {
+  --chart-3d-ocean: oklch(0.22 0.02 260);
+  --chart-3d-land: oklch(0.36 0.02 260);
+}
+```
 
 ## The focus color
 

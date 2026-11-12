@@ -61,6 +61,41 @@ One shape of a chart - a bar, a point, a face of a flow - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
 
+**Tile**:
+The piece of the globe between two meridians and two parallels, a fixed
+number of degrees wide. A tile with an entry rises from the globe to its
+value; one without an entry is not drawn.
+_Avoid_: cell, hexbin, bin, patch
+
+**Land**:
+The regions of the earth under the marks of a globe, drawn from the GeoJSON
+the chart is given, in the color of a gridline unless the theme gives it
+one. It is scenery: it neither enters nor answers the pointer.
+_Avoid_: countries, map, features, background
+
+**Region**:
+A part of the land with an entry, colored over the land in the color of its
+class - the mark of the choropleth. It fades in and out, since on a map a
+shape that grows would mislead, and answers the pointer with its name and
+its value.
+_Avoid_: country, polygon, area, feature
+
+**Dot**:
+A circle on the land at a place, its area the value of the place - the mark
+of the places chart. It grows from nothing as it fades in, and a dot on the
+far side of the globe is hidden by it.
+_Avoid_: bubble, marker, pin, point
+
+**Ocean**:
+The disc of the globe the land lies on, in the color of a wall unless the
+theme gives it one.
+_Avoid_: sea, sphere, backdrop
+
+**Horizon**:
+The edge of the ocean disc, where the land is cut and a tile beyond it is
+hidden.
+_Avoid_: silhouette, limb, clip
+
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not
 have, the gridline of that tick. It comes in gradually - a mark grows from

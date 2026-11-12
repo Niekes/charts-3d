@@ -10,6 +10,11 @@
     "fumadocs-ui",
     "react-dom",
     "react-router",
+    "topojson-client",
+    "world-atlas",
+    // The globe names its land through the global namespace this package
+    // declares, `GeoJSON.FeatureCollection`, so nothing imports it.
+    "@types/geojson",
   ],
 
   // The entry points. `index.ts` is the npm package, the registry files are

@@ -52,7 +52,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   (hover highlight).
 - **Project with d3-3d - the gates enforce it** (ADR-0003). The template
   check requires a d3-3d projection generator (`points3D`, `cubes3D`,
-  `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort`; fallow
+  `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort` - or, for
+  a chart of regions alone, d3-geo's `geoPath` (ADR-0007); fallow
   forbids a chart trigonometry (`Math.cos/sin/tan/atan2` - hand-rolled
   projection), the DOM, a canvas and the event loop. Reach for a core helper
   first, then d3-3d or an allowed d3 module, never write your own; a new d3
@@ -84,7 +85,8 @@ events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
 least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
 webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
-chart clears both; new data glides in (`useTween`); the axes follow. New code
+chart clears both; new data glides in (`useTween`); the axes follow, where the
+chart has axes - the globe has none (ADR-0007). New code
 comes with its tests - the coverage gate is 98% in each metric.
 
 ## 4. Docs
