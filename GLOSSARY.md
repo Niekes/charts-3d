@@ -38,6 +38,12 @@ _Avoid_: axis border, box edge line
 A short line at a tick, pointing away from the box.
 _Avoid_: tick stroke, tick
 
+**Axis title**:
+The name of an axis, beside its tick labels at the middle of its chosen
+edge, running along the edge so it reads as part of the box; never upside
+down, so a vertical edge reads bottom-to-top.
+_Avoid_: axis label, caption, title (bare: the tooltip has one too)
+
 **Cell**:
 The span between two neighbouring data positions along an axis of
 arrangement, such as one row of bars.

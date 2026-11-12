@@ -1821,6 +1821,8 @@ type AxisLabel = {
   text: React.ReactNode
   opacity: number
   title?: boolean
+  /** The turn of the text in degrees: a title runs along its edge. */
+  angle?: number
 }
 
 /**
@@ -1938,8 +1940,8 @@ function edgeLabels(
   const start = along(edge, clamp(range.lo, range.hi, s0))
   const end = along(edge, clamp(range.lo, range.hi, s1))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-  const head: AxisLabel | undefined = title
-    ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
+  const head = title
+    ? titleLabel(`${id}-title`, axis, title, middle, n, GAP + depth + GAP)
     : undefined
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
@@ -1954,6 +1956,47 @@ function edgeLabels(
     opacity: ticks[i].opacity,
   }))
   return { chosen, ticks, title: head, line, marks }
+}
+
+/**
+ * The title of an axis, at `middle` of its edge: its text runs along the
+ * edge, square to its `normal`, `gap` beyond the tick labels, and never
+ * upside down, so a vertical edge reads bottom-to-top. Its box is the
+ * upright extent of the turned text, which the labels of the other axes
+ * keep clear of.
+ */
+function titleLabel(
+  key: string,
+  axis: keyof AxesSpec,
+  text: React.ReactNode,
+  middle: Point2D,
+  normal: Point2D,
+  gap: number
+): AxisLabel {
+  const h = 12
+  const long = textWidth(text, h)
+  // Square to the normal, which every edge has, where an axis of one tick has no line to run along.
+  // In whole tenths of a degree, so an edge a hair off the vertical does not flip from frame to frame.
+  let tenths = Math.round((Math.atan2(normal.x, -normal.y) * 1800) / Math.PI)
+  if (tenths >= 900) tenths -= 1800
+  else if (tenths < -900) tenths += 1800
+  const angle = tenths / 10
+  const [c, s] = [Math.cos((angle * Math.PI) / 180), Math.sin((angle * Math.PI) / 180)].map(
+    Math.abs
+  )
+  return {
+    key,
+    axis,
+    text,
+    angle,
+    title: true,
+    opacity: 1,
+    shift: ZERO,
+    // Along the edge, the text stands one line deep beside it, whatever its length.
+    at: beside(middle, normal, h, h, gap),
+    w: c * long + s * h,
+    h: s * long + c * h,
+  }
 }
 
 /**
@@ -2110,11 +2153,12 @@ function AxisLine3D({
  * A label of the chart box. Its place follows the camera at once; a change
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
-function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: AxisLabel }) {
+function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { label: AxisLabel }) {
   return (
     <text
       x={at.x}
       y={at.y}
+      transform={angle ? `rotate(${angle} ${at.x} ${at.y})` : undefined}
       textAnchor="middle"
       dominantBaseline="central"
       style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}

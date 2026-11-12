@@ -1846,6 +1846,31 @@ describe("Axes3D", () => {
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
   })
 
+  test("runs the title of an axis along its edge, never upside down", () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    // The turn of the title that shows, with the camera at `yaw`.
+    const turn = (yaw: number, title: string) => {
+      const html = renderToString(
+        <ChartContainer3D config={{}} defaultView={{ yaw, tilt: Math.PI / 6 }}>
+          <Axes3D spec={spec} world={worldBox(spec)} titles={{ x: "Width", y: "Height" }} />
+        </ChartContainer3D>
+      )
+      const shown = [...html.matchAll(new RegExp(`<text([^>]*)>${title}</text>`, "g"))]
+        .map((m) => m[1])
+        .filter((attrs) => attrs.includes("opacity:1;"))
+      expect(shown).toHaveLength(1)
+      return Number(/rotate\((-?[\d.]+)/.exec(shown[0])?.[1] ?? 0)
+    }
+    // The y axis stands vertical from every side and reads bottom-to-top.
+    expect(turn(Math.PI / 4, "Height")).toBe(-90)
+    expect(turn((5 * Math.PI) / 4, "Height")).toBe(-90)
+    // Seen from behind, the x axis points left: its title turns round to read, leaning as from the front.
+    const [front, behind] = [turn(Math.PI / 4, "Width"), turn((5 * Math.PI) / 4, "Width")]
+    expect(Math.abs(front)).toBeGreaterThan(0)
+    expect(Math.abs(front)).toBeLessThan(90)
+    expect(behind).toBe(front)
+  })
+
   test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
     const chart = await mount(

@@ -214,7 +214,9 @@ How the charts draw, so that a new one draws the same way:
   rows, then every 2nd, 4th… label - and `labelAxes` lets a label fade as it
   nears one of an axis with fewer ticks. Whatever follows the camera is
   geometry, in `x` and `y`; only a change of edge, row or stride moves in the
-  CSS transition, through `opacity` and `translate`.
+  CSS transition, through `opacity` and `translate`. The title of an axis
+  runs along its chosen edge, one line deep beyond the tick rows, turned so
+  it never reads upside down: a vertical edge reads bottom-to-top.
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
   React moves the DOM nodes.
