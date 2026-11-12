@@ -313,6 +313,10 @@ gesture is a new action, so the panel never misses one.
   because a trackpad pinch arrives as Ctrl and the wheel; the wheel alone
   scrolls the page. The listener is the core's own, because React listens to
   the wheel passively and cannot keep the browser from zooming the page.
+- **The wheel zooms to the cursor.** The handler hands `moved` the cursor as
+  `at`, and `moved` moves the pan by the zoom after its limits, so the point
+  under the cursor stays and the chart stands still at them. A key has no
+  cursor: `+` and `-` zoom to the middle of the chart.
 - **The cursor names the gesture**: a hand while the platform modifier is
   held, `grabbing` while the drag turns, the four arrows (`move`) while Alt
   is held, `zoom-in`/`zoom-out` while the wheel zooms, falling back

@@ -42,3 +42,12 @@ key and the wheel zoom nothing. The cursor now names every gesture, not only
 the rotate: Alt held shows the four arrows (`move`), through a pan drag too,
 and a wheel zoom shows `zoom-in` or `zoom-out` by its direction, falling back
 to the hand shortly after the last tick.
+
+Amended 2026-11-12: the wheel zooms to the cursor - the point under it stays
+where it is, zooming in and out alike, as in maps and design tools, so
+zooming in and back out lands on the same view. The zoom therefore moves the
+pan with it, by the zoom after its limits: at 1/4 and 8 the chart stands
+still instead of sliding. A trackpad pinch anchors the same way, because it
+arrives as the wheel. `+` and `-` have no cursor and keep zooming to the
+middle of the chart, wherever the pointer rests. There is no prop to get the
+zoom to the centre back: the gestures are identity (ADR-0004).

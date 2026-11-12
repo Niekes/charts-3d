@@ -288,6 +288,60 @@ function stubGL() {
 }
 
 describe("shortcuts", () => {
+  test("the wheel zooms to the cursor, stands still at the limits, and the keys zoom to the middle", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    // The svg is drawn at half its view box, so the cursor at (220, 200)
+    // is the point (420, 300) of the view box.
+    chart.svg.getBoundingClientRect = () =>
+      ({ left: 10, top: 50, width: 320, height: 200 }) as DOMRect
+    const read = () => view(chart.host)
+    const wheel = (deltaY: number) =>
+      new WheelEvent("wheel", {
+        deltaY,
+        ctrlKey: true,
+        cancelable: true,
+        clientX: 220,
+        clientY: 200,
+      })
+
+    // Twice as close: the origin, 100 left of and above the cursor, is now 200 away.
+    await chart.send(wheel(-200))
+    expect(read()).toEqual({ origin: { x: 220, y: 100 }, scale: 240, yaw: 0 })
+    // And back out, onto the view it came from.
+    await chart.send(wheel(200))
+    expect(read()).toEqual({ origin: { x: 320, y: 200 }, scale: 120, yaw: 0 })
+
+    // The zoom stops at 8, after three doublings, and the chart with it.
+    for (let i = 0; i < 4; i++) await chart.send(wheel(-200))
+    expect(read()).toEqual({ origin: { x: -380, y: -500 }, scale: 960, yaw: 0 })
+    await chart.send(wheel(-200))
+    expect(read()).toEqual({ origin: { x: -380, y: -500 }, scale: 960, yaw: 0 })
+
+    // And at 1/4, five halvings on: the origin is 25 from the cursor and stays.
+    for (let i = 0; i < 5; i++) await chart.send(wheel(200))
+    expect(read()).toEqual({ origin: { x: 395, y: 275 }, scale: 30, yaw: 0 })
+    await chart.send(wheel(200))
+    expect(read()).toEqual({ origin: { x: 395, y: 275 }, scale: 30, yaw: 0 })
+
+    // A key has no cursor: it zooms to the middle of the chart, and a panned
+    // chart stays where it is.
+    await chart.send(key("0"))
+    await chart.send(key("ArrowRight", true))
+    await chart.send(key("+"))
+    expect(read().origin).toEqual({ x: 340, y: 200 })
+    expect(read().scale).toBeCloseTo(144)
+    await chart.send(key("-"))
+    await chart.send(key("-"))
+    expect(read().origin).toEqual({ x: 340, y: 200 })
+    expect(read().scale).toBeCloseTo(100)
+
+    await chart.unmount()
+  })
+
   test("Shift and an arrow pan, + and - and Ctrl with the wheel zoom, 0 and a double click reset", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
@@ -308,8 +362,11 @@ describe("shortcuts", () => {
     const wheel = { deltaY: -200, bubbles: true, cancelable: true }
     await chart.send(new WheelEvent("wheel", wheel))
     expect(read().scale).toBeCloseTo(120)
-    await chart.send(new WheelEvent("wheel", { ...wheel, ctrlKey: true }))
-    expect(read().scale).toBeCloseTo(240)
+    // The cursor on the origin of the panned chart, the zoom moves nothing else.
+    await chart.send(
+      new WheelEvent("wheel", { ...wheel, ctrlKey: true, clientX: 340, clientY: 200 })
+    )
+    expect(read()).toEqual({ origin: { x: 340, y: 200 }, scale: 240, yaw: 0 })
 
     await chart.send(key("0"))
     expect(read()).toEqual({ origin: { x: 320, y: 200 }, scale: 120, yaw: 0 })

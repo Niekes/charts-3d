@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mark and a glide never updates it, so it used to freeze a mid-glide number.
 - A mark on its way out of the data - a bar, a point, a segment of a ribbon
   or a cell fading away - says nothing on hover.
+- The wheel and a trackpad pinch zoom to the cursor: the point under it stays
+  where it is, so the zoom moves `pan` of the view with it, and at the limits
+  of the zoom the chart stands still. `+` and `-` zoom to the middle of the
+  chart, as before (ADR-0001).
 
 ## [0.6.0] - 2026-11-05
 

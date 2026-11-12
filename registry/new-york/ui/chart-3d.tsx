@@ -124,8 +124,18 @@ const CLICK_DISTANCE = 4
 // How long the zoom cursor outlives the last wheel tick before the hand returns.
 const ZOOM_CURSOR = 400
 
-/** A step of the camera: turned by `yaw` and `tilt`, moved by `pan`, zoomed by the factor `zoom`, or reset. */
-type Move = { yaw?: number; tilt?: number; pan?: Point2D; zoom?: number; reset?: boolean }
+/**
+ * A step of the camera: turned by `yaw` and `tilt`, moved by `pan`, zoomed by
+ * the factor `zoom` to the point `at`, from the middle of the view, or reset.
+ */
+type Move = {
+  yaw?: number
+  tilt?: number
+  pan?: Point2D
+  zoom?: number
+  at?: Point2D
+  reset?: boolean
+}
 
 /** The actions a key triggers: each steps the camera, `help` opens the shortcut panel. */
 export type KeyAction3D =
@@ -551,17 +561,25 @@ function useCamera(view: View3D, width: number, height: number) {
 const clamp = (lo: number, hi: number, value: number) => Math.max(lo, Math.min(hi, value))
 const ZERO = { x: 0, y: 0 }
 
-/** `view` moved by one step. The tilt stops at the zenith and the nadir, the zoom at 1/4 and 8. */
+/**
+ * `view` moved by one step. The tilt stops at the zenith and the nadir, the
+ * zoom at 1/4 and 8. A zoom keeps the point `at` where it is, by the zoom
+ * after its limits, so the chart stands still at them; without `at` that
+ * point is the origin of the chart, and the pan stays.
+ */
 function moved(view: View3D, move: Move, initial: View3D): View3D {
   if (move.reset) return initial
   const step = { yaw: 0, tilt: 0, zoom: 1, pan: { x: 0, y: 0 }, ...move }
   const pan = view.pan ?? { x: 0, y: 0 }
+  const zoom = clamp(0.25, 8, (view.zoom ?? 1) * step.zoom)
+  const k = zoom / (view.zoom ?? 1)
+  const at = move.at ?? pan
   return {
     ...view,
     yaw: view.yaw + step.yaw,
     tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt),
-    zoom: clamp(0.25, 8, (view.zoom ?? 1) * step.zoom),
-    pan: { x: pan.x + step.pan.x, y: pan.y + step.pan.y },
+    zoom,
+    pan: { x: at.x - (at.x - pan.x) * k + step.pan.x, y: at.y - (at.y - pan.y) * k + step.pan.y },
   }
 }
 
@@ -773,7 +791,7 @@ function useOrbit(
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
-  const ref = useWheelZoom(jump, keys.on("wheelZoom"))
+  const ref = useWheelZoom(jump, keys.on("wheelZoom"), width)
   // A drag follows the pointer at once, a key and a double click glide.
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
@@ -880,14 +898,14 @@ function useKeys(
 }
 
 /**
- * A ref for the svg that zooms the view with the platform modifier and the
- * wheel, if `on`. Ctrl and the wheel zooms on a Mac too, because a trackpad
+ * A ref for the svg that zooms the view to the cursor with the platform
+ * modifier and the wheel, if `on`. Ctrl and the wheel zooms on a Mac too, because a trackpad
  * pinch arrives that way, indistinguishable from the keys. The wheel alone
  * still scrolls the page. While the wheel zooms, the svg says so in
  * `data-zoom` - `"in"` or `"out"`, the direction of its cursor - until
  * `ZOOM_CURSOR` after the last tick.
  */
-function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean) {
+function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean, width: number) {
   // React listens to the wheel passively, and only a listener that is not
   // passive can keep the browser from zooming the page.
   return React.useCallback(
@@ -897,7 +915,14 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
       const onWheel = (e: WheelEvent) => {
         if (!platformMod(e) && !e.ctrlKey) return
         e.preventDefault()
-        jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200) }, v))
+        // The cursor, in the units of the view box, from the middle of the svg.
+        const box = svg.getBoundingClientRect()
+        const k = width / box.width
+        const at = {
+          x: (e.clientX - box.left - box.width / 2) * k,
+          y: (e.clientY - box.top - box.height / 2) * k,
+        }
+        jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200), at }, v))
         svg.dataset.zoom = e.deltaY < 0 ? "in" : "out"
         clearTimeout(timer)
         timer = setTimeout(() => delete svg.dataset.zoom, ZOOM_CURSOR)
@@ -908,7 +933,7 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
         svg.removeEventListener("wheel", onWheel)
       }
     },
-    [jump, on]
+    [jump, on, width]
   )
 }
 
