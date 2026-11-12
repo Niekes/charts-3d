@@ -381,6 +381,50 @@ describe("GlobeChart3D hover", () => {
     expect(edged()).toHaveLength(0)
     await chart.unmount()
   })
+
+  test("tooltip makes what a tile says of what it would say and the entries on the tile, and null says nothing", async () => {
+    const both = [
+      { lon: 10, lat: 40, population: 3 },
+      { lon: 20, lat: 50, population: 7 },
+    ]
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={both}
+          land={land}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+          tooltip={(tip, { entries }) => ({ ...tip, title: `${entries.length} places` })}
+        />
+      </ChartContainer3D>
+    )
+    const { x, y } = prism(chart.svg)
+    await chart.send("pointermove", { clientX: x, clientY: y })
+    // Both entries lie on the one tile; the items stay what the tile would say.
+    expect(chart.host.textContent).toContain("2 places")
+    expect(chart.host.textContent).toMatch(/lat\s*45/)
+    await chart.unmount()
+
+    const silent = await mount(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={both}
+          land={land}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+          tooltip={() => null}
+        />
+      </ChartContainer3D>
+    )
+    const at = prism(silent.svg)
+    await silent.send("pointermove", { clientX: at.x, clientY: at.y })
+    expect(silent.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await silent.unmount()
+  })
 })
 
 describe("GlobeChart3D labels", () => {
@@ -516,6 +560,64 @@ describe("GlobeChart3D transitions", () => {
     // Lower on screen is a larger y: the tile sinks gradually, never at once.
     expect(gliding).toBeGreaterThan(alone)
     expect(settled).toBeGreaterThan(gliding)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("mid-glide a tile tells the value of the data, not the gliding height, and a tile on its way out says nothing", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, number>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="population"
+              step={30}
+            />
+          </ChartContainer3D>
+        )
+      )
+    /** Points at the center of the face painted last, the top of the tile. */
+    const point = () => {
+      const svg = host.querySelector("svg")!
+      svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+      const top = [...svg.querySelectorAll('[data-slot="chart-3d-marks"] path')]
+        .filter((p) => p.getAttribute("fill")!.includes("--color-population"))
+        .at(-1)!
+      const corners = top.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+      )
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+    const leave = () =>
+      act(() =>
+        host
+          .querySelector("svg")!
+          .dispatchEvent(
+            new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+          )
+      )
+
+    await render([{ lon: 15, lat: 45, population: 10 }])
+    await render([{ lon: 15, lat: 45, population: 20 }])
+    await act(() => vi.advanceTimersByTime(300))
+    await point()
+    expect(host.textContent).toMatch(/population\s*20/)
+    await leave()
+
+    await render([])
+    await act(() => vi.advanceTimersByTime(300))
+    await point()
+    expect(host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
 
     await act(async () => root.unmount())
     host.remove()

@@ -156,7 +156,7 @@ The rules that `scripts/check-template.mjs` enforces:
   `ui` alias of the project;
 - a chart renders no SVG or HTML elements of its own: it draws through
   `Axes3D` and `Marks3D` - through `Marks3D` alone where it has no axes, as
-  the globe (ADR-0006) - so every renderer can draw it;
+  the globe (ADR-0007) - so every renderer can draw it;
 - a chart depends on `niekes/charts-3d/chart-3d` in the registry and leaves
   the npm dependencies to the core, unless it alone needs one: then its item
   declares it, as the globe declares `d3-geo`, and it lands only where that
@@ -187,17 +187,23 @@ How the charts draw, so that a new one draws the same way:
   with a d3-3d generator, never with mathematics of its own: fallow forbids a
   chart trigonometry, the DOM, a canvas and the event loop - the core owns
   them. The one other projection is d3-geo's, for the land of the globe,
-  built from the same camera (ADR-0006). The import whitelist is the ladder: reach for a core helper first,
+  built from the same camera (ADR-0007). The import whitelist is the ladder: reach for a core helper first,
   then for d3-3d or an allowed d3 module, and never write your own. A new d3
   module is a deliberate change to the dependencies of `chart-3d` in
   `registry.json`, and it lands in every installing project, so it has to
   earn its place; one that a single chart needs goes on that chart's item
-  instead, as the globe's `d3-geo` (ADR-0006).
+  instead, as the globe's `d3-geo` (ADR-0007).
 - **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
   a circle, a CSS fill and, if it has one, a tooltip, or a function that
   builds it when the pointer arrives, so a chart of thousands of marks pays
   for one - and hands them to `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
+- **Tooltips.** What a mark says is built from the data behind it, its
+  values as the ticks name them through `format`, and handed to the chart's
+  `tooltip` prop with that data, so the reader can say otherwise. A mark
+  carries it as a function the core calls when the pointer lands on it,
+  never built per frame, and a mark whose entry has left the data says
+  nothing (ADR-0006).
 - **Labels.** Text beside a mark, such as the name of a node, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the side of it the
   text lies on, `toward`, a unit vector. The core draws it with every

@@ -23,6 +23,7 @@ import {
   useChart3D,
   useTween,
   type ChartConfig,
+  type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -60,6 +61,13 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
   step?: number
   /** Formats the value in the tooltip. */
   format?: (value: number) => React.ReactNode
+  /**
+   * What a tile says on hover: `tooltip` is what it would say, its name or
+   * its series, its value and its center, `data` the entries on the tile;
+   * `null` shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (tooltip: Tooltip3D, data: { entries: T[] }) => Tooltip3D | null
 }
 
 /** The height of a tile at the ceiling, in the world box. */
@@ -77,15 +85,14 @@ type Fields<T> = {
   label?: keyof T & string
 }
 
-/** A tile with an entry: its id - center and config key - its value and, if the chart names entries, its name. */
-type Tile = { id: string; value: number; name?: string }
+/** A tile with an entry: its id - center and config key - its value, its entries and, if the chart names entries, its name. */
+type Tile<T> = { id: string; value: number; entries: T[]; name?: string }
 
-/** What the tooltip of a tile reads: the config, the fields and the format. */
-type Reading<T> = {
+/** What the tooltip of a tile reads: the config, the fields, the format and what the reader makes of it. */
+type Reading<T extends Record<string, unknown>> = {
   config: ChartConfig
   fields: Fields<T>
-  format?: (value: number) => React.ReactNode
-}
+} & Pick<GlobeChart3DProps<T>, "format" | "tooltip">
 
 /**
  * A globe of tiles between meridians and parallels, `step` degrees wide, on
@@ -102,6 +109,7 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   label,
   step = 5,
   format,
+  tooltip,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, label }
@@ -118,9 +126,7 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
 
   const eye = orthographic(camera)
   const near = nearTiles(Object.keys(heights), step, eye)
-  // The tooltip of a tile is built when the pointer arrives on one of its faces.
-  const reading = { config, fields, format }
-  const tooltip = (id: string) => () => tileTooltip(id, heights[id], tiles.get(id)?.name, reading)
+  const reading = { config, fields, format, tooltip }
   const prisms = polygons3D<Point3D>()
     .camera(eye)
     .data<Face>(prismFaces(near, heights, ceiling, step, eye.scale()))
@@ -135,7 +141,7 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
     // and hides what lies behind its center plane, as the ocean disc is drawn
     // first and a side of a far tile turned to the camera would show through.
     .filter((face) => face.ccw && face.centroid.z > 0)
-    .map((face) => prismMark(face, presence[face.id], tooltip(face.id)))
+    .map((face) => prismMark(face, presence[face.id], tileTooltip(tiles.get(face.id), reading)))
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...prisms]} />
@@ -165,7 +171,8 @@ function nearTiles(ids: string[], step: number, eye: Camera3DInstance) {
 /**
  * The tile of every entry - the last entry on a tile wins - keyed by the
  * center of the tile and the config key of its color, with its value and, if
- * the chart names entries, the name of that last entry.
+ * the chart names entries, the name of that last entry, and every entry on
+ * the tile.
  */
 function tileValues<T extends Record<string, unknown>>(
   data: T[],
@@ -173,7 +180,7 @@ function tileValues<T extends Record<string, unknown>>(
   step: number,
   fallback: string
 ) {
-  const tiles = new Map<string, Tile>()
+  const tiles = new Map<string, Tile<T>>()
   for (const d of data) {
     const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     // An entry without a place on the globe has no tile.
@@ -183,6 +190,7 @@ function tileValues<T extends Record<string, unknown>>(
     tiles.set(center, {
       id: `${center},${key}`,
       value: Math.max(0, Number(d[fields.value]) || 0),
+      entries: [...(tiles.get(center)?.entries ?? []), d],
       name: fields.label ? String(d[fields.label]) : undefined,
     })
   }
@@ -241,25 +249,31 @@ function corners(lon: number, lat: number, step: number, radius: number): Point3
 }
 
 /**
- * The tooltip of a tile: its name, or the label of its series, over the
- * value in the series color and the center of the tile, labelled by the
- * fields. Built when the pointer arrives.
+ * What a tile says on hover, made when the pointer lands on one of its
+ * faces: its name, or the label of its series, over its value in the series
+ * color and the center of the tile, labelled by the fields - or what
+ * `tooltip` makes of that. A tile whose entries have left the data says
+ * nothing.
  */
 function tileTooltip<T extends Record<string, unknown>>(
-  id: string,
-  value: number,
-  name: string | undefined,
-  { config, fields, format }: Reading<T>
-): Tooltip3D {
+  found: Tile<T> | undefined,
+  { config, fields, format, tooltip = (tip) => tip }: Reading<T>
+): Mark3D["tooltip"] {
+  if (!found) return undefined
+  const { id, value, name, entries } = found
   const { lon, lat, key } = tile(id)
-  return {
-    title: name ?? config[key]?.label ?? key,
-    items: [
-      { label: fields.value, value: format ? format(value) : value, color: `var(--color-${key})` },
-      { label: fields.lat, value: lat },
-      { label: fields.lon, value: lon },
-    ],
-  }
+  return () =>
+    tooltip(
+      {
+        title: name ?? config[key]?.label ?? key,
+        items: [
+          { label: fields.value, value: format?.(value) ?? value, color: `var(--color-${key})` },
+          { label: fields.lat, value: lat },
+          { label: fields.lon, value: lon },
+        ],
+      },
+      { entries }
+    )
 }
 
 /**
@@ -267,7 +281,7 @@ function tileTooltip<T extends Record<string, unknown>>(
  * series and faded to its presence. Its group is the tile alone, so hovering
  * highlights one tile, not its series.
  */
-function prismMark(face: Polygon<Point3D, Face>, presence: number, tooltip: () => Tooltip3D) {
+function prismMark(face: Polygon<Point3D, Face>, presence: number, tooltip: Mark3D["tooltip"]) {
   return {
     key: `${face.id}-${face.part}`,
     points: face.map((p) => p.projected),

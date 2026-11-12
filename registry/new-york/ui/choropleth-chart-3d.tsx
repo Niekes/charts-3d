@@ -9,6 +9,8 @@ import {
   faded,
   useChart3D,
   useTween,
+  type ChartConfig,
+  type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -43,10 +45,16 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
   label?: keyof T & string
   /** Formats the value in the tooltip. */
   format?: (value: number) => React.ReactNode
+  /**
+   * What a region says on hover: `tooltip` is what it would say, its name or
+   * its series and its value, `data` the entry behind it; `null` shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (tooltip: Tooltip3D, data: { entry: T }) => Tooltip3D | null
 }
 
-/** A region with an entry: its id in the land, the config key of its color, its value and, if the chart names entries, its name. */
-type Region = { rid: string; key: string; value: number; name?: string }
+/** A region with an entry: its id in the land, the config key of its color, its value, the entry and, if the chart names entries, its name. */
+type Region<T> = { rid: string; key: string; value: number; entry: T; name?: string }
 
 /** The fields of an entry: its region, its value and, if the chart has them, its series and its name. */
 type Fields<T> = {
@@ -71,8 +79,10 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   series,
   label,
   format,
+  tooltip,
 }: ChoroplethChart3DProps<T>) {
   const { config, camera } = useChart3D()
+  const reading = { config, value, format, tooltip }
   const regions = regionValues(data, { id, value, series, label }, Object.keys(config)[0])
   // Keyed by the region and its series, so a region that changes color
   // leaves as one and enters as the other, each fading.
@@ -106,24 +116,40 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
     const feature = features.get(rid)
     // An entry naming a region the land has not draws nothing.
     if (!feature) return []
-    const color = `var(--color-${key})`
-    // A region still fading out has no entry, so no tooltip; one with an
-    // entry builds its tooltip when the pointer arrives.
+    // A region still fading out has no entry, so it says nothing.
     const region = regions.get(rid)
-    const tooltip =
-      region && region.key === key
-        ? (): Tooltip3D => ({
-            title: region.name ?? config[key]?.label ?? key,
-            items: [{ label: value, value: format ? format(region.value) : region.value, color }],
-          })
-        : undefined
+    const says = region?.key === key ? regionTooltip(region, reading) : undefined
     // Its group is the region alone, so hovering highlights every ring of it.
     return sink
-      .marks(() => path(feature), `region-${rid}-${key}`, faded(color, opacity))
-      .map((mark) => ({ ...mark, groups: [rid], tooltip }))
+      .marks(() => path(feature), `region-${rid}-${key}`, faded(`var(--color-${key})`, opacity))
+      .map((mark) => ({ ...mark, groups: [rid], tooltip: says }))
   })
 
   return <Marks3D marks={[...scenery, ...overlays]} />
+}
+
+/**
+ * What a region says on hover, made when the pointer lands on it: its name,
+ * or the label of its series, over its value in the series color, labelled
+ * by the field - or what `tooltip` makes of that.
+ */
+function regionTooltip<T extends Record<string, unknown>>(
+  { key, value, name, entry }: Region<T>,
+  {
+    config,
+    value: field,
+    format,
+    tooltip = (tip) => tip,
+  }: { config: ChartConfig } & Pick<ChoroplethChart3DProps<T>, "value" | "format" | "tooltip">
+): Mark3D["tooltip"] {
+  return () =>
+    tooltip(
+      {
+        title: name ?? config[key]?.label ?? key,
+        items: [{ label: field, value: format?.(value) ?? value, color: `var(--color-${key})` }],
+      },
+      { entry }
+    )
 }
 
 /** The region of every entry - the last entry on a region wins - by the id it names. */
@@ -132,13 +158,14 @@ function regionValues<T extends Record<string, unknown>>(
   fields: Fields<T>,
   fallback: string
 ) {
-  const regions = new Map<string, Region>()
+  const regions = new Map<string, Region<T>>()
   for (const d of data) {
     const rid = String(d[fields.id])
     regions.set(rid, {
       rid,
       key: fields.series ? String(d[fields.series]) : fallback,
       value: Number(d[fields.value]) || 0,
+      entry: d,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
   }

@@ -26,7 +26,11 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   the webgl renderer paint it and the hover hit-tests it, whatever the
   renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
-- **Hover comes from the core.** Give every mark a `tooltip` and `groups`
+- **Hover comes from the core.** Give every mark a `tooltip` - a function
+  the core calls when the pointer lands on it, built from the data behind the
+  mark as the ticks name it through `format` and passed through the chart's
+  `tooltip` prop with that data, so the reader can say otherwise (ADR-0006);
+  a mark whose entry has left the data gets none - and `groups`
   naming what is highlighted together - the bar alone in the bar chart, the
   single point in the scatter -
   so that in every chart, while the pointer is on a mark, its tooltip shows and
@@ -49,7 +53,7 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 - **Project with d3-3d - the gates enforce it** (ADR-0003). The template
   check requires a d3-3d projection generator (`points3D`, `cubes3D`,
   `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort` - or, for
-  a chart of regions alone, d3-geo's `geoPath` (ADR-0006); fallow
+  a chart of regions alone, d3-geo's `geoPath` (ADR-0007); fallow
   forbids a chart trigonometry (`Math.cos/sin/tan/atan2` - hand-rolled
   projection), the DOM, a canvas and the event loop. Reach for a core helper
   first, then d3-3d or an allowed d3 module, never write your own; a new d3
@@ -82,7 +86,7 @@ least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
 webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
 chart clears both; new data glides in (`useTween`); the axes follow, where the
-chart has axes - the globe has none (ADR-0006). New code
+chart has axes - the globe has none (ADR-0007). New code
 comes with its tests - the coverage gate is 98% in each metric.
 
 ## 4. Docs

@@ -208,6 +208,38 @@ describe("PlacesChart3D hover", () => {
     expect(chart.host.textContent).not.toContain("City")
     await chart.unmount()
   })
+
+  test("tooltip makes what a dot says of what it would say and the entry behind it, and null says nothing", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <PlacesChart3D
+          data={data}
+          land={land}
+          lon="lon"
+          lat="lat"
+          value="people"
+          series="kind"
+          tooltip={(tip, { entry }) => ({ ...tip, title: `${entry.name}, a ${entry.kind}` })}
+        />
+      </ChartContainer3D>
+    )
+    const { x, y } = dot(chart.svg, "capital")
+    await chart.send("pointermove", { clientX: x, clientY: y })
+    // The items stay what the dot would say.
+    expect(chart.host.textContent).toContain("Rome, a capital")
+    expect(chart.host.textContent).toMatch(/people\s*100/)
+    await chart.unmount()
+
+    const silent = await mount(
+      <ChartContainer3D config={config}>
+        <PlacesChart3D data={data} land={land} lon="lon" lat="lat" tooltip={() => null} />
+      </ChartContainer3D>
+    )
+    const at = dot(silent.svg, "city")
+    await silent.send("pointermove", { clientX: at.x, clientY: at.y })
+    expect(silent.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await silent.unmount()
+  })
 })
 
 describe("PlacesChart3D labels", () => {
@@ -278,6 +310,52 @@ describe("PlacesChart3D transitions", () => {
     expect(dots()).toHaveLength(1)
     expect(transparent()).toHaveLength(0)
     expect(r()).toBe(6)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("mid-glide a dot tells the value of the data, not the gliding size, and a dot on its way out says nothing", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, unknown>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <PlacesChart3D data={data} land={none} lon="lon" lat="lat" value="people" id="name" />
+          </ChartContainer3D>
+        )
+      )
+    /** Points at the dot. */
+    const point = () => {
+      const svg = host.querySelector("svg")!
+      svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+      const circle = svg.querySelector('[data-slot="chart-3d-marks"] circle')!
+      const [clientX, clientY] = ["cx", "cy"].map((a) => Number(circle.getAttribute(a)))
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+    const leave = () =>
+      act(() =>
+        host
+          .querySelector("svg")!
+          .dispatchEvent(
+            new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
+          )
+      )
+
+    await render([{ lon: 15, lat: 15, people: 100, name: "Rome" }])
+    await render([{ lon: 15, lat: 15, people: 50, name: "Rome" }])
+    await act(() => vi.advanceTimersByTime(300))
+    await point()
+    expect(host.textContent).toMatch(/people\s*50/)
+    await leave()
+
+    await render([])
+    await act(() => vi.advanceTimersByTime(300))
+    await point()
+    expect(host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
 
     await act(async () => root.unmount())
     host.remove()

@@ -14,6 +14,8 @@ import {
   useTweenAxes,
   worldBox,
   type ChartConfig,
+  type Mark3D,
+  type Tooltip3D,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -47,6 +49,13 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
   format?: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>
   /** The titles of the axes. */
   titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
+  /**
+   * What a point says on hover: `tooltip` is what it would say, its series
+   * and its x, y and z as the ticks name them, `data` the entry behind it;
+   * `null` shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (tooltip: Tooltip3D, data: { entry: T }) => Tooltip3D | null
 }
 
 /**
@@ -63,10 +72,12 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   radius = 4,
   format,
   titles,
+  tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
   const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
+  const entries = new Map(names.map((name, i) => [name, data[i]]))
   const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
 
   // The axes of the data the chart glides into; their ends glide along.
@@ -92,13 +103,12 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       groups: [p.name],
       // Ringed by the background, so that points in front stand out.
       stroke: faded("var(--background)", opacity[p.name]),
-      tooltip: {
-        title: series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
-        items: (["x", "y", "z"] as const).map((a) => ({
-          label: titles?.[a] ?? fields[a],
-          value: read(p.name, a),
-        })),
-      },
+      tooltip: pointTooltip(
+        entries.get(p.name),
+        series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
+        fields,
+        { format, titles, tooltip }
+      ),
     }))
 
   return (
@@ -107,6 +117,36 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/**
+ * What a point says on hover, made when the pointer lands on it: its series,
+ * where `title` names one, and its x, y and z as the ticks of each axis name
+ * them - or what `tooltip` makes of that. A point whose entry has left the
+ * data says nothing.
+ */
+function pointTooltip<T extends Record<string, unknown>>(
+  entry: T | undefined,
+  title: React.ReactNode,
+  fields: Record<keyof AxesSpec, keyof T & string>,
+  {
+    format = {},
+    titles = {},
+    tooltip = (tip) => tip,
+  }: Pick<ScatterChart3DProps<T>, "format" | "titles" | "tooltip">
+): Mark3D["tooltip"] {
+  if (!entry) return undefined
+  return () =>
+    tooltip(
+      {
+        title,
+        items: (["x", "y", "z"] as const).map((a) => {
+          const value = Number(entry[fields[a]])
+          return { label: titles[a] ?? fields[a], value: format[a]?.(value) ?? value }
+        }),
+      },
+      { entry }
+    )
 }
 
 /** The axes that hold every entry of `data`, a nice one per field. */

@@ -230,6 +230,37 @@ describe("ChoroplethChart3D hover", () => {
     expect(chart.host.textContent).not.toContain("Population")
     await chart.unmount()
   })
+
+  test("tooltip makes what a region says of what it would say and the entry behind it, and null says nothing", async () => {
+    const data = [{ code: "a", n: 5, capital: "Alpha City" }]
+    const chart = await mount(
+      <ChartContainer3D config={config}>
+        <ChoroplethChart3D
+          data={data}
+          land={land}
+          id="code"
+          value="n"
+          tooltip={(tip, { entry }) => ({ ...tip, title: entry.capital })}
+        />
+      </ChartContainer3D>
+    )
+    const a = region(chart.svg)
+    await chart.send("pointermove", { clientX: a.x, clientY: a.y })
+    // The items stay what the region would say.
+    expect(chart.host.textContent).toContain("Alpha City")
+    expect(chart.host.textContent).toMatch(/n\s*5/)
+    await chart.unmount()
+
+    const silent = await mount(
+      <ChartContainer3D config={config}>
+        <ChoroplethChart3D data={data} land={land} id="code" value="n" tooltip={() => null} />
+      </ChartContainer3D>
+    )
+    const at = region(silent.svg)
+    await silent.send("pointermove", { clientX: at.x, clientY: at.y })
+    expect(silent.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    await silent.unmount()
+  })
 })
 
 describe("ChoroplethChart3D transitions", () => {

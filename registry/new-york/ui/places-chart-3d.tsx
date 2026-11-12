@@ -14,6 +14,8 @@ import {
   useChart3D,
   useTween,
   type ChartConfig,
+  type Mark3D,
+  type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -56,6 +58,13 @@ export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string
   radius?: number
   /** Formats the value in the tooltip. */
   format?: (value: number) => React.ReactNode
+  /**
+   * What a dot says on hover: `tooltip` is what it would say, its name or
+   * its series, its value and its place, `data` the entry behind it; `null`
+   * shows none.
+   * @defaultValue (tooltip) => tooltip
+   */
+  tooltip?: (tooltip: Tooltip3D, data: { entry: T }) => Tooltip3D | null
 }
 
 /** A dot by name, on the sphere, before the camera projects it. */
@@ -73,13 +82,12 @@ type Fields<T> = {
   id?: keyof T & string
 }
 
-/** What a dot reads for its mark: the config, the fields, the largest radius and the format. */
-type Reading<T> = {
+/** What a dot reads for its mark: the config, the fields, the largest radius, the format and what the reader makes of its tooltip. */
+type Reading<T extends Record<string, unknown>> = {
   config: ChartConfig
   fields: Fields<T>
   radius: number
-  format?: (value: number) => React.ReactNode
-}
+} & Pick<PlacesChart3DProps<T>, "format" | "tooltip">
 
 /**
  * Dots on the land of a globe, one per place, its area its value. A dot on
@@ -95,6 +103,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   id,
   radius = 6,
   format,
+  tooltip,
 }: PlacesChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, id }
@@ -114,10 +123,10 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const { peak } = useTween({ peak: Math.max(0, ...Object.values(target)) })
   const place = usePlaces(names, entries, fields, Object.keys(config)[0], sizes)
 
-  const eye = orthographic(camera)
-  const reading = { config, fields, radius, format }
+  const reading = { config, fields, radius, format, tooltip }
+  const behind = new Map(entries.map((d, i) => [names[i], d]))
   const dots = points3D<Dot>()
-    .camera(eye)
+    .camera(orthographic(camera))
     .x((p) => p.x)
     .y((p) => p.y)
     .z((p) => p.z)
@@ -135,7 +144,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
         p,
         place(p.name),
         sizes[p.name] / (peak || 1),
-        sizes[p.name],
+        behind.get(p.name),
         opacity[p.name],
         reading
       )
@@ -149,37 +158,61 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
  * The mark of one dot: a circle whose area is its share of the peak, in the
  * color of its series, faded to its presence and ringed by the background so
  * that dots in front stand out. Its group is the dot alone, so hovering
- * highlights that dot only; the tooltip names it, or its series, over its
- * value and its place, labelled by the fields.
+ * highlights that dot only.
  */
 function dotMark<T extends Record<string, unknown>>(
   p: TransformedPoint<Dot>,
-  { lon, lat, key }: Place,
+  place: Place,
   share: number,
-  value: number,
+  entry: T | undefined,
   presence: number,
-  { config, fields, radius, format }: Reading<T>
+  reading: Reading<T>
 ) {
-  const color = `var(--color-${key})`
   return {
     key: p.name,
     points: [p.projected],
-    r: radius * Math.sqrt(share),
-    fill: faded(color, presence),
+    r: reading.radius * Math.sqrt(share),
+    fill: faded(`var(--color-${place.key})`, presence),
     stroke: faded("var(--background)", presence),
     groups: [p.name],
-    // Built when the pointer arrives: thousands of dots, one tooltip.
-    tooltip: () => ({
-      title: fields.id ? p.name : (config[key]?.label ?? key),
-      items: [
-        ...(fields.value
-          ? [{ label: fields.value, value: format ? format(value) : value, color }]
-          : []),
-        { label: fields.lat, value: lat },
-        { label: fields.lon, value: lon },
-      ],
-    }),
+    tooltip: dotTooltip(p.name, place, entry, reading),
   }
+}
+
+/**
+ * What a dot says on hover, made when the pointer lands on it - thousands of
+ * dots, one tooltip: its name, or its series, over its value and its place,
+ * labelled by the fields - or what `tooltip` makes of that. A dot whose
+ * entry has left the data says nothing.
+ */
+function dotTooltip<T extends Record<string, unknown>>(
+  name: string,
+  { lon, lat, key }: Place,
+  entry: T | undefined,
+  { config, fields, format, tooltip = (tip) => tip }: Reading<T>
+): Mark3D["tooltip"] {
+  if (!entry) return undefined
+  const value = fields.value ? Math.max(0, Number(entry[fields.value]) || 0) : 0
+  return () =>
+    tooltip(
+      {
+        title: fields.id ? name : (config[key]?.label ?? key),
+        items: [
+          ...(fields.value
+            ? [
+                {
+                  label: fields.value,
+                  value: format?.(value) ?? value,
+                  color: `var(--color-${key})`,
+                },
+              ]
+            : []),
+          { label: fields.lat, value: lat },
+          { label: fields.lon, value: lon },
+        ],
+      },
+      { entry }
+    )
 }
 
 /**

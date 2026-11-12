@@ -37,4 +37,4 @@ d3 module, and never writes its own; a new d3 module is a deliberate change to
 the dependencies of `chart-3d` in `registry.json` and lands in every installing
 project, so it has to earn its place - or, where one chart alone needs it, to
 the dependencies of that chart's item, which land only where the chart
-installs, as the globe's `d3-geo` does (ADR-0006).
+installs, as the globe's `d3-geo` does (ADR-0007).

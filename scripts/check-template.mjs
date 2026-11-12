@@ -147,6 +147,16 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   if (!new RegExp(`export\\s+type\\s+${component}Props\\b`).test(source)) {
     fail(`${UI}/${file}: must export the type '${component}Props'`)
   }
+  // What a mark says on hover is the reader's: a chart takes `tooltip`, a
+  // function of what the mark would say and the data behind it (ADR-0006).
+  const props = source.match(
+    new RegExp(`export\\s+type\\s+${component}Props\\b[^{]*{([\\s\\S]*?)\\n}`)
+  )
+  if (!/\btooltip\?:\s*\(/.test(props?.[1] ?? "")) {
+    fail(
+      `${UI}/${file}: a chart takes 'tooltip', a function of what a mark would say and the data behind it`
+    )
+  }
 
   for (const [, specifier] of source.matchAll(/from\s+"([^"]+)"/g)) {
     if (specifier !== CORE_IMPORT && !allowed.has(specifier)) {
@@ -177,7 +187,7 @@ for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
     .filter((name) => name && !name.startsWith("type "))
   const generator = names.find((name) => GENERATORS.has(name))
   const body = source.replace(/import\s*{[^}]*}\s*from\s+"d3-3d"/, "")
-  // The one other projection is d3-geo's (ADR-0006): a chart of regions
+  // The one other projection is d3-geo's (ADR-0007): a chart of regions
   // alone, as the choropleth, projects with `geoPath` - handed to the core's
   // `earth` - and has no shapes of d3-3d to sort.
   const geo = /import\s*{[^}]*\bgeoPath\b[^}]*}\s*from\s+"d3-geo"/.test(source)

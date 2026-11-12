@@ -976,6 +976,33 @@ describe("Marks3D", () => {
 
     await chart.unmount()
   })
+  test("a tooltip given as a function is made when the pointer lands on the mark; null shows none", async () => {
+    const lazy = vi.fn(() => ({ items: [{ label: "Lazy", value: 1 }] }))
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D
+          marks={[
+            { ...marks[0], tooltip: lazy },
+            { ...marks[1], tooltip: () => null },
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    const move = (clientX: number, clientY: number) =>
+      chart.send(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    const tip = () => chart.host.querySelector('[data-slot="chart-3d-tooltip"]')
+
+    // Rendering never calls it; the hover does, once per mark it lands on.
+    expect(lazy).not.toHaveBeenCalled()
+    await move(150, 150)
+    await move(160, 160)
+    expect(lazy).toHaveBeenCalledTimes(1)
+    expect(tip()?.textContent).toContain("Lazy")
+    await move(405, 100)
+    expect(tip()).toBeNull()
+
+    await chart.unmount()
+  })
 })
 
 describe("tooltip", () => {
@@ -1538,6 +1565,10 @@ describe("helpers", () => {
     expect(read!.target).toEqual({ "x-a": 1, "x-b": 0, "y-a": 2, "y-b": 3 })
     expect(read!.values).toEqual(read!.target)
     expect(read!.rows).toEqual({ x: 0, y: 1 })
+    expect([...read!.entries]).toEqual([
+      ["x", { name: "x", a: 1, b: "n/a" }],
+      ["y", { name: "y", a: 2, b: 3 }],
+    ])
     expect(read!.presence).toEqual({ x: 1, y: 1 })
     // A tick of x names its entry, one beyond them none; a series without a label shows its key.
     expect([0, 1, 2].map(read!.labels.x)).toEqual(["X", "Y", ""])
