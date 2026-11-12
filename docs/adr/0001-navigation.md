@@ -42,3 +42,10 @@ key and the wheel zoom nothing. The cursor now names every gesture, not only
 the rotate: Alt held shows the four arrows (`move`), through a pan drag too,
 and a wheel zoom shows `zoom-in` or `zoom-out` by its direction, falling back
 to the hand shortly after the last tick.
+
+Amended 2026-11-09: a turn is divided by the zoom, in `moved`, where every
+step lands. Zoomed in eight times, a drag turned the chart the same angle as
+zoomed out, and the picture flew eight times as far under the pointer; now
+the drag moves it as far as it did, and an arrow key turns it as far on
+screen, as the 3D viewers of the browser slow their rotation as the camera
+nears. The zoom itself was a factor per tick already, and stays one.
