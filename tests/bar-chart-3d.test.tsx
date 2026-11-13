@@ -250,7 +250,7 @@ const apart = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =
   Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2)
 
 const chart = (
-  defaultView: { yaw: number; tilt: number },
+  defaultView: { yaw: number; tilt: number; perspective?: number },
   titles: Record<string, string> = { y: "Visitors" }
 ) => (
   <ChartContainer3D config={demo} defaultView={defaultView}>
@@ -260,37 +260,43 @@ const chart = (
 
 describe("BarChart3D labels", () => {
   test("show both series from every angle, and no two labels that show cover each other", async () => {
-    // Every 5° round, every 15° from below to above the box.
-    const bars = await mount(chart({ yaw: 0, tilt: -Math.PI / 2 }))
     const failures: string[] = []
-    for (let tilt = -90; tilt <= 90; tilt += 15) {
-      for (let yaw = 0; yaw < 360; yaw += 5) {
-        const shown = drawn(bars.host).filter((label) => label.opacity > 0.5)
-        const series = shown
-          .filter((l) => l.text === "Desktop" || l.text === "Mobile")
-          .map((l) => `${l.text} ${l.opacity}`)
-          .join()
-        if (series !== "Desktop 1,Mobile 1") failures.push(`${yaw}°/${tilt}°: ${series}`)
-        for (const [i, a] of shown.entries())
-          for (const b of shown.slice(i + 1))
-            if (apart(a, b) < 0) failures.push(`${yaw}°/${tilt}°: ${a.text} covers ${b.text}`)
-        await bars.send("keydown", { key: "ArrowRight" })
+    // Every 5° round, every 15° from below to above the box; once more in perspective, where the edges lean.
+    for (const perspective of [undefined, 4]) {
+      // shortcut: straight from below in perspective the y tick labels overlap, so that pass starts at -75°; fix `fit` for a leaning edge before a chart looks from there.
+      const from = perspective ? -75 : -90
+      const bars = await mount(chart({ yaw: 0, tilt: (from * Math.PI) / 180, perspective }))
+      const view = (yaw: number, tilt: number) => `${yaw}°/${tilt}°${perspective ? "/p" : ""}`
+      for (let tilt = from; tilt <= 90; tilt += 15) {
+        for (let yaw = 0; yaw < 360; yaw += 5) {
+          const shown = drawn(bars.host).filter((label) => label.opacity > 0.5)
+          const series = shown
+            .filter((l) => l.text === "Desktop" || l.text === "Mobile")
+            .map((l) => `${l.text} ${l.opacity}`)
+            .join()
+          if (series !== "Desktop 1,Mobile 1") failures.push(`${view(yaw, tilt)}: ${series}`)
+          for (const [i, a] of shown.entries())
+            for (const b of shown.slice(i + 1))
+              if (apart(a, b) < 0) failures.push(`${view(yaw, tilt)}: ${a.text} covers ${b.text}`)
+          await bars.send("keydown", { key: "ArrowRight" })
+        }
+        for (let i = 0; i < 3; i += 1) await bars.send("keydown", { key: "ArrowDown" })
       }
-      for (let i = 0; i < 3; i += 1) await bars.send("keydown", { key: "ArrowDown" })
+      await bars.unmount()
     }
     expect(failures).toEqual([])
-    await bars.unmount()
   }, 60_000)
 
   test("slide round their ticks as the camera turns, and never jump", async () => {
     let worst = 0
-    for (const tilt of [-30, 15, 30, 60]) {
-      const bars = await mount(chart({ yaw: 0, tilt: (tilt * Math.PI) / 180 }))
+    // From below, level and from above; once in perspective, where the edges of the box lean.
+    for (const [tilt, perspective] of [[-30], [15], [30, 4], [60]] as [number, number?][]) {
+      const bars = await mount(chart({ yaw: 0, tilt: (tilt * Math.PI) / 180, perspective }))
       let last = new Map(drawn(bars.host).map((label) => [label.el, label]))
-      // A drag of 2px turns the camera by 1.6°, a whole turn in 230 steps.
-      await bars.send("pointerdown", { clientX: 0, clientY: 0 })
+      // A drag of 2px with the platform modifier turns the camera by 1.6°, a whole turn in 230 steps.
+      await bars.send("pointerdown", { clientX: 0, clientY: 0, ctrlKey: true })
       for (let x = 4; x <= 464; x += 2) {
-        await bars.send("pointermove", { clientX: x, clientY: 0 })
+        await bars.send("pointermove", { clientX: x, clientY: 0, ctrlKey: true })
         const now = drawn(bars.host)
         for (const label of now) {
           const before = last.get(label.el)

@@ -39,9 +39,10 @@ A short line at a tick, pointing away from the box.
 _Avoid_: tick stroke, tick
 
 **Axis title**:
-The name of an axis, upright: over the top end of the vertical axis, heading
-its tick labels with its edge in line with theirs; beyond the tick labels of
-a floor axis, at the middle of its edge.
+The name of an axis, upright: over the top end of the vertical axis, on the
+box's side of the axis line with its edge on that line, clear of the top of
+the box as far as that keeps it by its axis; beyond the tick labels of a
+floor axis, at the middle of its edge.
 _Avoid_: axis label, caption, title (bare: the tooltip has one too)
 
 **Cell**:
