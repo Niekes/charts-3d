@@ -645,7 +645,8 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
     let frame = 0
     const step = (now: number) => {
       start ??= now
-      const t = Math.min(1, (now - start) / duration)
+      // A duration that turned 0 during the glide: 0 / 0 is NaN, so it jumps to the end.
+      const t = duration > 0 ? Math.min(1, (now - start) / duration) : 1
       setTween((tw) => ({ ...tw, t }))
       if (t < 1) frame = requestAnimationFrame(step)
     }

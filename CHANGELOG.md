@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `animationDuration` that turns 0 while a chart glides makes it jump to
+  the new data: the marks vanished, their numbers `NaN`, until the data
+  changed again.
 - On a phone a vertical swipe on a chart scrolls the page: the svg carries
   `touch-pan-y` where it took every touch with `touch-none`, for a drag a
   touch cannot make without a modifier (ADR-0001).

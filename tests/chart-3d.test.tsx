@@ -2234,10 +2234,10 @@ describe("useTween", () => {
   async function mountTween(duration: number) {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
-    const render = async (values: Record<string, number>, enter?: number) =>
+    const render = async (values: Record<string, number>, enter?: number, ms = duration) =>
       act(async () =>
         root.render(
-          <ChartContainer3D config={{}} animationDuration={duration}>
+          <ChartContainer3D config={{}} animationDuration={ms}>
             <Tween values={values} enter={enter} />
           </ChartContainer3D>
         )
@@ -2266,6 +2266,24 @@ describe("useTween", () => {
 
     await chart.unmount()
   })
+
+  // No time is whatever is not above 0: a negative duration would glide backwards for good.
+  test.each([0, -1, NaN])(
+    "a duration that turns %d during a glide jumps to the new numbers",
+    async (none) => {
+      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+      const chart = await mountTween(600)
+      await chart.render({ a: 0 })
+      await chart.render({ a: 600 })
+      await act(() => vi.advanceTimersByTime(300))
+
+      await chart.render({ a: 600 }, undefined, none)
+      await act(() => vi.advanceTimersToNextFrame())
+      expect(shown(chart.host)).toEqual({ a: 600 })
+
+      await chart.unmount()
+    }
+  )
 
   test("a new key starts at enter, and a gone one glides back to it before it leaves", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
