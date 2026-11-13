@@ -1374,6 +1374,32 @@ describe("renderer", () => {
 
     await chart.unmount()
   })
+  test("a chart taken out of its container leaves no marks: the hover finds none and the canvas paints none", async () => {
+    const ctx = stubCanvas()
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (shown: boolean) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        {shown && <Marks3D marks={marks} />}
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(true)))
+    const fills = ctx.fill.mock.calls.length
+    const paints = ctx.setTransform.mock.calls.length
+    await act(async () => root.render(chart(false)))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    // The canvas painted once more when the marks left, and filled nothing.
+    expect(ctx.setTransform.mock.calls.length).toBeGreaterThan(paints)
+    expect(ctx.fill.mock.calls.length).toBe(fills)
+    await act(async () => root.render(chart(true)))
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {
     const ctx = stubCanvas()
     const bare = { key: "bare", points: [{ x: 300, y: 300 }], r: 5, fill: "green" }

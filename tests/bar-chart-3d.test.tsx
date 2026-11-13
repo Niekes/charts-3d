@@ -630,9 +630,10 @@ describe("BarChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(500))
     expect(top()).toBeLessThan(top2)
 
-    vi.restoreAllMocks()
+    // Unmounted while the canvas is still stubbed: the marks leaving repaint it.
     await act(async () => root.unmount())
     host.remove()
+    vi.restoreAllMocks()
   })
 
   test("rows and series swapped together: a cell only one tween knows stays unseen, no number breaks", async () => {

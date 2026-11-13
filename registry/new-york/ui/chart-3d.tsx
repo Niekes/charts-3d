@@ -1503,6 +1503,15 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
     scene.current = drawn
     repaint()
   })
+  // A chart taken out of its container takes its marks along: the hover finds
+  // none, and the canvas paints none.
+  React.useLayoutEffect(
+    () => () => {
+      scene.current = []
+      repaint()
+    },
+    [scene, repaint]
+  )
 
   if (renderer !== "svg") return null
   return (
