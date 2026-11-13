@@ -46,7 +46,7 @@
     </tr>
 </table>
 
-Copy-paste components or an npm package, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn on drag and on the arrow keys.
+Copy-paste components or an npm package, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn with ⌘ or Ctrl and a drag, and with the arrow keys.
 
 ## Sponsor charts-3d
 
