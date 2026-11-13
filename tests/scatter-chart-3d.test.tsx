@@ -42,7 +42,7 @@ describe("ScatterChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
-  test("an entry with a missing field has no point, and nothing is drawn at NaN", () => {
+  test("an entry with a missing field has no point - null and an empty string are no 0 - and nothing is drawn at NaN", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>
         <ScatterChart3D
@@ -50,6 +50,8 @@ describe("ScatterChart3D", () => {
             { x: 1, y: 1, z: 1 },
             { x: 2, z: 2 },
             { x: 3, y: "abc", z: 3 },
+            { x: 4, y: null, z: 4 },
+            { x: 5, y: "", z: 5 },
           ]}
           x="x"
           y="y"
@@ -257,6 +259,52 @@ describe("ScatterChart3D transitions", () => {
     expect(radii().filter((r) => r > 0 && r < 4)).toHaveLength(1)
     await act(() => vi.advanceTimersByTime(400))
     expect(radii()).toEqual([4, 4])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("without id, a point keeps its name when an entry before it gains its place: the new one grows where it belongs", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { x: number; y?: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} x="x" y="y" z="z" />
+          </ChartContainer3D>
+        )
+      )
+    const circles = () =>
+      [...host.querySelectorAll("circle")].map((c) => ({
+        r: Number(c.getAttribute("r")),
+        at: [c.getAttribute("cx"), c.getAttribute("cy")],
+      }))
+
+    await render([
+      { x: 0, y: 0, z: 0 },
+      { x: 5, z: 5 },
+      { x: 10, y: 10, z: 10 },
+    ])
+    await act(() => vi.advanceTimersByTime(700))
+    const standing = circles().map((c) => c.at)
+    expect(standing).toHaveLength(2)
+
+    // The second entry gains its y, inside the box: the two points stand, a third grows.
+    await render([
+      { x: 0, y: 0, z: 0 },
+      { x: 5, y: 5, z: 5 },
+      { x: 10, y: 10, z: 10 },
+    ])
+    const growing = circles().filter((c) => c.r === 0)
+    expect(growing).toHaveLength(1)
+    expect(standing).not.toContainEqual(growing[0].at)
+    expect(
+      circles()
+        .filter((c) => c.r === 4)
+        .map((c) => c.at)
+    ).toEqual(standing)
 
     await act(async () => root.unmount())
     host.remove()

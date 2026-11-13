@@ -16,6 +16,8 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  numeric,
+  finite,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -109,14 +111,14 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const fields = { lon, lat, value, series, id }
   // An entry without a place on the globe has no dot.
   const entries = data.filter(
-    (d) => Number.isFinite(Number(d[lon])) && Number.isFinite(Number(d[lat]))
+    (d) => Number.isFinite(numeric(d[lon])) && Number.isFinite(numeric(d[lat]))
   )
   const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
   // The area of a dot is its value, from 0, so a new one grows as it fades
   // in and a gone one shrinks as it fades out; the peak glides along, so no
   // dot jumps when the largest leaves.
   const target = Object.fromEntries(
-    entries.map((d, i) => [names[i], value ? Math.max(0, Number(d[value]) || 0) : 1])
+    entries.map((d, i) => [names[i], value ? Math.max(0, finite(d[value])) : 1])
   )
   const sizes = useTween(target, 0)
   const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
@@ -192,7 +194,7 @@ function dotTooltip<T extends Record<string, unknown>>(
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = fields.value ? Math.max(0, Number(entry[fields.value]) || 0) : 0
+  const value = fields.value ? Math.max(0, finite(entry[fields.value])) : 0
   return () =>
     tooltip(
       {

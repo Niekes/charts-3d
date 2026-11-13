@@ -25,6 +25,8 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  numeric,
+  finite,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -172,7 +174,7 @@ function nearTiles(ids: string[], step: number, eye: Camera3DInstance) {
  * The tile of every entry - the last entry on a tile wins - keyed by the
  * center of the tile and the config key of its color, with its value and, if
  * the chart names entries, the name of that last entry, and every entry on
- * the tile.
+ * the tile, gathered in one list: a copy per entry costs the square of them.
  */
 function tileValues<T extends Record<string, unknown>>(
   data: T[],
@@ -182,15 +184,17 @@ function tileValues<T extends Record<string, unknown>>(
 ) {
   const tiles = new Map<string, Tile<T>>()
   for (const d of data) {
-    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
+    const [lon, lat] = [numeric(d[fields.lon]), numeric(d[fields.lat])]
     // An entry without a place on the globe has no tile.
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
+    const entries = tiles.get(center)?.entries ?? []
+    entries.push(d)
     tiles.set(center, {
       id: `${center},${key}`,
-      value: Math.max(0, Number(d[fields.value]) || 0),
-      entries: [...(tiles.get(center)?.entries ?? []), d],
+      value: Math.max(0, finite(d[fields.value])),
+      entries,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
   }

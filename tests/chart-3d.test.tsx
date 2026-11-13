@@ -17,8 +17,10 @@ import {
   earth,
   faded,
   globe,
+  finite,
   intoWorld,
   linear,
+  numeric,
   orthographic,
   pad,
   shade,
@@ -91,7 +93,7 @@ describe("ChartContainer3D", () => {
         {null}
       </ChartContainer3D>
     )
-    expect(html).toContain("[data-chart=chart-t]")
+    expect(html).toContain('[data-chart="chart-t"]')
     expect(html).toContain("chart-3d-axes-in")
     expect(html).toContain("cursor: grab")
     expect(html).toContain("cursor: move")
@@ -99,7 +101,7 @@ describe("ChartContainer3D", () => {
     expect(html).toContain("cursor: zoom-out")
     expect(html).toContain("--color-a: red;")
     expect(html).toContain("--color-b: white;")
-    expect(html).toContain(".dark [data-chart=chart-t]")
+    expect(html).toContain('.dark [data-chart="chart-t"]')
     expect(html).toContain("--color-b: black;")
   })
 
@@ -110,7 +112,7 @@ describe("ChartContainer3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("--color-b: white;")
-    expect(html.split(".dark [data-chart=chart-t]")[1]).not.toContain("--color-b")
+    expect(html.split('.dark [data-chart="chart-t"]')[1]).not.toContain("--color-b")
   })
 
   test("config text cannot close the style element of a server-rendered page", () => {
@@ -129,8 +131,20 @@ describe("ChartContainer3D", () => {
     const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"))
     expect(html.split("</style>")).toHaveLength(2)
     expect(html).not.toContain("<script")
-    expect(style).toContain(".dark [data-chart=chart-\\3c /style>")
+    expect(style).toContain('.dark [data-chart="chart-\\3c /style>')
     expect(style).toContain("--color-b: \\3c /style>")
+  })
+
+  test("an id with a dot, a space or a quote still names its chart in the style", async () => {
+    const chart = await mount(
+      <ChartContainer3D id={'sales 2024.q1"'} config={{ a: { color: "red" } }}>
+        {null}
+      </ChartContainer3D>
+    )
+    const style = chart.host.querySelector("style")!.textContent!
+    const selector = style.match(/^(\[data-chart=.*?\]) svg\[data-mod/m)![1]
+    expect(chart.host.querySelector(selector)).toBe(chart.host.querySelector("[data-chart]"))
+    await chart.unmount()
   })
 
   test("nor can the id of a chart without colors", () => {
@@ -859,6 +873,59 @@ function rows(host: HTMLElement) {
 }
 
 describe("pointer", () => {
+  test("a finger shows the tooltip of the mark it taps, which stays when it lifts, until a tap beside it", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const finger = (type: string, clientX: number, clientY: number, init: MouseEventInit = {}) =>
+      Object.assign(pointer(type, clientX, clientY, undefined, init), { pointerType: "touch" })
+
+    // A tap moves nothing: the press alone inspects.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+    // Lifting, the finger leaves the chart; what it tapped stays shown.
+    await chart.send(finger("pointerup", 150, 150))
+    await chart.send(finger("pointerout", 150, 150, { relatedTarget: document.body }))
+    expect(chart.host.textContent).toContain("Square")
+    // A tap beside every mark clears it.
+    await chart.send(finger("pointerdown", 300, 300))
+    expect(chart.host.textContent).not.toContain("Square")
+
+    // So does a tap off the chart, on the page or on another chart.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+    await act(() => document.body.dispatchEvent(finger("pointerdown", 900, 900)))
+    expect(chart.host.textContent).not.toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("a pinch lifting its fingers leaves no mark lit", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[{ ...marks[0], groups: ["square"] }, marks[1]]} />
+      </ChartContainer3D>
+    )
+    const finger = (type: string, clientX: number, clientY: number, init: MouseEventInit = {}) =>
+      Object.assign(pointer(type, clientX, clientY, undefined, init), { pointerType: "touch" })
+    const square = () => chart.host.querySelector('path[d^="M100,100"]')!.getAttribute("fill")
+
+    // The first finger lands on the square, the second beside it: the pinch drops the tooltip.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(square()).toMatch(/^var\(--chart-3d-focus/)
+    await chart.send(touch("touchstart", [150, 150], [250, 150]))
+    await chart.send(finger("pointermove", 150, 150))
+    expect(chart.host.textContent).not.toContain("Square")
+    // The fingers lift, and leave the chart: the square goes dark again.
+    await chart.send(touch("touchend"))
+    await chart.send(finger("pointerout", 150, 150, { relatedTarget: document.body }))
+    expect(square()).toBe("red")
+
+    await chart.unmount()
+  })
+
   test("a press that wanders a few pixels stays a click, a drag turns the camera", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
@@ -1257,6 +1324,63 @@ describe("Marks3D", () => {
 
     await chart.unmount()
   })
+  test("new data under a resting pointer tells the new value as soon as the pointer moves", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const draw = (value: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Marks3D
+              marks={[{ ...marks[0], tooltip: () => ({ items: [{ label: "n", value }] }) }]}
+            />
+          </ChartContainer3D>
+        )
+      )
+    await draw(10)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const move = (clientX: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY: 150 }))
+      )
+    const tip = () => host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent
+
+    await move(150)
+    expect(tip()).toBe("n10")
+    // The same mark, by its key, now of another value.
+    await draw(7)
+    await move(160)
+    expect(tip()).toBe("n7")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("marks taken out of the chart leave the scene: nothing is left to hover", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const draw = (shown: boolean) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>{shown && <Marks3D marks={marks} />}</ChartContainer3D>
+        )
+      )
+    await draw(true)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await draw(false)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 })
+      )
+    )
+    expect(host.textContent).not.toContain("Square")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a tooltip given as a function is made when the pointer lands on the mark; null shows none", async () => {
     const lazy = vi.fn(() => ({ items: [{ label: "Lazy", value: 1 }] }))
     const chart = await mount(
@@ -1875,6 +1999,13 @@ describe("helpers", () => {
   test("axis ends on nice ticks and widens an empty extent", () => {
     expect(axis(3, 97)).toEqual({ domain: [0, 100], ticks: [0, 20, 40, 60, 80, 100] })
     expect(axis(5, 5).domain[1]).toBeGreaterThan(5)
+  })
+
+  test("numeric reads null and an empty string as missing, finite reads every non-number as 0", () => {
+    expect([null, undefined, "", "abc"].map(numeric)).toEqual([NaN, NaN, NaN, NaN])
+    expect([0, "0", "2.5"].map(numeric)).toEqual([0, 0, 2.5])
+    expect([null, "abc", Infinity, -Infinity, NaN].map((v) => finite(v))).toEqual([0, 0, 0, 0, 0])
+    expect(finite("-3")).toBe(-3)
   })
 
   test("pad widens the domain by half a cell and leaves the ticks where they are", () => {

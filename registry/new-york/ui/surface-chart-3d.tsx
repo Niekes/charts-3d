@@ -117,7 +117,7 @@ export function SurfaceChart3D({
   const marks = grid
     .data(points)
     .sort(sort)
-    .map((quad) =>
+    .flatMap((quad) =>
       quadMark(
         quad,
         fade,
@@ -152,7 +152,7 @@ function cellTooltip(
     tooltip = (tip) => tip,
   }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  if (quad.some((p) => data[p.r]?.[p.c] === undefined)) return undefined
+  if (quad.some((p) => !Number.isFinite(data[p.r]?.[p.c]))) return undefined
   return () => {
     const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
@@ -166,7 +166,9 @@ function cellTooltip(
 
 /**
  * The mark of one cell: its quad, shaded by the color ramp at its height and
- * faded in place by `fade` while the cell enters or leaves.
+ * faded in place by `fade` while the cell enters or leaves. It is named by
+ * the row and column it starts at, as d3-3d numbers its quads anew as the
+ * grid grows.
  */
 function quadMark(
   quad: GridPlane<GridPoint>,
@@ -180,22 +182,31 @@ function quadMark(
     quad,
     `color-mix(in oklch, var(--color-${ramp.high}) ${t}%, var(--color-${ramp.low}))`
   )
-  // A corner only one of the tweens still knows is on its way out and stays unseen.
-  const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))
+  // A corner no tween knows - a height missing from the data - leaves the cell
+  // out, so no pointer lights it; one on its way in or out fades.
+  if (quad.some((p) => fade[`${p.r}-${p.c}`] === undefined)) return []
+  const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`]))
+  const cell = `${Math.min(...quad.map((p) => p.r))}-${Math.min(...quad.map((p) => p.c))}`
   return {
-    key: quad.plane,
+    key: cell,
     points: quad.map((p) => p.projected),
     fill:
       seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
     // Its group is the cell, so hovering it lights the cell alone.
-    groups: [quad.plane],
+    groups: [cell],
     tooltip,
   }
 }
 
-/** The height of every cell, keyed by its row and column, gliding into new data. */
+/**
+ * The height of every corner, keyed by its row and column, gliding into new
+ * data. A height that is missing is left out, so the cells around it stand
+ * at the floor unseen.
+ */
 function gridValues(data: number[][]) {
-  return Object.fromEntries(data.flatMap((row, r) => row.map((y, c) => [`${r}-${c}`, y])))
+  return Object.fromEntries(
+    data.flatMap((row, r) => row.flatMap((y, c) => (Number.isFinite(y) ? [[`${r}-${c}`, y]] : [])))
+  )
 }
 
 /**

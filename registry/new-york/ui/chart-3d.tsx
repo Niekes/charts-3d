@@ -223,6 +223,15 @@ const never = () => () => {}
 /** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
 const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
 
+/** `value` as a number, NaN where it is missing: `null` and `""` are no 0, as `Number` would have them. */
+const numeric = (value: unknown) => (value == null || value === "" ? NaN : Number(value))
+
+/** `value` as a finite number, 0 where it is none: missing, not a number, or infinite. */
+const finite = (value: unknown) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
 /** Whether `value` lies between the ends `lo` and `hi`. */
 const within = (lo: number, hi: number, value: number) => value >= lo && value <= hi
 // The keys that `aria-keyshortcuts` names, because `+` delimits and a space separates.
@@ -665,15 +674,20 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
   return shown
 }
 
-/** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends, a gone one gliding back to `enter` until the glide is done. */
+/**
+ * The numbers of `tween` on screen: `from` eased into `to`, a new key from
+ * `enter` or where it ends, a gone one gliding back to `enter` until the
+ * glide is done. At rest, as while the camera turns, they are the target
+ * itself: nothing to build.
+ */
 function tweenNumbers({ from, to, t }: Tween, enter?: number) {
+  if (t >= 1) return to
   const s = t * t * (3 - 2 * t)
-  const gone = t >= 1 ? [] : Object.entries(from).filter(([k]) => !(k in to))
+  const gone = Object.entries(from).filter(([k]) => !(k in to))
   return Object.fromEntries([
     ...Object.entries(to).map(([k, end]) => {
       const start = from[k] ?? enter ?? end
-      // At the end the number itself, so no float drift stays in the data.
-      return [k, t >= 1 ? end : start + (end - start) * s]
+      return [k, start + (end - start) * s]
     }),
     // A gone key glides back to `enter`, the mirror of its entering - without
     // one it stands where it is - and leaves when the glide is done.
@@ -809,7 +823,8 @@ function between(from: View3D, to: View3D, k: number): View3D {
 /**
  * The view of the camera, and the handlers that move it, as far as `keys`
  * has them on: a drag turns it, or pans it while Alt is held, the keys step
- * it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
+ * it, Ctrl or ⌘ with the wheel zooms it and a double click resets it - a
+ * drag following the pointer at once, a key and a double click gliding.
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one - but
  * under two fingers, where the tooltip would jump from one to the other, it
@@ -827,7 +842,6 @@ function useOrbit(
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
   const { ref, touching } = useGestures(jump, keys, width, setOrbiting)
-  // A drag follows the pointer at once, a key and a double click glide.
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
   const keyHandlers = useKeys(keys, step, setOrbiting)
@@ -839,7 +853,8 @@ function useOrbit(
   const handlers: OrbitHandlers = {
     ref,
     onPointerDown: (e) => {
-      // Alt held, the drag pans; the platform modifier held, it turns.
+      // A finger inspects where it lands, a tap having no move; Alt held, the drag pans, Mod turns.
+      if (e.pointerType === "touch") return onHover(e)
       const pans = keys.on("dragPan") && e.altKey
       if (pans || (keys.on("dragRotate") && platformMod(e))) {
         drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !pans }
@@ -1069,12 +1084,14 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean,
 /**
  * The tooltip of the mark under the pointer, the one painted last, and the
  * focus on its groups. The highlight follows the mark: `hover` sets the
- * tooltip only when the pointer moves onto another mark, and the focus only
- * when the groups change, so a move within a mark does not render the chart
- * again; off the mark and when the pointer leaves the chart, `leave` drops
- * both. While a drag turns the chart under the captured pointer, `hide`
- * drops the tooltip and keeps the focus, so a flow does not flash away and
- * can be followed from every side.
+ * tooltip only when the pointer moves onto another mark, or onto new data
+ * under the same one, and the focus only when the groups change, so a move
+ * within a mark of a chart at rest does not render it again; off the mark and
+ * when the pointer leaves the chart, `leave` drops both. A finger lifting
+ * leaves the chart too: what it tapped stays until a tap elsewhere, on the
+ * chart or off it. While a drag turns the chart under the captured pointer,
+ * `hide` drops the tooltip and keeps the focus, so a flow does not flash away
+ * and can be followed from every side.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -1084,10 +1101,19 @@ function useHover(
   focus: Focus3D
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
+  const svg = React.useRef<SVGSVGElement>(null)
+  const { set } = tip
+  const clear = React.useCallback(() => {
+    hovered.current = undefined
+    focus.set(undefined)
+    set(null)
+  }, [focus, set])
+  useTapElsewhere(svg, clear)
   const show = (mark?: Mark3D) => {
     // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
     focus.set(mark?.groups)
-    if (mark?.key === hovered.current?.key) return
+    // The tooltip decides what shows: the same one says the same, new data under the same mark another.
+    if (mark?.tooltip === hovered.current?.tooltip) return
     hovered.current = mark
     const tooltip = mark?.tooltip
     tip.set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
@@ -1095,6 +1121,7 @@ function useHover(
 
   return {
     hover: (e: React.PointerEvent<SVGSVGElement>) => {
+      svg.current = e.currentTarget
       const rect = e.currentTarget.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
@@ -1105,8 +1132,22 @@ function useHover(
       hovered.current = undefined
       tip.set(null)
     },
-    leave: () => show(undefined),
+    leave: (e: React.PointerEvent) => {
+      // A pinch dropped the tooltip already: lifting its fingers drops the focus too.
+      if (e.pointerType !== "touch" || !hovered.current) show(undefined)
+    },
   }
+}
+
+/** Calls `clear` when a finger taps anywhere but `svg`: on the page, or on another chart. */
+function useTapElsewhere(svg: React.RefObject<SVGSVGElement | null>, clear: () => void) {
+  React.useEffect(() => {
+    const tap = (e: PointerEvent) => {
+      if (e.pointerType === "touch" && !svg.current?.contains(e.target as Node)) clear()
+    }
+    document.addEventListener("pointerdown", tap)
+    return () => document.removeEventListener("pointerdown", tap)
+  }, [svg, clear])
 }
 
 /** A store for the groups in focus, which tells its listeners only when the groups change. */
@@ -1301,7 +1342,7 @@ function onePixel() {
   canvas.width = 1
   canvas.height = 1
   // useRenderer draws with webgl only where the browser gives a canvas a context; a 2D one comes with it.
-  return canvas.getContext("2d")!
+  return canvas.getContext("2d", { willReadFrequently: true })!
 }
 
 /** The resolved `color` as bytes, drawn on the 1×1 `pixel` and read back, cached per color. */
@@ -1577,20 +1618,37 @@ function ChartGizmo3D({
 const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
 
 /**
+ * Writes `marks` into the scene of the container, which the canvas paints and
+ * the hover hit-tests, after every render. Taken out of the chart, they leave
+ * it again: no canvas paints them, no hover finds them.
+ */
+function useSceneMarks(marks: Mark3D[]) {
+  const { scene, repaint } = useChart3D()
+  React.useLayoutEffect(() => {
+    scene.current = marks
+    repaint()
+  })
+  React.useLayoutEffect(
+    () => () => {
+      scene.current = []
+      repaint()
+    },
+    [scene, repaint]
+  )
+}
+
+/**
  * The marks of a chart, drawn by the renderer of the container: as SVG
  * elements, or on the canvas over the chart box. The hover reads them too.
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
-  const { renderer, scene, repaint } = useChart3D()
+  const { renderer } = useChart3D()
   const lit = useLit(marks)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
   // inner faces their seams. The order, and with it the depth, stays as painted.
   const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
-  React.useLayoutEffect(() => {
-    scene.current = drawn
-    repaint()
-  })
+  useSceneMarks(drawn)
 
   if (renderer !== "svg") return null
   return (
@@ -1669,23 +1727,29 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
   )
 }
 
+/**
+ * The rules of the chart `id`: the fade of the axes, the cursors and a color
+ * variable per config key and theme. The id is quoted in the selector, so
+ * one with a dot or a space is still one selector.
+ */
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
+  const scope = `[data-chart="${id.replace(/["\\]/g, "\\$&")}"]`
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
   // The cursor names the gesture of the held modifier: the platform modifier
   // a hand (Alt, held with it, wins, as it does on pointer down), Alt the four
   // arrows of the pan, the wheel zoom its direction, and a turning drag grabbing.
   const entering = ["text", "line", "path"]
-    .map((el) => `[data-chart=${id}] [data-slot="chart-3d-axes"] ${el}`)
+    .map((el) => `${scope} [data-slot="chart-3d-axes"] ${el}`)
     .join(", ")
   const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
 ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
 @media (prefers-reduced-motion: reduce) { ${entering} { animation: none; } }
-[data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
-[data-chart=${id}] svg[data-alt="true"] { cursor: move; }
-[data-chart=${id}] svg[data-zoom="in"] { cursor: zoom-in; }
-[data-chart=${id}] svg[data-zoom="out"] { cursor: zoom-out; }
-[data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
+${scope} svg[data-mod="true"] { cursor: grab; }
+${scope} svg[data-alt="true"] { cursor: move; }
+${scope} svg[data-zoom="in"] { cursor: zoom-in; }
+${scope} svg[data-zoom="out"] { cursor: zoom-out; }
+${scope} svg[data-orbiting="true"] { cursor: grabbing; }`
 
   // No colors, no rule per theme.
   const themes = colorConfig.length ? Object.entries(THEMES) : []
@@ -1697,7 +1761,7 @@ ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
           base,
           ...themes.map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} ${scope} {
 ${colorConfig
   .map(([key, item]) => {
     const color = item.theme?.[theme as keyof typeof item.theme] || item.color
@@ -2610,7 +2674,7 @@ function useSeries<T extends Record<string, unknown>>({
   const series = keys ?? Object.keys(config)
   const names = data.map((d) => String(d[index] ?? ""))
   const target = Object.fromEntries(
-    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, Number(d[key]) || 0]))
+    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, finite(d[key])]))
   )
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
@@ -2655,6 +2719,8 @@ export {
   axis,
   pad,
   linear,
+  numeric,
+  finite,
   worldBox,
   globe,
   GLOBE_RADIUS,

@@ -147,7 +147,7 @@ function barBox(entries: number, series: number, values: number[]) {
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
   // A shallow box for few series, so the bars stay square.
-  const depth = Math.min(1, Math.max(0.25, series / entries))
+  const depth = Math.min(1, Math.max(0.25, series / Math.max(1, entries)))
   return { spec, depth }
 }
 

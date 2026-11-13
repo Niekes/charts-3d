@@ -103,13 +103,14 @@ describe("AreaChart3D", () => {
     }
   })
 
-  test("a value that is not a number stands as 0, and the labels fall back to the keys", () => {
+  test("a value that is not a finite number stands as 0, and the labels fall back to the keys", () => {
     const html = renderToString(
       <ChartContainer3D config={{ a: { color: "red" } }}>
         <AreaChart3D
           data={[
             { name: "x", a: "n/a", b: 2 },
             { a: 1, b: 3 },
+            { name: "y", a: Infinity, b: 1 },
           ]}
           index="name"
           keys={["a", "b"]}

@@ -107,7 +107,8 @@ Two consequences worth remembering:
 - **The core knows nothing about the charts.** It holds the container, the
   camera and its shortcuts and gizmo, the axes, the marks and their
   renderers, the tooltip and the helpers (`axis`, `linear`, `worldBox`,
-  `shade`, `faded`, `useSeries`).
+  `shade`, `faded`, `useSeries`, and `numeric` and `finite`, which read a
+  field of the data as a number).
   A helper that two charts need moves here.
 
 ### The chart template

@@ -17,6 +17,7 @@ import {
   type Mark3D,
   type Tooltip3D,
   type World,
+  numeric,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -77,9 +78,9 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
   // An entry without a place in the box has no point.
-  const data = all.filter((d) => [x, y, z].every((f) => Number.isFinite(Number(d[f]))))
-  const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
-  const entries = new Map(names.map((name, i) => [name, data[i]]))
+  const entries = pointEntries(all, fields, id)
+  const names = [...entries.keys()]
+  const data = [...entries.values()]
   const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
 
   // The axes of the data the chart glides into; their ends glide along.
@@ -149,6 +150,22 @@ function pointTooltip<T extends Record<string, unknown>>(
       },
       { entry }
     )
+}
+
+/**
+ * The entries with a place in the box, by name: their `id`, or else their
+ * position in all the data, so a point keeps its name when an entry before
+ * it comes or goes.
+ */
+function pointEntries<T extends Record<string, unknown>>(
+  all: T[],
+  fields: Record<keyof AxesSpec, keyof T & string>,
+  id?: keyof T & string
+) {
+  const placed = (d: T) => Object.values(fields).every((f) => Number.isFinite(numeric(d[f])))
+  return new Map(
+    all.flatMap((d, i) => (placed(d) ? [[id ? String(d[id]) : String(i), d] as const] : []))
+  )
 }
 
 /** The axes that hold every entry of `data`, a nice one per field. */

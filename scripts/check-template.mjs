@@ -254,6 +254,20 @@ if (/^export (?!\* from "\.\/registry\/)/m.test(barrel)) {
   fail("index.ts: may only re-export the registry files")
 }
 
+/**
+ * Every scene can be checked on every renderer: a demo carries the
+ * RendererSelect below its chart, a renderers demo lays the scene out on all
+ * of them with RendererGrid.
+ */
+for (const demo of readdirSync(join(ROOT, "docs/examples")).filter((f) =>
+  f.endsWith("-demo.tsx")
+)) {
+  const control = demo.endsWith("-renderers-demo.tsx") ? "RendererGrid" : "RendererSelect"
+  if (!read(`docs/examples/${demo}`).includes(`<${control}`)) {
+    fail(`docs/examples/${demo}: a demo carries the ${control} of renderer-select.tsx`)
+  }
+}
+
 if (violations.length > 0) {
   console.error(`✗ ${violations.length} registry template violation(s):\n`)
   for (const violation of violations) {
