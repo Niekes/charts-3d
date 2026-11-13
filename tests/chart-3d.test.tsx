@@ -594,6 +594,9 @@ describe("shortcuts", () => {
     )
     const button = chart.host.querySelector("button")!
     expect(button.getAttribute("aria-label")).toBe("Tastenkürzel")
+    // The core draws the icon itself, hidden from readers, not an icon package.
+    expect(button.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    expect(button.querySelector(".lucide")).toBeNull()
     expect(chart.svg.getAttribute("aria-label")).toBe(
       "3D chart. Ctrl and drag to rotate it. Press h for all shortcuts."
     )

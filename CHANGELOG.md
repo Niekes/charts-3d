@@ -66,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the zoom the chart stands still. `+` and `-` zoom to the middle of the
   chart, as before (ADR-0001).
 
+### Removed
+
+- `chart-3d` no longer depends on `lucide-react`: the keyboard icon of the
+  shortcut button is drawn in the core. A project that installed it for the
+  charts alone may remove it.
+
 ### Fixed
 
 - On a phone a vertical swipe on a chart scrolls the page: the svg carries

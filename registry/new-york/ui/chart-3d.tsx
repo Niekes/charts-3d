@@ -19,7 +19,6 @@ import {
   type ShapeInstance,
   type TransformedPoint,
 } from "d3-3d"
-import { KeyboardIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -1673,10 +1672,31 @@ function ChartShortcuts3D({ rows, help, label }: Pick<Keymap, "rows" | "help" | 
         onClick={() => setOpen((o) => !o)}
         className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md bg-background/60 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_svg]:size-4"
       >
-        <KeyboardIcon />
+        <KeyboardIcon3D />
       </button>
       {open && <ChartShortcutList3D id={id} rows={rows} />}
     </div>
+  )
+}
+
+/**
+ * The keyboard of the shortcut button: the keyboard icon of Lucide,
+ * Copyright (c) Lucide Icons and Contributors, ISC License, https://lucide.dev.
+ */
+function KeyboardIcon3D() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10 8h.01M12 12h.01M14 8h.01M16 12h.01M18 8h.01M6 8h.01M7 16h10M8 12h.01" />
+      <rect width="20" height="16" x="2" y="4" rx="2" />
+    </svg>
   )
 }
 
