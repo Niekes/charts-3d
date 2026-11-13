@@ -91,7 +91,7 @@ closes the gap (see Enter in the
 
 ## Renderers
 
-The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG. The front of a ribbon is one concave polygon, which WebGL cuts into triangles ear by ear.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG. The front of a ribbon is one concave polygon, which WebGL fills through its stencil buffer.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

@@ -9,7 +9,7 @@ Decision: a chart is a pure function from data to marks. It projects its data
 with a d3-3d generator (`points3D`, `cubes3D`, `gridPlanes3D`, ...) on every
 render, sorts the shapes with d3-3d's `sort`, and hands them to the core as one
 scene. Only the core draws - as SVG elements, painted on a canvas, or
-triangulated on webgl - and the hover hit-tests the scene, whatever the
+filled on the GPU on webgl - and the hover hit-tests the scene, whatever the
 renderer. Parity is behavioural: every mark of the scene draws on every
 renderer, and hover, tooltip and focus act the same. Pixels may differ, and
 webgl draws a stroke as a line loop, so the focus edge may differ in width

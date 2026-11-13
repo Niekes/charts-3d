@@ -115,7 +115,7 @@ _Avoid_: data binding, virtual DOM, custom elements
 
 **Renderer**:
 How the marks are drawn: as SVG elements, painted on a canvas, or
-triangulated on webgl; the box, its labels, the tooltip and the legend
+filled on the GPU on webgl; the box, its labels, the tooltip and the legend
 stay SVG and HTML with every renderer.
 _Avoid_: painter, backend, layer
 
