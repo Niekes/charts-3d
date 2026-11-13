@@ -604,3 +604,22 @@ describe("AreaChart3D renderers", () => {
     await view.unmount()
   })
 })
+
+describe("AreaChart3D values that are no numbers", () => {
+  test("an infinite value stands as 0, as one that is not a number", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <AreaChart3D
+          data={[
+            { name: "x", a: Infinity, b: 2 },
+            { name: "y", a: 3, b: -Infinity },
+          ]}
+          index="name"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    expect(html).toContain(">3<")
+  })
+})

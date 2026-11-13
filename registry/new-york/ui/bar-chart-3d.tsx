@@ -148,7 +148,8 @@ function barBox(entries: number, series: number, values: number[]) {
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
   // A shallow box for few series, so the bars stay square.
-  const depth = Math.min(1, Math.max(0.25, series / entries))
+  // An empty chart has no entries to divide by.
+  const depth = Math.min(1, Math.max(0.25, series / (entries || 1)))
   return { spec, depth }
 }
 

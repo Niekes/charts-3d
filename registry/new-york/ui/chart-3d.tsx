@@ -2513,7 +2513,7 @@ function finite(value: unknown) {
  * name of every entry comes from its `index` field, the series are `keys` or
  * the keys of the config, and the `target` of every cell is keyed by the name
  * of its entry and its series, so it follows its entry when the data
- * reorders; a value that is not a number stands as 0. Each glides by name:
+ * reorders; a value that is not a finite number stands as 0. Each glides by name:
  * `values` from 0, `rows` - the place of every entry - to where it stands, and
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
  * still among them. `labels` name the ticks: the entry at a tick of x, through
@@ -2535,7 +2535,9 @@ function useSeries<T extends Record<string, unknown>>({
   const series = keys ?? Object.keys(config)
   const names = data.map((d) => String(d[index] ?? ""))
   const target = Object.fromEntries(
-    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, Number(d[key]) || 0]))
+    data.flatMap((d, i) =>
+      series.map((key) => [`${names[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+    )
   )
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),

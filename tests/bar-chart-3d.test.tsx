@@ -907,3 +907,32 @@ describe("BarChart3D names that are no CSS identifiers", () => {
     expect(html).not.toContain("--color-Net sales")
   })
 })
+
+describe("BarChart3D values that are no numbers", () => {
+  test("an infinite value stands as no bar, as one that is not a number, and the chart keeps its box", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D
+          data={[
+            { month: "Jan", a: Infinity, b: -Infinity },
+            { month: "Feb", a: 2, b: 1 },
+          ]}
+          index="month"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    expect(html).toContain(">2<")
+  })
+
+  test("no data and no series draws an empty box, with no number left undefined", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <BarChart3D data={[]} index="month" />
+      </ChartContainer3D>
+    )
+    expect(html).toContain('data-slot="chart-3d-axes"')
+    expect(html).not.toContain("NaN")
+  })
+})

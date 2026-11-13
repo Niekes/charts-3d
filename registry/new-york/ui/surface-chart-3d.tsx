@@ -24,12 +24,13 @@ import {
   useTweenAxes,
   worldBox,
   colorOf,
+  finite,
   type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type SurfaceChart3DProps = {
-  /** The heights on the grid, `data[row][column]`. */
+  /** The heights on the grid, `data[row][column]`; one that is not a finite number stands at the lowest of the others. */
   data: number[][]
   /**
    * The data values the first and the last column (x) and row (z) stand for.
@@ -66,7 +67,7 @@ export type SurfaceChart3DProps = {
  * of the chart config, by default its first two.
  */
 export function SurfaceChart3D({
-  data,
+  data: raw,
   domain = {},
   colors,
   format,
@@ -75,7 +76,7 @@ export function SurfaceChart3D({
 }: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
-  const [floor = 0, peak = 0] = extent(data.flat())
+  const { data, floor, peak } = cleanGrid(raw)
   const target = gridValues(data)
   // The heights glide cell by cell, so the surface, its color ramp and the y
   // axis follow. Coming and going is a fade in place - a new border cell
@@ -192,6 +193,17 @@ function quadMark(
     groups: [quad.plane],
     tooltip,
   }
+}
+
+/**
+ * The grid with every height a number: one that is not - NaN, Infinity -
+ * stands at the lowest of the others, so one cell cannot blank the surface.
+ * With the lowest and the highest height, 0 for a grid without one.
+ */
+function cleanGrid(raw: number[][]) {
+  const [floor = 0, peak = 0] = extent(raw.flat().filter(finite))
+  const data = raw.map((row) => row.map((y) => (finite(y) ? y : floor)))
+  return { data, floor, peak }
 }
 
 /** The height of every cell, keyed by its row and column, gliding into new data. */

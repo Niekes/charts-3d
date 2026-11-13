@@ -434,3 +434,22 @@ describe("SurfaceChart3D without a config", () => {
     expect(html.match(/<path [^>]*var\(--color-undefined\)/g)).toHaveLength(1)
   })
 })
+
+describe("SurfaceChart3D heights that are no numbers", () => {
+  test("a cell of NaN or Infinity stands at the floor of the others, and the surface still draws", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [1, NaN, 3],
+            [4, Infinity, 6],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    // Two rows of three corners make two cells.
+    expect(html.match(/<path [^>]*var\(--color-(low|high)\)/g)).toHaveLength(2)
+  })
+})
