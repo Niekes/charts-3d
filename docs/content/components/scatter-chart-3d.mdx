@@ -38,7 +38,7 @@ import ScatterChart3DDemo from "@/docs/examples/scatter-chart-3d-demo"
     Install the dependencies:
 
     ```package-install
-    npm install d3-3d d3-array lucide-react
+    npm install d3-3d d3-array
     ```
 
     Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/scatter-chart-3d.tsx`:
@@ -72,7 +72,8 @@ where it stands - the mirror of its entering - and one that moves glides (see
 Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
 Without an `id`, points are named by their position in `data`, which animates
-appending and removing at the end.
+appending and removing at the end. An entry whose `x`, `y` or `z` is missing
+or not a number has no point, as if it were not in `data`.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

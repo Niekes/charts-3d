@@ -66,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the zoom the chart stands still. `+` and `-` zoom to the middle of the
   chart, as before (ADR-0001).
 
+### Removed
+
+- `chart-3d` no longer depends on `lucide-react`: the keyboard icon of the
+  shortcut button is drawn in the core. A project that installed it for the
+  charts alone may remove it.
+
 ### Fixed
 
 - `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
@@ -73,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context, on a page with more WebGL charts than the browser allows or when
   the GPU resets, falls back to `"canvas"` and keeps drawing, where it
   stayed blank (#22).
+- An `animationDuration` that turns 0 while a chart glides makes it jump to
+  the new data: the marks vanished, their numbers `NaN`, until the data
+  changed again.
 - On a phone a vertical swipe on a chart scrolls the page: the svg carries
   `touch-pan-y` where it took every touch with `touch-none`, for a drag a
   touch cannot make without a modifier (ADR-0001).
@@ -84,6 +93,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tooltip on the choropleth: the larger region is painted first, and
   the hole of the region around it is no longer drawn as a second polygon
   over it (#19).
+- The webgl renderer fills a polygon with a dent through the stencil buffer
+  instead of cutting it into triangles on every frame, which took longer
+  with the square of its corners: detailed land, such as the countries at
+  1:50m, took 50 ms and more a frame for the cutting alone (#23). A polygon
+  that crosses itself now fills even-odd on webgl, as the hover finds it.
+- A `<` in the `id`, a key or a color of a chart is escaped where the
+  container writes them into its style element, so a config built from the
+  input of users cannot close that element on a server-rendered page.
+  Whether the text is CSS stays with the app (#25).
 
 ## [0.6.0] - 2026-11-05
 

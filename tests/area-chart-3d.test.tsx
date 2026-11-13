@@ -518,7 +518,7 @@ describe("AreaChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same ribbons, the front of each cut into a triangle per entry", async () => {
+  test("canvas and webgl paint the same ribbons, the front of each filled through the stencil", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -548,6 +548,9 @@ describe("AreaChart3D renderers", () => {
       bufferData: vi.fn(),
       drawArrays: vi.fn(),
       lineWidth: vi.fn(),
+      colorMask: vi.fn(),
+      stencilFunc: vi.fn(),
+      stencilOp: vi.fn(),
       getParameter: vi.fn(() => [1, 1]),
       createProgram: vi.fn(() => ({})),
       attachShader: vi.fn(),
@@ -558,7 +561,7 @@ describe("AreaChart3D renderers", () => {
       createBuffer: vi.fn(() => ({})),
       getExtension: vi.fn(() => null),
       isContextLost: vi.fn(() => false),
-      TRIANGLES: 4,
+      TRIANGLE_FAN: 6,
     }
     // A canvas gives out one context only: another type on the same element is null.
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
@@ -592,11 +595,12 @@ describe("AreaChart3D renderers", () => {
 
     await view.render(scene("webgl"))
     const counts = gl.drawArrays.mock.calls.map(([, , count]) => count)
-    expect(counts).toHaveLength(svg)
-    // A quad is two triangles; the front of three entries and two floor
-    // corners is three, cut ear by ear.
-    expect(counts.filter((c) => c === 9)).toHaveLength(2)
-    expect(counts.filter((c) => c === 6)).toHaveLength(6)
+    // A quad is one fan of 4; the front of three entries and two floor corners
+    // is a fan of 5 drawn twice: into the stencil, then as its cover.
+    expect(counts.filter((c) => c === 5)).toHaveLength(4)
+    expect(counts.filter((c) => c === 4)).toHaveLength(6)
+    expect(counts).toHaveLength(10)
+    expect(gl.stencilOp).toHaveBeenCalledTimes(4)
     await view.unmount()
   })
 })

@@ -296,9 +296,11 @@ every renderer, so text stays sharp and the theme stays in CSS.
   falls back to `"canvas"` on `webglcontextlost` and stays there (see
   Fallback in GLOSSARY.md); it never restores, as a restored context would
   take the one of the next chart. Its paint function
-  triangulates the same marks - a polygon ear by ear, so a concave one such
-  as the front of a ribbon fills as on the canvas, a fan of 12 segments per
-  circle - draws them in paint order without a depth test, a stroke as a line
+  fills the same marks - a polygon of up to four corners that is convex, or a
+  circle of 12 segments, as one fan, any other through the stencil buffer,
+  even-odd, so a concave one such as the front of a ribbon or a coast fills as
+  on the canvas with no triangle cut on the CPU - draws them in paint order
+  without a depth test, a stroke as a line
   loop over the outline, and takes its colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
   only once the projection on the CPU is what is slow.
 
