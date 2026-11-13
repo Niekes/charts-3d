@@ -408,7 +408,12 @@ the client. The npm dependencies stay external.
   package depend on the API: a change to a prop or an export of `index.ts`
   is a breaking change and needs a major version. Before 1.0.0 the minor
   version is the major one: a breaking change goes from 0.4 to 0.5, which
-  `^0.4.0` does not pick up.
+  `^0.4.0` does not pick up. Semver covers what a chart is used with - the
+  charts, `ChartContainer3D`, `ChartLegend3D`, their props and the types they
+  take; what a chart is built from - `Axes3D`, `Marks3D`, the hooks, `Mark3D`
+  and the helpers - may change in a minor version, with a changelog entry.
+  The list is on the Stability section of the `chart-3d` docs page: a new
+  export goes on one side of it.
 
 ### Adding a chart
 

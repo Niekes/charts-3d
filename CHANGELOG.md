@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The docs say which exports semver covers from 1.0.0: the charts,
+  `ChartContainer3D`, `ChartLegend3D`, their props and the types they take.
+  What a chart is built from - `Axes3D`, `Marks3D`, the hooks, `Mark3D` and
+  the helpers such as `earth` and `colorOf` - may change in a minor version.
+- The install page no longer says the CLI installs `lucide-react`, and the
+  home page no longer says the charts have no canvas.
+
 - The tooltip of a mark is built from the data behind it: its values read
   as the ticks name them through `format`, and the entry of a bar as the
   ticks of x name it. The core sets the tooltip when the pointer lands on a

@@ -171,6 +171,12 @@ A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that e
 
 The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it - while the line of the axis grows to a new outermost tick and shrinks from a dropped one. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
 
+## Stability
+
+From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D`. A change to any of them that breaks a project waits for a major version.
+
+What a chart is built from stays free to change in a minor version, with an entry in the changelog: `Axes3D`, `Marks3D`, `Labels3D`, `useChart3D`, `useTween`, `useTweenAxes`, `useSeries`, `Mark3D`, `Label3D`, `World`, `GeoProjectionLike` and the helpers `axis`, `pad`, `linear`, `worldBox`, `intoWorld`, `shade`, `faded`, `colorOf`, `finite`, `cubeMarks`, `globe`, `GLOBE_RADIUS`, `orthographic` and `earth`. They are exported so a chart of your own can draw the way the charts here do; pin the version of the package, or own a copy through the registry, if you build on them.
+
 ## API Reference
 
 ### ChartContainer3D
