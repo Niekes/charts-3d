@@ -498,6 +498,18 @@ describe("shortcuts", () => {
     await chart.unmount()
   })
 
+  test("a vertical swipe on the chart scrolls the page", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    // A phone has no modifier to rotate with, so the chart must not trap its swipe.
+    expect(chart.svg.getAttribute("class")).toContain("touch-pan-y")
+    expect(chart.svg.getAttribute("class")).not.toContain("touch-none")
+    await chart.unmount()
+  })
+
   test("an action turned off does nothing and leaves its event to the browser", async () => {
     const chart = await mount(
       <ChartContainer3D
@@ -520,7 +532,7 @@ describe("shortcuts", () => {
     const read = () => view(chart.host)
     chart.svg.setPointerCapture = vi.fn()
     expect(chart.svg.getAttribute("aria-label")).toBe("Sales")
-    expect(chart.svg.getAttribute("class")).not.toContain("touch-none")
+    expect(chart.svg.getAttribute("class")).not.toContain("touch-")
 
     await chart.send(key("ArrowRight"))
     expect(read().yaw).toBeCloseTo(Math.PI / 36)
