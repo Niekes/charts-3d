@@ -72,7 +72,8 @@ where it stands - the mirror of its entering - and one that moves glides (see
 Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
 Without an `id`, points are named by their position in `data`, which animates
-appending and removing at the end.
+appending and removing at the end. An entry whose `x`, `y` or `z` is missing
+or not a number has no point, as if it were not in `data`.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

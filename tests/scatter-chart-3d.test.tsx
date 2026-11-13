@@ -42,6 +42,25 @@ describe("ScatterChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
+  test("an entry with a missing field has no point, and nothing is drawn at NaN", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={[
+            { x: 1, y: 1, z: 1 },
+            { x: 2, z: 2 },
+            { x: 3, y: "abc", z: 3 },
+          ]}
+          x="x"
+          y="y"
+          z="z"
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(1)
+    expect(html).not.toContain("NaN")
+  })
+
   test("the tooltip of a point shows its values rounded", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
@@ -237,6 +256,41 @@ describe("ScatterChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(300))
     expect(radii().filter((r) => r > 0 && r < 4)).toHaveLength(1)
     await act(() => vi.advanceTimersByTime(400))
+    expect(radii()).toEqual([4, 4])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a point whose field goes missing shrinks away, and grows back with the field", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { id: string; x: number; y?: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} id="id" x="x" y="y" z="z" />
+          </ChartContainer3D>
+        )
+      )
+    const radii = () => [...host.querySelectorAll("circle")].map((c) => Number(c.getAttribute("r")))
+
+    const p = { id: "p", x: 0, y: 0, z: 0 }
+    await render([p, { id: "q", x: 10, y: 10, z: 10 }])
+    await act(() => vi.advanceTimersByTime(700))
+    expect(radii()).toEqual([4, 4])
+
+    await render([p, { id: "q", x: 10, z: 10 }])
+    await act(() => vi.advanceTimersByTime(300))
+    expect(radii().filter((r) => r > 0 && r < 4)).toHaveLength(1)
+    expect(host.innerHTML).not.toContain("NaN")
+    await act(() => vi.advanceTimersByTime(400))
+    expect(radii()).toEqual([4])
+
+    await render([p, { id: "q", x: 10, y: 10, z: 10 }])
+    expect(radii().filter((r) => r === 0)).toHaveLength(1)
+    await act(() => vi.advanceTimersByTime(700))
     expect(radii()).toEqual([4, 4])
 
     await act(async () => root.unmount())
