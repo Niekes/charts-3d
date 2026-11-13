@@ -93,6 +93,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the square of its corners: detailed land, such as the countries at
   1:50m, took 50 ms and more a frame for the cutting alone (#23). A polygon
   that crosses itself now fills even-odd on webgl, as the hover finds it.
+- A `<` in the `id`, a key or a color of a chart is escaped where the
+  container writes them into its style element, so a config built from the
+  input of users cannot close that element on a server-rendered page.
+  Whether the text is CSS stays with the app (#25).
 
 ## [0.6.0] - 2026-11-05
 

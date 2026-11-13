@@ -1566,16 +1566,15 @@ ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
 [data-chart=${id}] svg[data-zoom="out"] { cursor: zoom-out; }
 [data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
 
-  if (!colorConfig.length) {
-    return <style dangerouslySetInnerHTML={{ __html: base }} />
-  }
+  // No colors, no rule per theme.
+  const themes = colorConfig.length ? Object.entries(THEMES) : []
 
   return (
     <style
       dangerouslySetInnerHTML={{
         __html: [
           base,
-          ...Object.entries(THEMES).map(
+          ...themes.map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
@@ -1587,7 +1586,12 @@ ${colorConfig
 }
 `
           ),
-        ].join("\n"),
+        ]
+          .join("\n")
+          // The id, the keys and the colors are the caller's text: escaped, a `<` in
+          // them cannot close the style element of a server-rendered page. Whether
+          // they are CSS stays with the caller.
+          .replaceAll("<", "\\3c "),
       }}
     />
   )
