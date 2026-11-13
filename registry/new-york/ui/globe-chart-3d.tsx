@@ -43,7 +43,7 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
   lon: keyof T & string
   /** The field of the latitude of an entry, in degrees north. */
   lat: keyof T & string
-  /** The field of the value of an entry, the height of its tile; a value below 0, or none, stands as 0. */
+  /** The field of the value of an entry, the height of its tile; a value below 0, or one that is not a finite number, stands as 0. */
   value: keyof T & string
   /**
    * The field whose value is the config key of the color of a tile.
@@ -191,7 +191,7 @@ function tileValues<T extends Record<string, unknown>>(
     const key = fields.series ? String(d[fields.series]) : fallback
     tiles.set(center, {
       id: `${center},${key}`,
-      value: Math.max(0, Number(d[fields.value]) || 0),
+      value: finite(d[fields.value]) ? Math.max(0, Number(d[fields.value])) : 0,
       entries: [...(tiles.get(center)?.entries ?? []), d],
       name: fields.label ? String(d[fields.label]) : undefined,
     })

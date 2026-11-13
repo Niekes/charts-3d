@@ -473,3 +473,26 @@ describe("PlacesChart3D missing values", () => {
     expect(html.match(/<circle /g)).toHaveLength(1)
   })
 })
+
+describe("PlacesChart3D values that are no numbers", () => {
+  test("an infinite value stands as 0, as one that is not a number: the chart draws as with 0", () => {
+    const html = (v: number) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <PlacesChart3D
+            data={[
+              { lon: 10, lat: 10, v },
+              { lon: -10, lat: -10, v: 3 },
+            ]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="v"
+          />
+        </ChartContainer3D>
+      )
+    expect(html(Infinity)).not.toContain("NaN")
+    expect(html(Infinity)).toBe(html(0))
+    expect(html(-Infinity)).toBe(html(0))
+  })
+})

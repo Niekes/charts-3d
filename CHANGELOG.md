@@ -107,6 +107,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stands at the lowest of the others, and a cell it touches says nothing on
   hover: one such value wrote `NaN` into the whole chart. So did a bar chart
   without data and without series.
+- A value of `Infinity` on the globe and the places chart stands as 0, as one
+  that is not a number: the dot of that place drew at a radius of `NaN` and
+  shrank every other dot to nothing, and on the globe the other tiles fell
+  flat.
 - Entries of the same name are a bar, or a point of the area chart, of their
   own: two entries named "Jan" drew one bar, the last, where the axis named
   both. Their ticks and tooltips read the name as the data gives it, and

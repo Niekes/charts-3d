@@ -739,3 +739,25 @@ describe("GlobeChart3D missing values", () => {
     expect(faces(html)).toHaveLength(0)
   })
 })
+
+describe("GlobeChart3D values that are no numbers", () => {
+  test("an infinite value stands as 0, as one that is not a number: the globe draws as with 0", () => {
+    const html = (population: number) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[
+              { lon: 15, lat: 45, population },
+              { lon: -15, lat: 15, population: 3 },
+            ]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={30}
+          />
+        </ChartContainer3D>
+      )
+    expect(html(Infinity)).toBe(html(0))
+  })
+})
