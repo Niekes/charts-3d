@@ -85,6 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container escapes it, where the browser dropped the rule and the marks drew
   black. `colorOf` in the core names the variable of a key; a plain key reads
   `var(--color-desktop)` as before.
+- A value of `Infinity` in the bar and the area chart stands as 0, as one
+  that is not a number, and a height of `NaN` or `Infinity` in the surface
+  stands at the lowest of the others: one such value wrote `NaN` into the
+  whole chart. So did a bar chart without data and without series.
+- Entries of the same name are a bar, or a point of the area chart, of their
+  own: two entries named "Jan" drew one bar, the last, where the axis named
+  both. Their ticks and tooltips read the name as the data gives it.
 - `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
   for support hands its context back at once - and a chart that loses its
   context, on a page with more WebGL charts than the browser allows or when
