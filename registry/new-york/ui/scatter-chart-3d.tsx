@@ -20,7 +20,7 @@ import {
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
-  /** One entry per point. */
+  /** One entry per point; one whose x, y or z is missing or not a number has none. */
   data: T[]
   /** The field of the position along x. */
   x: keyof T & string
@@ -63,7 +63,7 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
  * `series` names the field whose value is the config key of the color.
  */
 export function ScatterChart3D<T extends Record<string, unknown>>({
-  data,
+  data: all,
   x,
   y,
   z,
@@ -76,6 +76,8 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
+  // An entry without a place in the box has no point.
+  const data = all.filter((d) => [x, y, z].every((f) => Number.isFinite(Number(d[f]))))
   const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
   const entries = new Map(names.map((name, i) => [name, data[i]]))
   const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
