@@ -113,6 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flat.
 - A `step` of 0, below 0 or `NaN` on the globe draws the tiles of the
   default, 5 degrees, where it drew no tiles at all.
+- More than one `Marks3D` in a container - a chart and marks of your own
+  beside it - all draw and answer the hover: the last one replaced the
+  marks of the others in the scene, so on the canvas they were not drawn
+  and on SVG they showed no tooltip.
 - Entries of the same name are a bar, or a point of the area chart, of their
   own: two entries named "Jan" drew one bar, the last, where the axis named
   both. Their ticks and tooltips read the name as the data gives it, and

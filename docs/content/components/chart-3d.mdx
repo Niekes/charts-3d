@@ -5,7 +5,7 @@ description: The container, camera, axes and tooltip that every 3D chart builds 
 
 import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
-`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box, `Marks3D` draws your shapes with every renderer and `shade` lights a face.
+`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box, `Marks3D` draws your shapes with every renderer and `shade` lights a face. A container takes more than one `Marks3D` - a chart and marks of your own beside it - and paints each set over the ones placed before it.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

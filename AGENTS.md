@@ -280,7 +280,8 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **SVG first.** The server, the prerender and the first render on the client
   draw SVG. An effect then switches to the requested renderer if the browser
   has it, and stays on SVG where it has none, as in jsdom.
-- **One scene.** `Marks3D` writes its marks into the scene of the container;
+- **One scene.** Every `Marks3D` places its marks into the scene of the
+  container, a set per `Marks3D`, in the order the sets came;
   the canvas paints the scene and the hover hit-tests it, whatever the
   renderer.
 - **Parity is behavioural and gated**

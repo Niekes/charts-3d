@@ -103,6 +103,8 @@ type ChartContext3D = {
   renderer: Renderer3D
   /** The marks of the chart, which the hover and the canvas read. */
   scene: React.RefObject<Mark3D[]>
+  /** Puts the marks of the `Marks3D` of `id` into the scene, or takes them out. */
+  place: (id: string, marks?: Mark3D[]) => void
   repaint: () => void
   focus: Focus3D
   /** The time in ms a chart takes to glide into new data, 600 unless the container says. */
@@ -410,7 +412,7 @@ function ChartContainer3D({
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
+  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
     requested,
     width,
     height,
@@ -420,8 +422,8 @@ function ChartContainer3D({
   const { view, handlers } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, repaint, focus, animationDuration }),
-    [config, camera, renderer, repaint, focus, animationDuration]
+    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration }),
+    [config, camera, renderer, place, repaint, focus, animationDuration]
   )
 
   return (
@@ -502,16 +504,25 @@ function keymapProps(keys: Keymap, mod: string, label?: string): React.SVGProps<
 
 /**
  * The marks of the chart and what reads them: the renderer that draws them,
- * the canvas it paints them on and the hover that shows their tooltips.
+ * the canvas it paints them on and the hover that shows their tooltips. The
+ * scene holds the marks of every `Marks3D` in the container, each set placed
+ * by `place`, in the order the sets came: a chart and marks of your own beside
+ * it all draw and answer the hover.
  */
 function useScene(requested: Renderer3D, width: number, height: number, placement: Placement3D) {
   const scene = React.useRef<Mark3D[]>([])
+  const sets = React.useRef(new Map<string, Mark3D[]>())
+  const place = React.useCallback((id: string, marks?: Mark3D[]) => {
+    if (marks) sets.current.set(id, marks)
+    else sets.current.delete(id)
+    scene.current = [...sets.current.values()].flat()
+  }, [])
   const tip = useTip(placement)
   const focus = useFocus()
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width)
   const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
-  return { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus }
+  return { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus }
 }
 
 type Tip3D = ReturnType<typeof useTip>
@@ -1303,24 +1314,25 @@ const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${f
  * elements, or on the canvas over the chart box. The hover reads them too.
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
-  const { renderer, scene, repaint } = useChart3D()
+  const { renderer, place, repaint } = useChart3D()
+  const id = React.useId()
   const lit = useLit(marks)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
   // inner faces their seams. The order, and with it the depth, stays as painted.
   const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
   React.useLayoutEffect(() => {
-    scene.current = drawn
+    place(id, drawn)
     repaint()
   })
   // A chart taken out of its container takes its marks along: the hover finds
   // none, and the canvas paints none.
   React.useLayoutEffect(
     () => () => {
-      scene.current = []
+      place(id)
       repaint()
     },
-    [scene, repaint]
+    [id, place, repaint]
   )
 
   if (renderer !== "svg") return null

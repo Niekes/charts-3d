@@ -1297,6 +1297,46 @@ describe("renderer", () => {
 
     await chart.unmount()
   })
+  test("several sets of marks in one container all draw and answer the hover, in the order they are placed", async () => {
+    const ctx = stubCanvas()
+    const [square, dot] = marks
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (both: boolean) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[square]} />
+        {both && <Marks3D marks={[dot]} />}
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(true)))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    // The square of the first set is painted, before the dot of the second.
+    const corners = ctx.lineTo.mock.calls as number[][]
+    const first = corners.map(([x, y]) => x === 100 && y === 100).lastIndexOf(true)
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+    expect(ctx.lineTo.mock.invocationCallOrder[first]).toBeLessThan(
+      ctx.arc.mock.invocationCallOrder.at(-1)!
+    )
+    // Each set answers the hover.
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.textContent).toContain("Square")
+    await act(() => svg.dispatchEvent(pointer("pointermove", 400, 100)))
+    expect(host.textContent).toContain("Dot")
+    // The second set leaves; the first stays.
+    await act(async () => root.render(chart(false)))
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.textContent).toContain("Square")
+    ctx.arc.mockClear()
+    ctx.lineTo.mockClear()
+    await act(async () => root.render(chart(false)))
+    expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+    expect(ctx.arc).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a chart taken out of its container leaves no marks: the hover finds none and the canvas paints none", async () => {
     const ctx = stubCanvas()
     const host = document.body.appendChild(document.createElement("div"))
