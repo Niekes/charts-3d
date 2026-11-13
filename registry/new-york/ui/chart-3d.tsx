@@ -1253,6 +1253,10 @@ function trianglesOf(mark: Mark3D): Point2D[] {
 const turn = (a: Point2D, b: Point2D, c: Point2D) =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 
+/** Twice the signed area of a ring: its sign tells which way it winds. */
+const areaOf = (ring: Point2D[]) =>
+  ring.reduce((sum, p, i) => sum + turn(ring[0], p, ring[i + 1] ?? p), 0)
+
 /**
  * The triangles of a polygon, cut off ear by ear, so a concave one - the
  * front of a ribbon - fills as on the canvas, where a fan would spill over
@@ -1262,7 +1266,7 @@ const turn = (a: Point2D, b: Point2D, c: Point2D) =>
  */
 function earsOf(points: Point2D[]): Point2D[] {
   const left = [...points]
-  const way = Math.sign(left.reduce((sum, p, i) => sum + turn(left[0], p, left[i + 1] ?? p), 0))
+  const way = Math.sign(areaOf(left))
   const triangles: Point2D[] = []
   while (left.length > 3) {
     const corner = (i: number) => [left.at(i - 1)!, left[i], left[(i + 1) % left.length]]
@@ -2279,7 +2283,9 @@ function geoView<P extends GeoProjectionLike<P>>(camera: Camera3DInstance, proje
  * Stands in for a canvas under d3-geo's `geoPath`: `marks(draw, key, fill)`
  * runs `draw` and returns every ring it drew, cut at the horizon as d3-geo
  * cuts it, as a polygon mark keyed `key-i`. A point is not a region: the ring
- * its `moveTo` began goes with its `arc`.
+ * its `moveTo` began goes with its `arc`. A hole is not one either: a ring
+ * wound the other way than the largest ring is left out, so the region
+ * around a hole fills it once, not twice.
  */
 function ringSink() {
   const rings: Point2D[][] = []
@@ -2300,7 +2306,11 @@ function ringSink() {
     marks: (draw: () => void, key: string, fill: string): Mark3D[] => {
       rings.length = 0
       draw()
-      return rings.map((points, i) => ({ key: `${key}-${i}`, points, fill }))
+      const areas = rings.map(areaOf)
+      const largest = areas.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0)
+      return rings.flatMap((points, i) =>
+        areas[i] * largest < 0 ? [] : [{ key: `${key}-${i}`, points, fill }]
+      )
     },
   }
 }

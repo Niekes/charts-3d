@@ -63,6 +63,11 @@ Amended 2026-11-09: the ocean and the land draw in `--chart-3d-ocean` and
 otherwise - looks are CSS (ADR-0004), and the globe demos set them for a globe
 at night.
 
+Amended 2026-11-13: world-atlas at 110m does have a hole, Lesotho in South
+Africa. A hole still fills in the color of the region around it, once: its
+ring is not drawn as a polygon of its own, and the choropleth paints the
+larger region first, so a region inside another lands on top (#19).
+
 Amended 2026-11-09: a tile thinner than a pixel on screen draws its top alone.
 Its sides would draw nothing, and on a globe of thousands of flat tiles - the
 places of the world, summed per tile - they are most of the faces d3-3d

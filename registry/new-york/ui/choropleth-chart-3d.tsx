@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { geoOrthographic, geoPath } from "d3-geo"
+import { geoArea, geoOrthographic, geoPath } from "d3-geo"
 
 import {
   Marks3D,
@@ -82,6 +82,7 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ChoroplethChart3DProps<T>) {
   const { config, camera } = useChart3D()
+  const largerFirst = useLargerFirst(land)
   const reading = { config, value, format, tooltip }
   const regions = regionValues(data, { id, value, series, label }, Object.keys(config)[0])
   // Keyed by the region and its series, so a region that changes color
@@ -111,7 +112,8 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   const features = new Map(
     land.features.filter((f) => f.id !== undefined).map((f) => [String(f.id), f])
   )
-  const overlays = Object.entries(presence).flatMap(([pid, opacity]) => {
+  const painted = Object.entries(presence).sort(([a], [b]) => largerFirst(a, b))
+  const overlays = painted.flatMap(([pid, opacity]) => {
     const [rid, key] = JSON.parse(pid) as [string, string]
     const feature = features.get(rid)
     // An entry naming a region the land has not draws nothing.
@@ -126,6 +128,20 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   })
 
   return <Marks3D marks={[...scenery, ...overlays]} />
+}
+
+/**
+ * Orders the presence ids of two regions, the larger region first, so a
+ * region inside another - Lesotho in South Africa - is painted on top, where
+ * the pointer finds it.
+ */
+function useLargerFirst(land: GeoJSON.FeatureCollection) {
+  const areas = React.useMemo(
+    () => new Map(land.features.map((f) => [String(f.id), geoArea(f)])),
+    [land]
+  )
+  const size = (pid: string) => areas.get((JSON.parse(pid) as [string])[0]) ?? 0
+  return (a: string, b: string) => size(b) - size(a)
 }
 
 /**
