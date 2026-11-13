@@ -228,7 +228,10 @@ function stubCanvas() {
 
 /** A webgl context of spies, and a 2D context that reads colors back as bytes, on every canvas. */
 function stubGL() {
+  const lose = { loseContext: vi.fn() }
   const gl = {
+    getExtension: vi.fn((): typeof lose | null => lose),
+    isContextLost: vi.fn(() => false),
     viewport: vi.fn(),
     disable: vi.fn(),
     enable: vi.fn(),
@@ -288,7 +291,7 @@ function stubGL() {
       disconnect() {}
     }
   )
-  return { gl, ctx }
+  return { gl, ctx, lose }
 }
 
 describe("shortcuts", () => {
@@ -1473,6 +1476,72 @@ describe("renderer", () => {
     expect(gl.createBuffer).toHaveBeenCalledTimes(1)
 
     document.documentElement.classList.remove("dark")
+    await chart.unmount()
+  })
+
+  test("webgl hands the context of its probe back, so a chart holds one context, not two", async () => {
+    const { gl, lose } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(gl.getExtension).toHaveBeenCalledWith("WEBGL_lose_context")
+    expect(lose.loseContext).toHaveBeenCalledTimes(1)
+
+    await chart.unmount()
+  })
+
+  test("webgl still draws where the browser cannot take the context of the probe back", async () => {
+    const { gl } = stubGL()
+    gl.getExtension.mockReturnValue(null)
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(gl.drawArrays).toHaveBeenCalled()
+
+    await chart.unmount()
+  })
+
+  test("a chart that loses its webgl context falls back to canvas, and the hover still finds its marks", async () => {
+    const { gl, ctx } = stubGL()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const lost = chart.host.querySelector("canvas")!
+    const drawn = gl.drawArrays.mock.calls.length
+    await act(async () => lost.dispatchEvent(new Event("webglcontextlost")))
+
+    // A canvas that gave out a webgl context cannot give a 2D one: a new one takes its place.
+    const canvas = chart.host.querySelector("canvas")
+    expect(canvas).not.toBeNull()
+    expect(canvas).not.toBe(lost)
+    expect(chart.svg.querySelector("path, circle")).toBeNull()
+    expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+    expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+    expect(gl.drawArrays.mock.calls.length).toBe(drawn)
+
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
+    expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("a repaint on a lost webgl context draws nothing and compiles nothing", async () => {
+    const { gl } = stubGL()
+    gl.isContextLost.mockReturnValue(true)
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    expect(gl.createProgram).not.toHaveBeenCalled()
+    expect(gl.drawArrays).not.toHaveBeenCalled()
+
     await chart.unmount()
   })
 })

@@ -356,7 +356,8 @@ export type ChartContainer3DProps = {
   /**
    * How the marks of the chart are drawn: "canvas" suits many marks, "webgl" more.
    * The chart draws as SVG until the browser shows it has the requested renderer,
-   * "webgl" falling back to "canvas", and where it has none, as SVG.
+   * "webgl" falling back to "canvas", and where it has none, as SVG. A chart
+   * that loses its webgl context later falls back to "canvas" too, and stays there.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D
@@ -483,8 +484,8 @@ function useScene(requested: Renderer3D, width: number, height: number, placemen
   const scene = React.useRef<Mark3D[]>([])
   const tip = useTip(placement)
   const focus = useFocus()
-  const renderer = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width, height, renderer)
+  const [renderer, fall] = useRenderer(requested)
+  const { canvas, repaint } = useCanvas(scene, width, height, renderer, fall)
   const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
   return { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus }
 }
@@ -1038,19 +1039,26 @@ function inside(polygon: Point2D[], at: Point2D) {
 /**
  * The renderer the chart draws with: SVG on the server and in the first
  * render on the client, then the requested one if the browser has it, with
- * "webgl" falling back to "canvas" and "canvas" to SVG.
+ * "webgl" falling back to "canvas" and "canvas" to SVG. And `fall`, which
+ * takes a chart that lost its webgl context to "canvas", where it stays: a
+ * browser gives a page only some 16 contexts and drops the oldest, so one
+ * that climbed back would take the context of the next chart.
  */
 function useRenderer(requested: Renderer3D) {
   const [renderer, setRenderer] = React.useState<Renderer3D>("svg")
   React.useEffect(() => {
     // A canvas of its own per probe, as one that gave out a context cannot give another.
-    if (requested === "webgl" && document.createElement("canvas").getContext("webgl")) {
+    const gl = requested === "webgl" && document.createElement("canvas").getContext("webgl")
+    if (gl) {
+      // The probe hands its context back at once, or it counts against the page until it is collected.
+      gl.getExtension("WEBGL_lose_context")?.loseContext()
       return setRenderer("webgl")
     }
     const canvas = requested !== "svg" && document.createElement("canvas").getContext("2d")
     setRenderer(canvas ? "canvas" : "svg")
   }, [requested])
-  return renderer
+  const fall = React.useCallback(() => setRenderer("canvas"), [])
+  return [renderer, fall] as const
 }
 
 /** A resolved CSS color as bytes, which the webgl renderer draws with. */
@@ -1066,7 +1074,8 @@ function useCanvas(
   scene: React.RefObject<Mark3D[]>,
   width: number,
   height: number,
-  renderer: Renderer3D
+  renderer: Renderer3D,
+  fall: () => void
 ) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
@@ -1076,15 +1085,7 @@ function useCanvas(
   const repaint = React.useCallback(() => {
     const canvas = element.current
     if (!canvas) return
-    const resolve = (css: string) => {
-      let color = colors.current.get(css)
-      if (color === undefined) {
-        canvas.style.color = css
-        color = getComputedStyle(canvas).color
-        colors.current.set(css, color)
-      }
-      return color
-    }
+    const resolve = (css: string) => resolved(canvas, css, colors.current)
     if (renderer === "webgl") {
       pixel.current ??= onePixel()
       paintGL(canvas, scene.current, width, height, (css) =>
@@ -1102,6 +1103,8 @@ function useCanvas(
       repaint()
       const resize = new ResizeObserver(repaint)
       resize.observe(node)
+      // Only a webgl canvas loses its context: to too many on the page, or to a reset of the GPU.
+      node.addEventListener("webglcontextlost", fall)
       // ponytail: watches the theme on <html> only, as the class `.dark` of THEMES does.
       const theme = new MutationObserver(() => {
         colors.current.clear()
@@ -1111,14 +1114,26 @@ function useCanvas(
       theme.observe(document.documentElement, { attributeFilter: ["class", "style"] })
       return () => {
         element.current = null
+        node.removeEventListener("webglcontextlost", fall)
         resize.disconnect()
         theme.disconnect()
       }
     },
-    [repaint]
+    [repaint, fall]
   )
 
   return { canvas, repaint }
+}
+
+/** The color that `css` resolves to on `canvas`, inside the chart, cached per color. */
+function resolved(canvas: HTMLCanvasElement, css: string, cache: Map<string, string>) {
+  let color = cache.get(css)
+  if (color === undefined) {
+    canvas.style.color = css
+    color = getComputedStyle(canvas).color
+    cache.set(css, color)
+  }
+  return color
 }
 
 /** Paints `marks` on `canvas`, from the view box of `width` to the pixels of the canvas. */
@@ -1197,6 +1212,8 @@ function paintGL(
   canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
   // useRenderer draws with webgl only where the browser gives one a context.
   const gl = canvas.getContext("webgl")!
+  // A lost context may make no program, which attachShader throws on; the chart falls back to canvas.
+  if (gl.isContextLost()) return
   gl.viewport(0, 0, canvas.width, canvas.height)
   gl.disable(gl.DEPTH_TEST)
   gl.enable(gl.BLEND)

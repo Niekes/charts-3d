@@ -653,6 +653,8 @@ describe("GlobeChart3D renderer switch", () => {
       shaderSource: vi.fn(),
       compileShader: vi.fn(),
       createBuffer: vi.fn(() => ({})),
+      getExtension: vi.fn(() => null),
+      isContextLost: vi.fn(() => false),
       DEPTH_TEST: 1,
       BLEND: 2,
       SRC_ALPHA: 3,
