@@ -58,3 +58,9 @@ still instead of sliding. A trackpad pinch anchors the same way, because it
 arrives as the wheel. `+` and `-` have no cursor and keep zooming to the
 middle of the chart, wherever the pointer rests. There is no prop to get the
 zoom to the centre back: the gestures are identity (ADR-0004).
+
+Amended 2026-11-13: a vertical swipe on the chart scrolls the page. The svg
+took every touch (`touch-none`) for a drag that a phone, having no modifier,
+could never make, so a chart taller than half the screen trapped the reader.
+It now carries `touch-pan-y`: the browser scrolls on a vertical swipe, and a
+tap and a sideways drag still reach the chart and inspect.

@@ -453,7 +453,8 @@ function chartIdOf(id: string | undefined, uniqueId: string) {
 /**
  * What the svg says about its keymap: a label that names the drag and the
  * help key if they are on, the keys, the focus only if a key does something
- * and the grab cursor only if a drag does; without one, a touch scrolls the page.
+ * and, if a drag does, `touch-pan-y`: a vertical swipe scrolls the page and
+ * every other touch reaches the chart.
  */
 function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement> {
   const drag = keys.on("dragRotate") || keys.on("dragPan")
@@ -470,7 +471,8 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
     className: cn(
       "block h-auto w-full outline-hidden select-none mask-x-from-96% mask-y-from-96%",
       // The default cursor stays, so a plain drag only inspects; the modifier and a drag rotate.
-      drag && "touch-none"
+      // A touch has no modifier, so its vertical swipe scrolls the page (ADR-0001).
+      drag && "touch-pan-y"
     ),
   }
 }

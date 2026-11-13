@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On a phone a vertical swipe on a chart scrolls the page: the svg carries
+  `touch-pan-y` where it took every touch with `touch-none`, for a drag a
+  touch cannot make without a modifier (ADR-0001).
 - The SVG renderer rounds the center and the radius of a circle to two
   decimals, like a path: a sine's last bits differ between the server and
   the browser, and the dots of the places chart no longer fail to hydrate.
