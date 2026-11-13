@@ -292,8 +292,8 @@ every renderer, so text stays sharp and the theme stays in CSS.
   into a discriminated union with an exhaustive switch everywhere the core
   draws - `Marks3D`, `paint` - so a shape one renderer misses fails to
   compile.
-- **No WebGL.** `"webgl"` draws as `"canvas"`, deprecated until the next
-  major version: measured, it drew no faster, because projecting the marks on
+- **No WebGL.** `"webgl"` draws as `"canvas"`, deprecated until 1.0.0
+  removes it: measured, it drew no faster, because projecting the marks on
   the CPU takes the time, not filling them (the globe's 2,500 tiles ran at
   about 25 fps on both). A GPU renderer earns its place again only with the
   projection on the GPU, through `camera.matrix()`, and a measurement that

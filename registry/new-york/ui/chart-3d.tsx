@@ -50,7 +50,8 @@ export type View3D = {
 
 /**
  * How the marks of a chart are drawn. The box, its labels, the tooltip and the
- * legend are always SVG and HTML. "webgl" draws as "canvas": it drew no faster.
+ * legend are always SVG and HTML. "webgl" draws as "canvas", as it drew no
+ * faster, and goes in 1.0.0.
  */
 export type Renderer3D = "svg" | "canvas" | "webgl"
 
@@ -361,8 +362,8 @@ export type ChartContainer3DProps = {
   /**
    * How the marks of the chart are drawn: "canvas" suits many marks. The chart
    * draws as SVG until the browser shows it has a canvas, and where it has
-   * none, as SVG. "webgl" draws as "canvas": it drew no faster, so it is
-   * deprecated and goes in the next major version.
+   * none, as SVG. "webgl" draws as "canvas", as it drew no faster; it is
+   * deprecated and goes in 1.0.0.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D

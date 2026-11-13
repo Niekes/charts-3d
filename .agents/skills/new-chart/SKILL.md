@@ -63,7 +63,7 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   hand CSS colors to the core; build the world with `worldBox`; tween numbers
   with `useTween`/`useTweenAxes`, never the projected marks. A new mark shape
   (beyond polygon and circle) extends everywhere the core draws (`Marks3D`,
-  `paint`, `paintGL`) and the parity test in `tests/chart-3d.test.tsx`, and
+  `paint`) and the parity test in `tests/chart-3d.test.tsx`, and
   turns `Mark3D` into a discriminated union with an exhaustive switch
   (ADR-0003).
 - Style: shadcn/ui - two spaces, double quotes, no semicolons. Every function
@@ -79,7 +79,7 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 ## 3. Tests: `tests/<name>-chart-3d.test.tsx`
 
 Drive the chart the way a user does: render it, send pointer and keyboard
-events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
+events, read what it draws. Copy `mount` and `stubCanvas` from
 `tests/chart-3d.test.tsx` (jsdom has no layout and no canvas). Cover at
 least: the marks draw as SVG and on the canvas (`renderer="canvas"`, and
 `"webgl"`, which draws on the canvas too); hovering a mark shows its tooltip and
@@ -100,8 +100,8 @@ comes with its tests - the coverage gate is 98% in each metric.
   surface does - a gone one leaves as the mirror, and the axes make room (see
   Enter in GLOSSARY.md). Fixed values, so the only change is which entries
   are there; see `docs/examples/bar-chart-3d-enter-demo.tsx`.
-- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on all
-  three renderers side by side (`RendererGrid` from
+- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on every
+  renderer side by side (`RendererGrid` from
   `docs/examples/renderer-select.tsx`). See
   `docs/examples/bar-chart-3d-renderers-demo.tsx`.
 - `docs/examples/<name>-chart-3d-many-demo.tsx` - the many demo: a fixed,
@@ -115,7 +115,7 @@ comes with its tests - the coverage gate is 98% in each metric.
 
 Every demo but the renderers one carries the `RendererSelect` below the
 chart, so every scene can be checked visually on every renderer; the
-renderers demo shows all three at once through `RendererGrid` (AGENTS.md).
+renderers demo shows them all at once through `RendererGrid` (AGENTS.md).
 
 ## 5. Gates
 

@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Mark3D.tooltip` may be a function, which the core calls when the pointer
   lands on the mark, so a chart with thousands of marks pays for one tooltip
   per hover, not one per mark per frame.
-- `useSeries` hands back `entries`, the entry behind every name in the data.
+- `useSeries` hands back `entries`, the entry behind every name in the data,
+  and `nameOf`, the name behind the id of an entry, where a name repeats.
 - `choropleth-chart-3d`: the regions of the land on a globe, each in the
   color of its class, joined to the data by the `id` of the feature; a
   region fades in and out, and its name and value show on hover.
@@ -55,7 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the helpers such as `earth` and `colorOf` - may change in a minor version.
 - The install page no longer says the CLI installs `lucide-react`, and the
   home page no longer says the charts have no canvas.
-
 - The tooltip of a mark is built from the data behind it: its values read
   as the ticks name them through `format`, and the entry of a bar as the
   ticks of x name it. The core sets the tooltip when the pointer lands on a
@@ -75,15 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the zoom the chart stands still. `+` and `-` zoom to the middle of the
   chart, as before (ADR-0001).
 
+### Deprecated
+
+- `renderer="webgl"`: it draws on the canvas, as `"canvas"` does, and the
+  name goes in 1.0.0. Use `"canvas"`.
+
 ### Removed
 
 - The webgl renderer. Measured, it drew no faster than the canvas, because
   projecting the marks on the CPU takes the time, not filling them: the
-  globe's 2,500 tiles ran at about 25 fps on both. `renderer="webgl"` still
-  works and draws on the canvas; the name is deprecated and goes in the next
-  major version. The chart no longer opens a WebGL context at all, so the
-  limit of about 16 per page and the fallback on a lost context are gone.
-
+  globe's 2,500 tiles ran at about 25 fps on both. The chart no longer opens
+  a WebGL context at all, so the limit of about 16 per page and the fallback
+  on a lost context are gone.
 - `chart-3d` no longer depends on `lucide-react`: the keyboard icon of the
   shortcut button is drawn in the core. A project that installed it for the
   charts alone may remove it.
@@ -111,11 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept painting them.
 - The canvas renderer clears its canvas between frames instead of sizing it
   again, which threw its buffer away and made a new one every frame.
-- `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
-  for support hands its context back at once - and a chart that loses its
-  context, on a page with more WebGL charts than the browser allows or when
-  the GPU resets, falls back to `"canvas"` and keeps drawing, where it
-  stayed blank (#22).
+- `renderer="webgl"` no longer leaves a chart blank on a page with more
+  WebGL charts than the browser allows, or when the GPU resets (#22): it
+  draws on the canvas and opens no WebGL context.
 - An `animationDuration` that turns 0 while a chart glides makes it jump to
   the new data: the marks vanished, their numbers `NaN`, until the data
   changed again.
@@ -130,11 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tooltip on the choropleth: the larger region is painted first, and
   the hole of the region around it is no longer drawn as a second polygon
   over it (#19).
-- The webgl renderer fills a polygon with a dent through the stencil buffer
-  instead of cutting it into triangles on every frame, which took longer
-  with the square of its corners: detailed land, such as the countries at
-  1:50m, took 50 ms and more a frame for the cutting alone (#23). A polygon
-  that crosses itself now fills even-odd on webgl, as the hover finds it.
+- `renderer="webgl"` no longer takes 50 ms and more a frame to cut detailed
+  land, such as the countries at 1:50m, into triangles (#23): it draws on
+  the canvas.
 - A `<` in the `id`, a key or a color of a chart is escaped where the
   container writes them into its style element, so a config built from the
   input of users cannot close that element on a server-rendered page.

@@ -117,7 +117,7 @@ _Avoid_: data binding, virtual DOM, custom elements
 **Renderer**:
 How the marks are drawn: as SVG elements, or painted on a canvas; the box,
 its labels, the tooltip and the legend stay SVG and HTML with every renderer.
-`"webgl"` is a deprecated name of the canvas.
+`"webgl"` is a deprecated name of the canvas, until 1.0.0.
 _Avoid_: painter, backend, layer
 
 **Fallback**:

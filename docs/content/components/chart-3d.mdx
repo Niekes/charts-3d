@@ -56,7 +56,7 @@ The marks of a chart - its bars, points and faces - are drawn by the renderer of
 <ChartContainer3D config={chartConfig} renderer="canvas">
 ```
 
-The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none. `"webgl"` draws as `"canvas"`: measured, it drew no faster, as projecting the marks on the CPU takes the time, not filling them. It is deprecated and goes in the next major version.
+The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none. `"webgl"` draws as `"canvas"`: measured, it drew no faster, as projecting the marks on the CPU takes the time, not filling them. It is deprecated and goes in 1.0.0.
 
 ## Shortcuts
 
