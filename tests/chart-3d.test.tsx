@@ -19,6 +19,7 @@ import {
   faded,
   finite,
   globe,
+  nonNegative,
   intoWorld,
   linear,
   orthographic,
@@ -1337,6 +1338,49 @@ describe("renderer", () => {
     host.remove()
   })
 
+  test("a set that mounts later but sits earlier in the tree is drawn under the later ones, on every renderer", async () => {
+    const square = (key: string, at: number) => ({
+      key,
+      points: [
+        { x: at, y: at },
+        { x: at + 100, y: at },
+        { x: at + 100, y: at + 100 },
+        { x: at, y: at + 100 },
+      ],
+      fill: "red",
+      tooltip: { items: [{ label: key, value: 1 }] },
+    })
+    for (const renderer of ["svg", "canvas"] as const) {
+      const ctx = stubCanvas()
+      const host = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(host)
+      const chart = (early: boolean) => (
+        <ChartContainer3D config={{}} renderer={renderer}>
+          {early && <Marks3D marks={[square("Under", 150)]} />}
+          <Marks3D marks={[square("Over", 100)]} />
+        </ChartContainer3D>
+      )
+      await act(async () => root.render(chart(false)))
+      await act(async () => root.render(chart(true)))
+      const svg = host.querySelector("svg")!
+      svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+      // Where the two overlap, the later one in the tree is on top: the hover finds it.
+      await act(() => svg.dispatchEvent(pointer("pointermove", 175, 175)))
+      expect(host.textContent).toContain("Over")
+      if (renderer === "canvas") {
+        // The last paint draws the earlier set first.
+        const corners = ctx.lineTo.mock.calls as number[][]
+        const xs = corners.map(([x]) => x)
+        expect(xs.lastIndexOf(150)).toBeGreaterThanOrEqual(0)
+        expect(xs.lastIndexOf(150)).toBeLessThan(xs.lastIndexOf(100))
+      }
+      await act(async () => root.unmount())
+      host.remove()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
   test("a chart taken out of its container leaves no marks: the hover finds none and the canvas paints none", async () => {
     const ctx = stubCanvas()
     const host = document.body.appendChild(document.createElement("div"))
@@ -2578,6 +2622,18 @@ describe("finite", () => {
   test("what Number alone reads as 0, or not as a number, is none", () => {
     const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
     expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("nonNegative", () => {
+  test("an amount to size a mark by: a number, or a string of one, from 0 up", () => {
+    expect([3, "2.5", 0].map(nonNegative)).toEqual([3, 2.5, 0])
+  })
+
+  test("below 0, or no finite number, stands as 0", () => {
+    expect([-1, Infinity, -Infinity, NaN, null, "", "abc"].map(nonNegative)).toEqual([
+      0, 0, 0, 0, 0, 0, 0,
+    ])
   })
 })
 

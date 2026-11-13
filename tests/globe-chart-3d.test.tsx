@@ -763,7 +763,7 @@ describe("GlobeChart3D values that are no numbers", () => {
 })
 
 describe("GlobeChart3D step", () => {
-  test("a step that is not a positive number - 0, below 0, NaN - draws the tiles of the default", () => {
+  test("a step that makes no tiles - 0, below 0, NaN, Infinity, wider than 180 - draws the tiles of the default", () => {
     const html = (step?: number) =>
       renderToString(
         <ChartContainer3D config={config}>
@@ -778,6 +778,6 @@ describe("GlobeChart3D step", () => {
         </ChartContainer3D>
       )
     expect(faces(html()).length).toBeGreaterThan(0)
-    for (const step of [0, -5, NaN]) expect(html(step)).toBe(html())
+    for (const step of [0, -5, NaN, Infinity, 400]) expect(html(step)).toBe(html())
   })
 })

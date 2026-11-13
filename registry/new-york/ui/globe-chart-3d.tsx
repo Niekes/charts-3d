@@ -18,6 +18,7 @@ import {
   earth,
   faded,
   finite,
+  nonNegative,
   globe,
   orthographic,
   shade,
@@ -57,8 +58,8 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   label?: keyof T & string
   /**
-   * The width of a tile in degrees, a divisor of 180; one that is not a
-   * positive number draws the default.
+   * The width of a tile in degrees, a divisor of 180; one that is not
+   * above 0 and up to 180 draws the default.
    * @defaultValue 5
    */
   step?: number
@@ -113,13 +114,13 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   value,
   series,
   label,
-  step: wanted = STEP,
+  step: requested = STEP,
   format,
   tooltip,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  // A step of 0 or below would make no tiles at all.
-  const step = wanted > 0 ? wanted : STEP
+  // A step of 0 or below, NaN, Infinity or one wider than half the globe makes no tiles at all.
+  const step = requested > 0 && requested <= 180 ? requested : STEP
   const fields = { lon, lat, value, series, label }
   // The value of every tile with an entry, keyed by the tile and its series,
   // so a tile that changes color leaves as one and enters as the other.
@@ -197,7 +198,7 @@ function tileValues<T extends Record<string, unknown>>(
     const key = fields.series ? String(d[fields.series]) : fallback
     tiles.set(center, {
       id: `${center},${key}`,
-      value: finite(d[fields.value]) ? Math.max(0, Number(d[fields.value])) : 0,
+      value: nonNegative(d[fields.value]),
       entries: [...(tiles.get(center)?.entries ?? []), d],
       name: fields.label ? String(d[fields.label]) : undefined,
     })

@@ -103,8 +103,8 @@ type ChartContext3D = {
   renderer: Renderer3D
   /** The marks of the chart, which the hover and the canvas read. */
   scene: React.RefObject<Mark3D[]>
-  /** Puts the marks of the `Marks3D` of `id` into the scene, or takes them out. */
-  place: (id: string, marks?: Mark3D[]) => void
+  /** Puts the marks of the `Marks3D` of `id`, drawn at `node` in the tree, into the scene, or takes them out. */
+  place: (id: string, set?: { marks: Mark3D[]; node: Element }) => void
   repaint: () => void
   focus: Focus3D
   /** The time in ms a chart takes to glide into new data, 600 unless the container says. */
@@ -502,20 +502,26 @@ function keymapProps(keys: Keymap, mod: string, label?: string): React.SVGProps<
   }
 }
 
+// The bit of `a.compareDocumentPosition(b)` that says `b` comes before `a` in the document.
+const PRECEDING = 2
+
 /**
  * The marks of the chart and what reads them: the renderer that draws them,
  * the canvas it paints them on and the hover that shows their tooltips. The
  * scene holds the marks of every `Marks3D` in the container, each set placed
- * by `place`, in the order the sets came: a chart and marks of your own beside
- * it all draw and answer the hover.
+ * by `place`, in the order of the sets in the document - the order SVG paints
+ * them in - so a set that mounts later but sits earlier lies under the others
+ * on every renderer.
  */
 function useScene(requested: Renderer3D, width: number, height: number, placement: Placement3D) {
   const scene = React.useRef<Mark3D[]>([])
-  const sets = React.useRef(new Map<string, Mark3D[]>())
-  const place = React.useCallback((id: string, marks?: Mark3D[]) => {
-    if (marks) sets.current.set(id, marks)
+  const sets = React.useRef(new Map<string, { marks: Mark3D[]; node: Element }>())
+  const place = React.useCallback((id: string, set?: { marks: Mark3D[]; node: Element }) => {
+    if (set) sets.current.set(id, set)
     else sets.current.delete(id)
-    scene.current = [...sets.current.values()].flat()
+    scene.current = [...sets.current.values()]
+      .sort((a, b) => (a.node.compareDocumentPosition(b.node) & PRECEDING ? 1 : -1))
+      .flatMap((s) => s.marks)
   }, [])
   const tip = useTip(placement)
   const focus = useFocus()
@@ -1316,13 +1322,16 @@ const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${f
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, place, repaint } = useChart3D()
   const id = React.useId()
+  // Drawn on every renderer, empty off SVG, so the scene orders the sets as SVG does.
+  const node = React.useRef<SVGGElement>(null)
   const lit = useLit(marks)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
   // inner faces their seams. The order, and with it the depth, stays as painted.
   const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
   React.useLayoutEffect(() => {
-    place(id, drawn)
+    // The group is in the tree once the layout effects run.
+    place(id, { marks: drawn, node: node.current! })
     repaint()
   })
   // A chart taken out of its container takes its marks along: the hover finds
@@ -1335,33 +1344,33 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
     [id, place, repaint]
   )
 
-  if (renderer !== "svg") return null
   return (
-    <g data-slot="chart-3d-marks">
-      {drawn.map(({ key, points, r, fill, stroke }) =>
-        r === undefined ? (
-          <path
-            key={key}
-            d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
-            fill={fill}
-            stroke={stroke ?? fill}
-            strokeWidth={0.5}
-            strokeLinejoin="round"
-          />
-        ) : (
-          // Rounded like a path, so the server and the browser, whose last
-          // bits of a sine differ, write the same HTML.
-          <circle
-            key={key}
-            cx={+points[0].x.toFixed(2)}
-            cy={+points[0].y.toFixed(2)}
-            r={+r.toFixed(2)}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={stroke ? 1 : undefined}
-          />
-        )
-      )}
+    <g ref={node} data-slot="chart-3d-marks">
+      {renderer === "svg" &&
+        drawn.map(({ key, points, r, fill, stroke }) =>
+          r === undefined ? (
+            <path
+              key={key}
+              d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+              fill={fill}
+              stroke={stroke ?? fill}
+              strokeWidth={0.5}
+              strokeLinejoin="round"
+            />
+          ) : (
+            // Rounded like a path, so the server and the browser, whose last
+            // bits of a sine differ, write the same HTML.
+            <circle
+              key={key}
+              cx={+points[0].x.toFixed(2)}
+              cy={+points[0].y.toFixed(2)}
+              r={+r.toFixed(2)}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={stroke ? 1 : undefined}
+            />
+          )
+        )}
     </g>
   )
 }
@@ -2339,6 +2348,15 @@ function finite(value: unknown) {
 }
 
 /**
+ * `value` as an amount a mark is sized by, such as the area of a dot or the
+ * height of a tile: one below 0, or one that is not a finite number, stands
+ * as 0.
+ */
+function nonNegative(value: unknown) {
+  return finite(value) ? Math.max(0, Number(value)) : 0
+}
+
+/**
  * The entries of `data` and their series, for a chart that lays the entries
  * out along x and the series along z, as the bar and the area chart do. The
  * name of every entry comes from its `index` field, the series are `keys` or
@@ -2449,6 +2467,7 @@ export {
   colorOf,
   faded,
   finite,
+  nonNegative,
   useSeries,
   cubeMarks,
   useTween,

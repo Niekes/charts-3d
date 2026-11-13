@@ -10,6 +10,7 @@ import {
   earth,
   faded,
   finite,
+  nonNegative,
   globe,
   orthographic,
   useChart3D,
@@ -115,7 +116,9 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   // The area of a dot is its value, from 0, so a new one grows as it fades
   // in and a gone one shrinks as it fades out; the peak glides along, so no
   // dot jumps when the largest leaves.
-  const target = Object.fromEntries(entries.map((d, i) => [names[i], value ? sizeOf(d[value]) : 1]))
+  const target = Object.fromEntries(
+    entries.map((d, i) => [names[i], value ? nonNegative(d[value]) : 1])
+  )
   const sizes = useTween(target, 0)
   const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
   const { peak } = useTween({ peak: Math.max(0, ...Object.values(target)) })
@@ -151,9 +154,6 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...dots]} />
 }
-
-/** The value of an entry as the size of its dot: one below 0, or no finite number, stands as 0. */
-const sizeOf = (value: unknown) => (finite(value) ? Math.max(0, Number(value)) : 0)
 
 /**
  * The mark of one dot: a circle whose area is its share of the peak, in the
@@ -193,7 +193,7 @@ function dotTooltip<T extends Record<string, unknown>>(
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = fields.value ? sizeOf(entry[fields.value]) : 0
+  const value = fields.value ? nonNegative(entry[fields.value]) : 0
   return () =>
     tooltip(
       {

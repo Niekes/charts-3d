@@ -109,9 +109,10 @@ the line of the axis shrinks from it.
 _Avoid_: appear, pop in
 
 **Scene**:
-The marks of a chart as plain data, in paint order: every renderer draws
-the scene and the hover hit-tests it, so a chart is data-driven on every
-renderer and never keeps a copy of its own.
+The marks of a container as plain data, in paint order: a set per
+`Marks3D`, in their order in the tree. Every renderer draws the scene and
+the hover hit-tests it, so a chart is data-driven on every renderer and
+never keeps a copy of its own.
 _Avoid_: data binding, virtual DOM, custom elements
 
 **Renderer**:

@@ -45,8 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   land of the globe, falling back to `--muted` and `--border`. The globe demos
   set them for a globe at night and show the populated places of the world,
   from Natural Earth, summed per tile, in nine classes of YlOrRd.
-- `finite` and `colorOf` in the core, for a chart of your own: whether a
-  value is a number the chart can place, and the CSS variable of a config key.
+- `finite`, `nonNegative` and `colorOf` in the core, for a chart of your own:
+  whether a value is a number the chart can place, an amount to size a mark
+  by, and the CSS variable of a config key.
 
 ### Changed
 
@@ -111,12 +112,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a number: the dot of that place drew at a radius of `NaN` and
   shrank every other dot to nothing, and on the globe the other tiles fell
   flat.
-- A `step` of 0, below 0 or `NaN` on the globe draws the tiles of the
-  default, 5 degrees, where it drew no tiles at all.
+- A `step` on the globe that made no tiles - 0, below 0, `NaN`, `Infinity`
+  or wider than 180 degrees - draws the tiles of the default, 5 degrees.
 - More than one `Marks3D` in a container - a chart and marks of your own
-  beside it - all draw and answer the hover: the last one replaced the
-  marks of the others in the scene, so on the canvas they were not drawn
-  and on SVG they showed no tooltip.
+  beside it - all draw and answer the hover, in their order in the tree on
+  every renderer: the last one replaced the marks of the others in the
+  scene, so on the canvas they were not drawn and on SVG they showed no
+  tooltip.
 - Entries of the same name are a bar, or a point of the area chart, of their
   own: two entries named "Jan" drew one bar, the last, where the axis named
   both. Their ticks and tooltips read the name as the data gives it, and
