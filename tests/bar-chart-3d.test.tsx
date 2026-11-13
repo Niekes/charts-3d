@@ -936,3 +936,40 @@ describe("BarChart3D values that are no numbers", () => {
     expect(html).not.toContain("NaN")
   })
 })
+
+describe("BarChart3D entries of the same name", () => {
+  const twice = [
+    { month: "Jan", a: 1 },
+    { month: "Jan", a: 5 },
+    { month: "Feb", a: 2 },
+  ]
+
+  test("each is a bar of its own: as many faces as with three names", () => {
+    const render = (data: typeof twice) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarChart3D data={data} index="month" keys={["a"]} />
+        </ChartContainer3D>
+      )
+    const three = render(twice.map((d, i) => ({ ...d, month: `${d.month}${i}` })))
+    expect(faces(render(twice))).toHaveLength(faces(three).length)
+  })
+
+  test("a bar of a repeated name says that name, and the entry behind it", async () => {
+    const seen: (typeof twice)[number][] = []
+    const view = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D
+          data={twice}
+          index="month"
+          keys={["a"]}
+          tooltip={(t, bar) => (seen.push(bar.entry), t)}
+        />
+      </ChartContainer3D>
+    )
+    await view.send("pointermove", lastFace(view.host))
+    expect(twice).toContain(seen[0])
+    expect(tip(view.host)).toBe(`${seen[0].month}A${seen[0].a}`)
+    await view.unmount()
+  })
+})

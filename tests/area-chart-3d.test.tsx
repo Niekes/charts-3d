@@ -261,6 +261,17 @@ describe("AreaChart3D tooltip", () => {
     await view.unmount()
   })
 
+  test("a segment between entries of the same name names both by that name", async () => {
+    const twice = data.map((d) => ({ ...d, name: "x" }))
+    const given: { items: { label: unknown }[] }[] = []
+    const view = await mount(
+      chart(twice, { tooltip: (t: { items: { label: unknown }[] }) => (given.push(t), t) })
+    )
+    await view.point(middle(tops(view.host)[1].corners))
+    expect(given[0].items.map((item) => item.label)).toEqual(["x", "x"])
+    await view.unmount()
+  })
+
   test("a tooltip of null shows none", async () => {
     const view = await mount(chart(data, { tooltip: () => null }))
     await view.point(middle(tops(view.host)[1].corners))
@@ -621,5 +632,23 @@ describe("AreaChart3D values that are no numbers", () => {
     expect(html).not.toContain("NaN")
     expect(html).not.toContain("Infinity")
     expect(html).toContain(">3<")
+  })
+})
+
+describe("AreaChart3D entries of the same name", () => {
+  test("each is a point of its own: as many faces as with three names", () => {
+    const twice = [
+      { name: "x", a: 1, b: 2 },
+      { name: "x", a: 3, b: 1 },
+      { name: "y", a: 2, b: 4 },
+    ]
+    const render = (rows: typeof twice) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <AreaChart3D data={rows} index="name" />
+        </ChartContainer3D>
+      ).match(/<path [^>]*color-mix/g) ?? []
+    const three = render(twice.map((d, i) => ({ ...d, name: `${d.name}${i}` })))
+    expect(render(twice)).toHaveLength(three.length)
   })
 })

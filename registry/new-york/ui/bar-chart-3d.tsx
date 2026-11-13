@@ -25,7 +25,7 @@ import {
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per row of bars, with a value per series. */
   data: T[]
-  /** The field that names each entry, such as "month"; a bar follows its name through updates, so the names should be unique. */
+  /** The field that names each entry, such as "month"; a bar follows its name through updates, and an entry of a name that repeats is a bar of its own. */
   index: keyof T & string
   /**
    * The fields that hold the series, one row of bars each.
@@ -69,7 +69,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
   // grows from the floor, and a gone one shrinks back into it. The rows glide
   // to their new cells when the data reorders; a gone row stands in its cell
   // while its bars shrink and fade away, so a flat bar never pops.
-  const { series, target, entries, values, rows, presence, labels } = useSeries({
+  const { series, target, entries, values, rows, presence, labels, nameOf } = useSeries({
     data,
     index,
     keys,
@@ -95,7 +95,12 @@ export function BarChart3D<T extends Record<string, unknown>>({
             id: `${bar.name}-${bar.key}`,
             faces: bar.faces,
             color: colorOf(bar.key),
-            tooltip: barTooltip(bar, entries.get(bar.name), target, { config, format, tooltip }),
+            tooltip: barTooltip(
+              { id: bar.name, name: nameOf(bar.name), key: bar.key },
+              entries.get(bar.name),
+              target,
+              { config, format, tooltip }
+            ),
             opacity: presence[bar.name],
           })
         )}
@@ -193,7 +198,7 @@ function barCorners(
  * says nothing.
  */
 function barTooltip<T extends Record<string, unknown>>(
-  { name, key }: { name: string; key: string },
+  { id, name, key }: { id: string; name: string; key: string },
   entry: T | undefined,
   target: Record<string, number>,
   {
@@ -203,7 +208,7 @@ function barTooltip<T extends Record<string, unknown>>(
   }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = target[`${name}-${key}`]
+  const value = target[`${id}-${key}`]
   return () =>
     tooltip(
       {

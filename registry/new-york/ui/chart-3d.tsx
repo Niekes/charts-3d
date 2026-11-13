@@ -2518,7 +2518,9 @@ function finite(value: unknown) {
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
  * still among them. `labels` name the ticks: the entry at a tick of x, through
  * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
- * tick of z. `entries` holds the entry behind every name still in the data.
+ * tick of z. Every entry is keyed by its id - its name, made unique where a
+ * name repeats - and `nameOf` reads the name back; `entries` holds the entry
+ * behind every id still in the data.
  */
 function useSeries<T extends Record<string, unknown>>({
   data,
@@ -2534,9 +2536,10 @@ function useSeries<T extends Record<string, unknown>>({
   const { config } = useChart3D()
   const series = keys ?? Object.keys(config)
   const names = data.map((d) => String(d[index] ?? ""))
+  const ids = uniqueIds(names)
   const target = Object.fromEntries(
     data.flatMap((d, i) =>
-      series.map((key) => [`${names[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+      series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
     )
   )
   const labels = {
@@ -2547,13 +2550,35 @@ function useSeries<T extends Record<string, unknown>>({
   return {
     series,
     target,
-    entries: new Map(data.map((d, i) => [names[i], d])),
+    entries: new Map(data.map((d, i) => [ids[i], d])),
     values: useTween(target, 0),
-    rows: useTween(Object.fromEntries(names.map((name, i) => [name, i]))),
-    presence: useTween(Object.fromEntries(names.map((name) => [name, 1])), 0),
+    rows: useTween(Object.fromEntries(ids.map((id, i) => [id, i]))),
+    presence: useTween(Object.fromEntries(ids.map((id) => [id, 1])), 0),
     labels,
+    nameOf,
   }
 }
+
+// Between a name and the count of its repeat, in the id of an entry: no name holds it.
+const REPEAT = "\u0000"
+
+/**
+ * An id per name, unique: a name the first time, the name and its count when
+ * it comes again, so entries of the same name are entries of their own. An
+ * entry keeps its id through updates as long as no entry of its name comes
+ * before it.
+ */
+function uniqueIds(names: string[]) {
+  const seen = new Map<string, number>()
+  return names.map((name) => {
+    const count = (seen.get(name) ?? 0) + 1
+    seen.set(name, count)
+    return count === 1 ? name : `${name}${REPEAT}${count}`
+  })
+}
+
+/** The name of the entry of `id`, as its data names it. */
+const nameOf = (id: string) => id.split(REPEAT)[0]
 
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(
