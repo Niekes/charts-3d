@@ -418,3 +418,19 @@ describe("SurfaceChart3D focus", () => {
     host.remove()
   })
 })
+
+describe("SurfaceChart3D without a config", () => {
+  test("an empty config has no keys for the color ramp: the surface draws all the same, colorless", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <SurfaceChart3D
+          data={[
+            [1, 2],
+            [3, 4],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<path [^>]*var\(--color-undefined\)/g)).toHaveLength(1)
+  })
+})

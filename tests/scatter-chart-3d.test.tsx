@@ -460,3 +460,15 @@ describe("ScatterChart3D series from the data", () => {
     expect(html).toContain('fill="var(--color-Iris\\20 setosa)"')
   })
 })
+
+describe("ScatterChart3D without a config", () => {
+  test("an empty config has no first key to color the points with: they draw all the same, colorless", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <ScatterChart3D data={[{ x: 1, y: 1, z: 1 }]} x="x" y="y" z="z" />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(1)
+    expect(html).toContain('fill="var(--color-undefined)"')
+  })
+})

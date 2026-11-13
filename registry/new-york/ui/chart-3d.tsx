@@ -1475,8 +1475,12 @@ function ChartGizmo3D({
 const cssName = (text: string) =>
   text.replace(/[^\w-]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `)
 
-/** The color of the config key `key`: the CSS variable the container declares for it. */
-const colorOf = (key: string) => `var(--color-${cssName(key)})`
+/**
+ * The color of the config key `key`: the CSS variable the container declares
+ * for it. A chart without a config has no first key to fall back on, and
+ * draws in a variable nobody declares: colorless, as before.
+ */
+const colorOf = (key: string | undefined) => `var(--color-${cssName(String(key))})`
 
 /**
  * The focus color of a fill, which a lit mark takes: `--chart-3d-focus`, or the
