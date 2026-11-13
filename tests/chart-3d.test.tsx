@@ -1986,29 +1986,50 @@ describe("Axes3D", () => {
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
   })
 
-  test("runs the title of an axis along its edge, never upside down", () => {
+  test("the title of the y axis stands upright over the top end of its line, heading its tick labels", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
-    // The turn of the title that shows, with the camera at `yaw`.
-    const turn = (yaw: number, title: string) => {
-      const html = renderToString(
-        <ChartContainer3D config={{}} defaultView={{ yaw, tilt: Math.PI / 6 }}>
-          <Axes3D spec={spec} world={worldBox(spec)} titles={{ x: "Width", y: "Height" }} />
+    /** The y axis line, the title and the label of the tick at `value`, with the y axis gliding into `y`. */
+    const titled = async (y = spec.y, value = 100) => {
+      const chart = await mount(
+        <ChartContainer3D config={{}} defaultView={{ yaw: Math.PI / 4, tilt: Math.PI / 6 }}>
+          <Axes3D
+            spec={{ ...spec, y }}
+            world={worldBox(spec)}
+            titles={{ x: "Width", y: "Height" }}
+          />
         </ChartContainer3D>
       )
-      const shown = [...html.matchAll(new RegExp(`<text([^>]*)>${title}</text>`, "g"))]
-        .map((m) => m[1])
-        .filter((attrs) => attrs.includes("opacity:1;"))
-      expect(shown).toHaveLength(1)
-      return Number(/rotate\((-?[\d.]+)/.exec(shown[0])?.[1] ?? 0)
+      const shown = (selector: string) =>
+        [
+          ...chart.host.querySelectorAll<SVGElement>(`[data-slot="chart-3d-axes"] ${selector}`),
+        ].filter((el) => Number(el.style.opacity) > 0.5)
+      const at = (el: SVGElement) => ({
+        x: Number(el.getAttribute("x")),
+        y: Number(el.getAttribute("y")),
+      })
+      // The y axis stands vertical on screen; its top end is the higher one.
+      const line = shown('line[stroke-width="1.5"]').find(
+        (l) => l.getAttribute("x1") === l.getAttribute("x2")
+      )!
+      const top = Math.min(...["y1", "y2"].map((a) => Number(line.getAttribute(a))))
+      const text = (content: string) => shown("text").find((t) => t.textContent === content)!
+      const [title, tick, width] = [text("Height"), text(String(value)), text("Width")]
+      await chart.unmount()
+      return { x: Number(line.getAttribute("x1")), top, title: at(title), tick: at(tick), width }
     }
-    // The y axis stands vertical from every side and reads bottom-to-top.
-    expect(turn(Math.PI / 4, "Height")).toBe(-90)
-    expect(turn((5 * Math.PI) / 4, "Height")).toBe(-90)
-    // Seen from behind, the x axis points left: its title turns round to read, leaning as from the front.
-    const [front, behind] = [turn(Math.PI / 4, "Width"), turn((5 * Math.PI) / 4, "Width")]
-    expect(Math.abs(front)).toBeGreaterThan(0)
-    expect(Math.abs(front)).toBeLessThan(90)
-    expect(behind).toBe(front)
+    const { x, top, title, tick, width } = await titled()
+    // Upright, a gap over the label of the top tick, and ending a gap from the line on the
+    // side of the tick labels, like them: "Height" is 6 characters of 12px, "100" 3 of 10px.
+    expect(tick.y).toBeCloseTo(top)
+    expect(title.y).toBeCloseTo(tick.y - 5 - 10 - 6)
+    expect(title.x - x).toBeCloseTo(Math.sign(tick.x - x) * (10 + (6 * 12 * 0.6) / 2))
+    expect(tick.x - x).toBeCloseTo(Math.sign(tick.x - x) * (10 + (3 * 10 * 0.6) / 2))
+    expect(width.getAttribute("transform")).toBeNull()
+    // Mid-glide the line ends at the gliding end, and the title stands over that.
+    const gliding = await titled({ ...spec.y, domain: [0, 60], span: [0, 60] } as AxisSpec, 60)
+    expect(gliding.top).toBeGreaterThan(top)
+    expect(gliding.tick.y).toBeCloseTo(gliding.top)
+    expect(gliding.title.y).toBeCloseTo(gliding.top - 5 - 10 - 6)
   })
 
   test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {

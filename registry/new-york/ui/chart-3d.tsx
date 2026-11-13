@@ -1870,8 +1870,6 @@ type AxisLabel = {
   text: React.ReactNode
   opacity: number
   title?: boolean
-  /** The turn of the text in degrees: a title runs along its edge. */
-  angle?: number
 }
 
 /**
@@ -1988,11 +1986,11 @@ function edgeLabels(
   const [s0, s1] = span ?? [edge[0][axis], edge[edge.length - 1][axis]]
   const start = along(edge, clamp(range.lo, range.hi, s0))
   const end = along(edge, clamp(range.lo, range.hi, s1))
-  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const head = title
-    ? titleLabel(`${id}-title`, axis, title, middle, n, GAP + depth + GAP)
+    ? titleLabel(`${id}-title`, axis, title, start, end, n, ranged, depth)
     : undefined
-  if (head && rows === 2) head.shift = row
+  // A second row of tick labels pushes the title of a floor axis out with it; the y title heads the first row.
+  if (head && rows === 2 && axis !== "y") head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
   hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
@@ -2008,44 +2006,36 @@ function edgeLabels(
 }
 
 /**
- * The title of an axis, at `middle` of its edge: its text runs along the
- * edge, square to its `normal`, `gap` beyond the tick labels, and never
- * upside down, so a vertical edge reads bottom-to-top. Its box is the
- * upright extent of the turned text, which the labels of the other axes
- * keep clear of.
+ * The title of an axis, upright. The y axis has a free end, the top: its
+ * title stands a gap over its tick labels and the top end of its line, and
+ * heads the labels, its edge on their side of the axis in line with theirs.
+ * A floor axis ends in corners the other axes label, so its title sits
+ * beyond its tick labels, at the middle of its edge, `depth` being how far
+ * they reach out.
  */
 function titleLabel(
   key: string,
   axis: keyof AxesSpec,
   text: React.ReactNode,
-  middle: Point2D,
+  start: Point2D,
+  end: Point2D,
   normal: Point2D,
-  gap: number
+  ticks: AxisLabel[],
+  depth: number
 ): AxisLabel {
   const h = 12
-  const long = textWidth(text, h)
-  // Square to the normal, which every edge has, where an axis of one tick has no line to run along.
-  // In whole tenths of a degree, so an edge a hair off the vertical does not flip from frame to frame.
-  let tenths = Math.round((Math.atan2(normal.x, -normal.y) * 1800) / Math.PI)
-  if (tenths >= 900) tenths -= 1800
-  else if (tenths < -900) tenths += 1800
-  const angle = tenths / 10
-  const [c, s] = [Math.cos((angle * Math.PI) / 180), Math.sin((angle * Math.PI) / 180)].map(
-    Math.abs
+  const w = textWidth(text, h)
+  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+  const label = { key, axis, text, title: true, opacity: 1, shift: ZERO, w, h }
+  if (axis !== "y") return { ...label, at: beside(middle, normal, w, h, GAP + depth + GAP) }
+  // The y axis stands upright on screen: over its higher end, and over a label slid past it.
+  const over = Math.min(
+    start.y,
+    end.y,
+    ...ticks.filter((t) => t.opacity > 0).map((t) => t.at.y + t.shift.y - t.h / 2)
   )
-  return {
-    key,
-    axis,
-    text,
-    angle,
-    title: true,
-    opacity: 1,
-    shift: ZERO,
-    // Along the edge, the text stands one line deep beside it, whatever its length.
-    at: beside(middle, normal, h, h, gap),
-    w: c * long + s * h,
-    h: s * long + c * h,
-  }
+  const side = Math.sign(normal.x) || -1
+  return { ...label, at: { x: middle.x + side * (GAP + w / 2), y: over - GAP - h / 2 } }
 }
 
 /**
@@ -2202,12 +2192,11 @@ function AxisLine3D({
  * A label of the chart box. Its place follows the camera at once; a change
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
-function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { label: AxisLabel }) {
+function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: AxisLabel }) {
   return (
     <text
       x={at.x}
       y={at.y}
-      transform={angle ? `rotate(${angle} ${at.x} ${at.y})` : undefined}
       textAnchor="middle"
       dominantBaseline="central"
       style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
