@@ -559,6 +559,8 @@ describe("AreaChart3D renderers", () => {
       shaderSource: vi.fn(),
       compileShader: vi.fn(),
       createBuffer: vi.fn(() => ({})),
+      getExtension: vi.fn(() => null),
+      isContextLost: vi.fn(() => false),
       TRIANGLE_FAN: 6,
     }
     // A canvas gives out one context only: another type on the same element is null.

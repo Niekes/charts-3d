@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
+  for support hands its context back at once - and a chart that loses its
+  context, on a page with more WebGL charts than the browser allows or when
+  the GPU resets, falls back to `"canvas"` and keeps drawing, where it
+  stayed blank (#22).
 - An `animationDuration` that turns 0 while a chart glides makes it jump to
   the new data: the marks vanished, their numbers `NaN`, until the data
   changed again.

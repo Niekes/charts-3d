@@ -289,7 +289,13 @@ every renderer, so text stays sharp and the theme stays in CSS.
   draws - `Marks3D`, `paint`, `paintGL` - so a shape one renderer misses fails
   to compile.
 - **WebGL joins the same chain.** `"webgl"` probes
-  `getContext("webgl")` and falls back to `"canvas"`. Its paint function
+  `getContext("webgl")` and falls back to `"canvas"`. The probe hands its
+  context back at once with `WEBGL_lose_context`, so a chart holds one
+  context, not two: a browser gives a page about 16 and drops the oldest. A
+  chart that loses its context - to that limit, or to a reset of the GPU -
+  falls back to `"canvas"` on `webglcontextlost` and stays there (see
+  Fallback in GLOSSARY.md); it never restores, as a restored context would
+  take the one of the next chart. Its paint function
   fills the same marks - a polygon of up to four corners that is convex, or a
   circle of 12 segments, as one fan, any other through the stencil buffer,
   even-odd, so a concave one such as the front of a ribbon or a coast fills as

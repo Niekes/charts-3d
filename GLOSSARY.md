@@ -119,6 +119,12 @@ filled on the GPU on webgl; the box, its labels, the tooltip and the legend
 stay SVG and HTML with every renderer.
 _Avoid_: painter, backend, layer
 
+**Fallback**:
+The renderer a chart draws with where the requested one is not to be had:
+webgl falls to canvas, canvas to SVG. A chart falls when it starts, and
+again when the browser takes its webgl away; it never climbs back on its own.
+_Avoid_: degradation, downgrade, polyfill
+
 **Mark shape**:
 The form of a mark: a polygon, or a circle around its one point. The shapes
 are a closed vocabulary: a new one joins every renderer and the parity test

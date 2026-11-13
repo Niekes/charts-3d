@@ -56,7 +56,7 @@ The marks of a chart - its bars, points and faces - are drawn by the renderer of
 <ChartContainer3D config={chartConfig} renderer="webgl">
 ```
 
-The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has the requested renderer, `"webgl"` falling back to `"canvas"`, and stays SVG where it has none.
+The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has the requested renderer, `"webgl"` falling back to `"canvas"`, and stays SVG where it has none. A browser gives a page only so many WebGL contexts, about 16; a chart that loses its own, on a page with more charts than that or when the GPU resets, falls back to `"canvas"` and keeps drawing.
 
 ## Shortcuts
 
