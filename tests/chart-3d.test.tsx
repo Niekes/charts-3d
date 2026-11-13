@@ -2128,29 +2128,95 @@ describe("Axes3D", () => {
     expect(html).toContain("<tspan>z<!-- -->10</tspan>")
   })
 
-  test("runs the title of an axis along its edge, never upside down", () => {
+  test("the title of the y axis stands over the top end of its line, its edge on the line, clear of the top of the box", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
-    // The turn of the title that shows, with the camera at `yaw`.
-    const turn = (yaw: number, title: string) => {
-      const html = renderToString(
+    /** The y axis line, the title and the label of the tick at `value`, with the y axis gliding into `y`. */
+    const titled = async (y = spec.y, value = 100, yaw = Math.PI / 4) => {
+      const chart = await mount(
         <ChartContainer3D config={{}} defaultView={{ yaw, tilt: Math.PI / 6 }}>
-          <Axes3D spec={spec} world={worldBox(spec)} titles={{ x: "Width", y: "Height" }} />
+          <Axes3D
+            spec={{ ...spec, y }}
+            world={worldBox(spec)}
+            titles={{ x: "Width", y: "Height" }}
+          />
         </ChartContainer3D>
       )
-      const shown = [...html.matchAll(new RegExp(`<text([^>]*)>${title}</text>`, "g"))]
-        .map((m) => m[1])
-        .filter((attrs) => attrs.includes("opacity:1;"))
-      expect(shown).toHaveLength(1)
-      return Number(/rotate\((-?[\d.]+)/.exec(shown[0])?.[1] ?? 0)
+      const shown = (selector: string) =>
+        [
+          ...chart.host.querySelectorAll<SVGElement>(`[data-slot="chart-3d-axes"] ${selector}`),
+        ].filter((el) => Number(el.style.opacity) > 0.5)
+      const at = (el: SVGElement) => ({
+        x: Number(el.getAttribute("x")),
+        y: Number(el.getAttribute("y")),
+      })
+      // The y axis stands vertical on screen; its top end is the higher one.
+      const line = shown('line[stroke-width="1.5"]').find(
+        (l) => l.getAttribute("x1") === l.getAttribute("x2")
+      )!
+      const x = Number(line.getAttribute("x1"))
+      const top = Math.min(...["y1", "y2"].map((a) => Number(line.getAttribute(a))))
+      const text = (content: string) => shown("text").find((t) => t.textContent === content)!
+      const [title, tick, width] = [text("Height"), text(String(value)), text("Width")]
+      // The box's side of the line, away from the tick label.
+      const side = Math.sign(x - at(tick).x)
+      // The corners of the walls as drawn next to the top end of the line: where the top of the box leaves it.
+      const next = [...chart.host.querySelectorAll('[data-slot="chart-3d-axes"] path')]
+        .map((p) =>
+          p
+            .getAttribute("d")!
+            .split("Z")[0]
+            .match(/-?[\d.]+,-?[\d.]+/g)!
+        )
+        .map((quad) => quad.map((s) => s.split(",").map(Number)))
+        .flatMap((quad) =>
+          quad.flatMap(([px, py], i) =>
+            Math.abs(px - x) < 1e-6 && Math.abs(py - top) < 1e-6
+              ? [quad[(i + 1) % 4], quad[(i + 3) % 4]]
+              : []
+          )
+        )
+        .filter(([px]) => Math.abs(px - x) > 1e-6)
+      // The top of the box under the title: the corner, and the height of each edge leaving it on the
+      // title's side at the far end of the text - "Height" is 6 characters of 12px.
+      const w = 6 * 12 * 0.6
+      const under = Math.min(
+        top,
+        ...next
+          .filter(([nx]) => (nx - x) * side > 0)
+          .map(([nx, ny]) => top + ((ny - top) * side * w) / (nx - x))
+      )
+      await chart.unmount()
+      return {
+        x,
+        top,
+        under,
+        side,
+        title: at(title),
+        anchor: title.getAttribute("text-anchor"),
+        tick: at(tick),
+        width,
+      }
     }
-    // The y axis stands vertical from every side and reads bottom-to-top.
-    expect(turn(Math.PI / 4, "Height")).toBe(-90)
-    expect(turn((5 * Math.PI) / 4, "Height")).toBe(-90)
-    // Seen from behind, the x axis points left: its title turns round to read, leaning as from the front.
-    const [front, behind] = [turn(Math.PI / 4, "Width"), turn((5 * Math.PI) / 4, "Width")]
-    expect(Math.abs(front)).toBeGreaterThan(0)
-    expect(Math.abs(front)).toBeLessThan(90)
-    expect(behind).toBe(front)
+    const { x, top, under, side, title, anchor, tick, width } = await titled()
+    // Its edge on the line, the text running over the box, away from the tick labels, which keep their side:
+    // "100" is 3 characters of 10px.
+    expect(tick.y).toBeCloseTo(top)
+    expect(tick.x - x).toBeCloseTo(-side * (10 + (3 * 10 * 0.6) / 2))
+    expect(title.x).toBeCloseTo(x)
+    expect(anchor).toBe(side > 0 ? "start" : "end")
+    // Its bottom a gap over the top of the box under it: from this view the edge rises under the title.
+    expect(under).toBeLessThan(top - 1)
+    expect(title.y).toBeCloseTo(under - 10 - 6)
+    expect(width.getAttribute("transform")).toBeNull()
+    // Mid-glide the line ends at the gliding end, the walls with it, and the title stands over that.
+    const gliding = await titled({ ...spec.y, domain: [0, 60], span: [0, 60] } as AxisSpec, 60)
+    expect(gliding.top).toBeGreaterThan(top)
+    expect(gliding.tick.y).toBeCloseTo(gliding.top)
+    expect(gliding.title.y).toBeCloseTo(gliding.under - 10 - 6)
+    // Turned further, the edge under the title climbs more than three gaps: the title rises that far and no further.
+    const steep = await titled(spec.y, 100, Math.PI / 3)
+    expect(steep.under).toBeLessThan(steep.top - 30)
+    expect(steep.title.y).toBeCloseTo(steep.top - 30 - 10 - 6)
   })
 
   test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {
