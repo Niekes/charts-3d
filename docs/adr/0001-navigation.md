@@ -49,3 +49,12 @@ zoomed out, and the picture flew eight times as far under the pointer; now
 the drag moves it as far as it did, and an arrow key turns it as far on
 screen, as the 3D viewers of the browser slow their rotation as the camera
 nears. The zoom itself was a factor per tick already, and stays one.
+
+Amended 2026-11-12: the wheel zooms to the cursor - the point under it stays
+where it is, zooming in and out alike, as in maps and design tools, so
+zooming in and back out lands on the same view. The zoom therefore moves the
+pan with it, by the zoom after its limits: at 1/4 and 8 the chart stands
+still instead of sliding. A trackpad pinch anchors the same way, because it
+arrives as the wheel. `+` and `-` have no cursor and keep zooming to the
+middle of the chart, wherever the pointer rests. There is no prop to get the
+zoom to the centre back: the gestures are identity (ADR-0004).

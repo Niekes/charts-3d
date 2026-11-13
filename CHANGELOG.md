@@ -61,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   twice as fast (ADR-0007).
 - The choropleth leaves out the land ring under a region it colors, so a
   colored region is drawn once.
+- The wheel and a trackpad pinch zoom to the cursor: the point under it stays
+  where it is, so the zoom moves `pan` of the view with it, and at the limits
+  of the zoom the chart stands still. `+` and `-` zoom to the middle of the
+  chart, as before (ADR-0001).
 
 ### Fixed
 

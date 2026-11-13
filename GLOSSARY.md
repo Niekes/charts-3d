@@ -193,7 +193,9 @@ Shift and an arrow key.
 _Avoid_: Space and a drag (gone), Cmd and drag (the browser and the OS take it), scroll, move the camera
 
 **Zoom**:
-Moving the camera closer, with the platform modifier and the wheel - ⌘ on a
-Mac, Ctrl elsewhere, and a trackpad pinch arrives as Ctrl and the wheel on
-every platform - or `+` and `-`. The wheel alone scrolls the page.
-_Avoid_: pinch without Ctrl, dolly, scale
+Moving the camera closer to the point under the cursor, which stays where it
+is, with the platform modifier and the wheel - ⌘ on a Mac, Ctrl elsewhere,
+and a trackpad pinch arrives as Ctrl and the wheel on every platform - or,
+with `+` and `-`, to the middle of the chart. The wheel alone scrolls the
+page.
+_Avoid_: pinch without Ctrl, dolly, scale, zoom to the centre (the wheel)
