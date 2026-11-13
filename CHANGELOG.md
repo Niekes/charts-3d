@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tooltip on the choropleth: the larger region is painted first, and
   the hole of the region around it is no longer drawn as a second polygon
   over it (#19).
+- A `<` in the `id`, a key or a color of a chart is escaped where the
+  container writes them into its style element, so a config built from the
+  input of users cannot close that element on a server-rendered page.
+  Whether the text is CSS stays with the app (#25).
 
 ## [0.6.0] - 2026-11-05
 

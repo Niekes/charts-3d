@@ -113,6 +113,36 @@ describe("ChartContainer3D", () => {
     expect(html.split(".dark [data-chart=chart-t]")[1]).not.toContain("--color-b")
   })
 
+  test("config text cannot close the style element of a server-rendered page", () => {
+    const attack = "</style><script>alert(1)</script>"
+    const html = renderToString(
+      <ChartContainer3D
+        id={attack}
+        config={{
+          [attack]: { color: attack },
+          b: { theme: { light: attack, dark: attack } },
+        }}
+      >
+        {null}
+      </ChartContainer3D>
+    )
+    const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"))
+    expect(html.split("</style>")).toHaveLength(2)
+    expect(html).not.toContain("<script")
+    expect(style).toContain(".dark [data-chart=chart-\\3c /style>")
+    expect(style).toContain("--color-b: \\3c /style>")
+  })
+
+  test("nor can the id of a chart without colors", () => {
+    const html = renderToString(
+      <ChartContainer3D id="</style><script>" config={{}}>
+        {null}
+      </ChartContainer3D>
+    )
+    expect(html.split("</style>")).toHaveLength(2)
+    expect(html).not.toContain("<script")
+  })
+
   test("legend shows the config below the chart", () => {
     const html = renderToString(
       <ChartContainer3D config={{ a: { label: "Apples", color: "red" } }} legend>
