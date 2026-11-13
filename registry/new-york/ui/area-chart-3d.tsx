@@ -32,7 +32,7 @@ import {
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per point along x, with a value per series. */
   data: T[]
-  /** The field that names each entry, such as "year"; a point follows its name through updates, and an entry of a name that repeats is a point of its own. */
+  /** The field that names each entry, such as "year"; a point follows its name through updates, and an entry of a name that repeats is, in the order of the data, a point of its own. */
   index: keyof T & string
   /**
    * The fields that hold the series, one ribbon each.

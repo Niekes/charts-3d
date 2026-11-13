@@ -932,9 +932,18 @@ describe("BarChart3D entries of the same name", () => {
         />
       </ChartContainer3D>
     )
-    await view.send("pointermove", lastFace(view.host))
-    expect(twice).toContain(seen[0])
-    expect(tip(view.host)).toBe(`${seen[0].month}A${seen[0].a}`)
+    // Every face under the pointer in turn: each bar answers, the second "Jan" too.
+    const said = new Set<string>()
+    for (const face of view.host.querySelectorAll('path[fill^="color-mix"]')) {
+      const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      await view.send("pointermove", { clientX, clientY })
+      said.add(tip(view.host))
+    }
+    expect([...said].sort()).toEqual(["FebA2", "JanA1", "JanA5"])
+    expect(new Set(seen)).toEqual(new Set(twice))
     await view.unmount()
   })
 })

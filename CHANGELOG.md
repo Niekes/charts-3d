@@ -104,11 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `var(--color-desktop)` as before.
 - A value of `Infinity` in the bar and the area chart stands as 0, as one
   that is not a number, and a height of `NaN` or `Infinity` in the surface
-  stands at the lowest of the others: one such value wrote `NaN` into the
-  whole chart. So did a bar chart without data and without series.
+  stands at the lowest of the others, and a cell it touches says nothing on
+  hover: one such value wrote `NaN` into the whole chart. So did a bar chart
+  without data and without series.
 - Entries of the same name are a bar, or a point of the area chart, of their
   own: two entries named "Jan" drew one bar, the last, where the axis named
-  both. Their ticks and tooltips read the name as the data gives it.
+  both. Their ticks and tooltips read the name as the data gives it, and
+  the order of the data tells them apart through an update.
 - A chart taken out of a container that stays takes its marks along: the
   hover showed the tooltips of its marks over the empty chart, and the canvas
   kept painting them.

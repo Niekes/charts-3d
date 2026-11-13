@@ -2378,14 +2378,15 @@ function useSeries<T extends Record<string, unknown>>({
   }
 }
 
-// Between a name and the count of its repeat, in the id of an entry: no name holds it.
+// Between a name and the count of its repeat, in the id of an entry: a
+// character no name of the data is expected to hold.
 const REPEAT = "\u0000"
 
 /**
  * An id per name, unique: a name the first time, the name and its count when
- * it comes again, so entries of the same name are entries of their own. An
- * entry keeps its id through updates as long as no entry of its name comes
- * before it.
+ * it comes again, so entries of the same name are entries of their own.
+ * Nothing else tells them apart, so the order of the data does: the first
+ * "Jan" stays the first through an update, whichever entry that is.
  */
 function uniqueIds(names: string[]) {
   const seen = new Map<string, number>()

@@ -124,7 +124,7 @@ export function SurfaceChart3D({
         quad,
         fade,
         { lo, hi, low, high },
-        cellTooltip(quad, data, { format, titles, tooltip })
+        cellTooltip(quad, raw, { format, titles, tooltip })
       )
     )
 
@@ -143,7 +143,8 @@ type GridPoint = Point3D & { r: number; c: number }
  * What a cell says on hover, made when the pointer lands on it: its height,
  * the mean of its four corners in the data, as the ticks of y name it - or
  * what `tooltip` makes of that. A cell on its way out of the data says
- * nothing.
+ * nothing, and so does one with a height that is no number, where the
+ * stand-in at the floor would make a value up.
  */
 function cellTooltip(
   quad: GridPlane<GridPoint>,
@@ -154,7 +155,7 @@ function cellTooltip(
     tooltip = (tip) => tip,
   }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  if (quad.some((p) => data[p.r]?.[p.c] === undefined)) return undefined
+  if (quad.some((p) => !finite(data[p.r]?.[p.c]))) return undefined
   return () => {
     const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))

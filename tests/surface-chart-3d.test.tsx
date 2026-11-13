@@ -172,6 +172,24 @@ describe("SurfaceChart3D tooltip", () => {
     await view.unmount()
   })
 
+  test("a cell with a height that is no number says nothing, where its stand-in would make one up", async () => {
+    const seen: unknown[] = []
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [10, NaN],
+            [20, 30],
+          ]}
+          tooltip={(tip, cell) => (seen.push(cell), tip)}
+        />
+      </ChartContainer3D>
+    )
+    expect(seen).toEqual([])
+    expect(tip(view.host)).toBe("")
+    await view.unmount()
+  })
+
   test("a tooltip of null shows none", async () => {
     const view = await hovered(
       <ChartContainer3D config={config}>
