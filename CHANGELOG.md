@@ -111,6 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a number: the dot of that place drew at a radius of `NaN` and
   shrank every other dot to nothing, and on the globe the other tiles fell
   flat.
+- A `step` of 0, below 0 or `NaN` on the globe draws the tiles of the
+  default, 5 degrees, where it drew no tiles at all.
 - Entries of the same name are a bar, or a point of the area chart, of their
   own: two entries named "Jan" drew one bar, the last, where the axis named
   both. Their ticks and tooltips read the name as the data gives it, and

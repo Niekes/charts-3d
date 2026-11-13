@@ -761,3 +761,23 @@ describe("GlobeChart3D values that are no numbers", () => {
     expect(html(Infinity)).toBe(html(0))
   })
 })
+
+describe("GlobeChart3D step", () => {
+  test("a step that is not a positive number - 0, below 0, NaN - draws the tiles of the default", () => {
+    const html = (step?: number) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[{ lon: 15, lat: 45, population: 3 }]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={step}
+          />
+        </ChartContainer3D>
+      )
+    expect(faces(html()).length).toBeGreaterThan(0)
+    for (const step of [0, -5, NaN]) expect(html(step)).toBe(html())
+  })
+})

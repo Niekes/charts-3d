@@ -57,7 +57,8 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   label?: keyof T & string
   /**
-   * The width of a tile in degrees, a divisor of 180.
+   * The width of a tile in degrees, a divisor of 180; one that is not a
+   * positive number draws the default.
    * @defaultValue 5
    */
   step?: number
@@ -71,6 +72,9 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   tooltip?: (tooltip: Tooltip3D, data: { entries: T[] }) => Tooltip3D | null
 }
+
+/** The width of a tile in degrees, unless the chart says. */
+const STEP = 5
 
 /** The height of a tile at the ceiling, in the world box. */
 const HEIGHT = 0.4
@@ -109,11 +113,13 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   value,
   series,
   label,
-  step = 5,
+  step: wanted = STEP,
   format,
   tooltip,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
+  // A step of 0 or below would make no tiles at all.
+  const step = wanted > 0 ? wanted : STEP
   const fields = { lon, lat, value, series, label }
   // The value of every tile with an entry, keyed by the tile and its series,
   // so a tile that changes color leaves as one and enters as the other.
