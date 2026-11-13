@@ -1204,8 +1204,9 @@ function colorBytes(
 
 /**
  * Paints `marks` on a webgl `canvas`, from the view box of `width`×`height` to
- * the pixels of the canvas: a polygon ear by ear, a fan of 12 segments per
- * circle, in paint order and without a depth test, the color of each as bytes.
+ * the pixels of the canvas: each as a fan over its outline - through the
+ * stencil where it may have a dent - in paint order and without a depth test,
+ * the color of each as bytes.
  */
 function paintGL(
   canvas: HTMLCanvasElement,
@@ -1216,8 +1217,9 @@ function paintGL(
 ) {
   canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
   canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
-  // useRenderer draws with webgl only where the browser gives one a context.
-  const gl = canvas.getContext("webgl")!
+  // useRenderer draws with webgl only where the browser gives one a context;
+  // one asked for a stencil buffer has it.
+  const gl = canvas.getContext("webgl", { stencil: true })!
   gl.viewport(0, 0, canvas.width, canvas.height)
   gl.disable(gl.DEPTH_TEST)
   gl.enable(gl.BLEND)
@@ -1233,26 +1235,46 @@ function paintGL(
     const [r, g, b, a] = color(css)
     gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
   }
-  const draw = (mode: number, points: Point2D[]) => {
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array(points.flatMap((p) => [p.x, p.y])),
-      gl.DYNAMIC_DRAW
-    )
-    gl.drawArrays(mode, 0, points.length)
-  }
   // A stroke - a ring, a seam - draws as a line loop over the outline,
   // as wide as the platform gives a line.
   const [, widest] = (gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) as Float32Array | null) ?? [1, 1]
   gl.lineWidth(Math.min(1.5 * devicePixelRatio, widest))
   for (const mark of marks) {
+    const outline = outlineOf(mark)
+    const xy = new Float32Array(2 * outline.length)
+    outline.forEach((p, i) => {
+      xy[2 * i] = p.x
+      xy[2 * i + 1] = p.y
+    })
+    gl.bufferData(gl.ARRAY_BUFFER, xy, gl.DYNAMIC_DRAW)
     tint(mark.fill)
-    draw(gl.TRIANGLES, trianglesOf(mark))
-    if (mark.stroke) {
-      tint(mark.stroke)
-      draw(gl.LINE_LOOP, outlineOf(mark))
-    }
+    if (mark.r !== undefined || fans(outline)) gl.drawArrays(gl.TRIANGLE_FAN, 0, outline.length)
+    else fillGL(gl, outline.length)
+    if (!mark.stroke) continue
+    tint(mark.stroke)
+    gl.drawArrays(gl.LINE_LOOP, 0, outline.length)
   }
+}
+
+/**
+ * Fills the polygon in the buffer of `gl`, of `count` corners, whatever its
+ * shape - a dent, as the front of a ribbon or a coast, or a crossing - with no
+ * triangle cut on the CPU. Its fan flips the stencil under each triangle with
+ * the color off, which leaves set what lies under an odd number of them: the
+ * inside, even-odd, as `inside` finds it for the hover. The same fan then
+ * paints where the stencil is set and clears it, so no pixel blends twice.
+ */
+function fillGL(gl: WebGLRenderingContext, count: number) {
+  gl.enable(gl.STENCIL_TEST)
+  gl.colorMask(false, false, false, false)
+  gl.stencilFunc(gl.ALWAYS, 0, 0xff)
+  gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT)
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, count)
+  gl.colorMask(true, true, true, true)
+  gl.stencilFunc(gl.NOTEQUAL, 0, 0xff)
+  gl.stencilOp(gl.KEEP, gl.KEEP, gl.ZERO)
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, count)
+  gl.disable(gl.STENCIL_TEST)
 }
 
 /** The 12 points of the circle around `c` of radius `r`. */
@@ -1261,14 +1283,6 @@ const ringOf = (c: Point2D, r: number) =>
     x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
     y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
   }))
-
-/** The triangles of `mark` as view-box points: its polygon ear by ear, a fan of 12 segments per circle. */
-function trianglesOf(mark: Mark3D): Point2D[] {
-  const { points, r } = mark
-  if (r === undefined) return earsOf(points)
-  const ring = ringOf(points[0], r)
-  return ring.flatMap((p, i) => [points[0], p, ring[(i + 1) % 12]])
-}
 
 /** Twice the signed area of the triangle `a`, `b`, `c`: its sign tells which way it turns, 0 on a line. */
 const turn = (a: Point2D, b: Point2D, c: Point2D) =>
@@ -1279,30 +1293,14 @@ const areaOf = (ring: Point2D[]) =>
   ring.reduce((sum, p, i) => sum + turn(ring[0], p, ring[i + 1] ?? p), 0)
 
 /**
- * The triangles of a polygon, cut off ear by ear, so a concave one - the
- * front of a ribbon - fills as on the canvas, where a fan would spill over
- * its dents. An ear is a corner that turns the way of the polygon, or not at
- * all, with no other corner inside it; a simple polygon always has one. One
- * that crosses itself may have none, and then loses its first corner.
+ * Whether one fan fills `ring` as it is: the face of a bar, a tile. Up to four
+ * corners that never turn opposite ways are convex. With more, a ring may turn
+ * one way and still cross itself, as a star, so it takes the stencil.
  */
-function earsOf(points: Point2D[]): Point2D[] {
-  const left = [...points]
-  const way = Math.sign(areaOf(left))
-  const triangles: Point2D[] = []
-  while (left.length > 3) {
-    const corner = (i: number) => [left.at(i - 1)!, left[i], left[(i + 1) % left.length]]
-    const ear = left.findIndex((_, i) => {
-      const [a, b, c] = corner(i)
-      if (way * turn(a, b, c) < 0) return false
-      return !left.some(
-        (p) => way * turn(a, b, p) > 0 && way * turn(b, c, p) > 0 && way * turn(c, a, p) > 0
-      )
-    })
-    const i = Math.max(0, ear)
-    triangles.push(...corner(i))
-    left.splice(i, 1)
-  }
-  return [...triangles, ...left]
+function fans(ring: Point2D[]) {
+  if (ring.length > 4) return false
+  const turns = ring.map((p, i) => turn(ring.at(i - 1)!, p, ring[(i + 1) % ring.length]))
+  return !(turns.some((t) => t < 0) && turns.some((t) => t > 0))
 }
 
 /** The outline of `mark` as view-box points: its polygon, or the ring of its circle. */

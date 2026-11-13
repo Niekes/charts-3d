@@ -50,7 +50,7 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
 ## Renderers
 
-The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks; `"webgl"` triangulates them on the GPU, for charts with the most.
+The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks; `"webgl"` fills them on the GPU, for charts with the most.
 
 ```tsx
 <ChartContainer3D config={chartConfig} renderer="webgl">
