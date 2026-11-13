@@ -38,6 +38,12 @@ _Avoid_: axis border, box edge line
 A short line at a tick, pointing away from the box.
 _Avoid_: tick stroke, tick
 
+**Axis title**:
+The name of an axis, beside its tick labels at the middle of its chosen
+edge, running along the edge so it reads as part of the box; never upside
+down, so a vertical edge reads bottom-to-top.
+_Avoid_: axis label, caption, title (bare: the tooltip has one too)
+
 **Cell**:
 The span between two neighbouring data positions along an axis of
 arrangement, such as one row of bars.
@@ -54,6 +60,41 @@ _Avoid_: margin, gap
 One shape of a chart - a bar, a point, a face of a flow - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
+
+**Tile**:
+The piece of the globe between two meridians and two parallels, a fixed
+number of degrees wide. A tile with an entry rises from the globe to its
+value; one without an entry is not drawn.
+_Avoid_: cell, hexbin, bin, patch
+
+**Land**:
+The regions of the earth under the marks of a globe, drawn from the GeoJSON
+the chart is given, in the color of a gridline unless the theme gives it
+one. It is scenery: it neither enters nor answers the pointer.
+_Avoid_: countries, map, features, background
+
+**Region**:
+A part of the land with an entry, colored over the land in the color of its
+class - the mark of the choropleth. It fades in and out, since on a map a
+shape that grows would mislead, and answers the pointer with its name and
+its value.
+_Avoid_: country, polygon, area, feature
+
+**Dot**:
+A circle on the land at a place, its area the value of the place - the mark
+of the places chart. It grows from nothing as it fades in, and a dot on the
+far side of the globe is hidden by it.
+_Avoid_: bubble, marker, pin, point
+
+**Ocean**:
+The disc of the globe the land lies on, in the color of a wall unless the
+theme gives it one.
+_Avoid_: sea, sphere, backdrop
+
+**Horizon**:
+The edge of the ocean disc, where the land is cut and a tile beyond it is
+hidden.
+_Avoid_: silhouette, limb, clip
 
 **Enter**:
 A part the new data brings: a mark with a new key, a tick the axis did not
@@ -87,7 +128,7 @@ _Avoid_: mark kind, mark type
 **Parity**:
 The same chart behaves the same on every renderer: every mark draws, and
 hover, tooltip and focus act alike. Only the pixels may differ, such as the
-width of the focus edge.
+width of a ring.
 _Avoid_: pixel identity, visual equality
 
 **Renderer demo**:
@@ -133,11 +174,11 @@ more room: past the right edge it sits to the left, past the top below.
 _Avoid_: alignment, anchor, position
 
 **Focus**:
-The element under the pointer, highlighted with an edge in its own color,
-lightened - or in the focus color, where one is set; the fill never changes.
-Every chart's marks carry their `groups`, naming the marks highlighted
-together: one bar, one point, one cell.
-_Avoid_: selection, active state, fade
+The element under the pointer, lit: its fill in its own color lightened - or
+in the focus color, where one is set; a stroke of its own stays. Every
+chart's marks carry their `groups`, naming the marks lit together: one bar,
+one point, one cell.
+_Avoid_: selection, active state, fade, edge
 
 ## Navigation
 

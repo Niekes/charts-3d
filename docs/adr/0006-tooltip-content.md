@@ -15,7 +15,8 @@ and its items, built from the data behind the mark, its values as the ticks
 name them through `format` - so a small edit spreads it; the second is what
 the chart knows about the mark, in the words of its props: `{ entry, key }`
 for a bar, `{ entry }` for a point, `{ key, entries }` for a face of a
-ribbon, `{ row, column, value }` for a cell. `null` shows none. The box and
+ribbon, `{ row, column, value }` for a cell, `{ entries }` for a tile of the
+globe, `{ entry }` for a region or a place. `null` shows none. The box and
 the items of the tooltip stay the core's, and the container's `tooltip` stays
 the placement. A mark carries its tooltip as a function the core calls when
 the pointer lands on it, so the user's function never runs per mark per

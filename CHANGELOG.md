@@ -12,13 +12,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tooltip` on every chart: a function of what the mark would say, a title
   and its items, and of the data behind the mark - the entry and series key
   of a bar, the entry of a point, the series key and the spanned entries of
-  a face of a ribbon, the row, column and height of a cell - that returns
+  a face of a ribbon, the row, column and height of a cell, the entries on a
+  tile of the globe, the entry of a region or a place - that returns
   what it says, or `null` for nothing. It runs when the pointer lands on the
   mark (ADR-0006).
 - `Mark3D.tooltip` may be a function, which the core calls when the pointer
   lands on the mark, so a chart with thousands of marks pays for one tooltip
   per hover, not one per mark per frame.
 - `useSeries` hands back `entries`, the entry behind every name in the data.
+- `choropleth-chart-3d`: the regions of the land on a globe, each in the
+  color of its class, joined to the data by the `id` of the feature; a
+  region fades in and out, and its name and value show on hover.
+- `places-chart-3d`: a dot on the land at every place, its area the place's
+  value, hidden on the far side of the globe; a new dot grows as it fades in.
+- The geo helpers of the core, for a chart on the globe: `orthographic`,
+  `earth` and `GLOBE_RADIUS`. d3-geo stays with the charts (ADR-0007).
+- `globe-chart-3d`: `label`, the field that names an entry, as the title of
+  the tooltip of its tile.
+- `globe-chart-3d`: a globe of tiles between meridians and parallels, `step`
+  degrees wide, on the land. The tile that holds an entry rises to its value
+  in the color of its series; a new tile grows from the globe as it fades in
+  and a gone one shrinks back. The `land` is a GeoJSON feature collection,
+  cut at the horizon by d3-geo and laid on the ocean disc, flat in the colors
+  of the walls. Regions as the data and hexagons are out of scope by decision
+  (ADR-0007).
+- `globe` in the core: the point at a longitude and latitude on a sphere in
+  the world box, since a chart may not do trigonometry of its own.
+- A chart may declare npm dependencies of its own on its registry item, which
+  land only where that chart installs: the globe's `d3-geo` is the first.
+- `--chart-3d-ocean` and `--chart-3d-land`: the colors of the ocean and the
+  land of the globe, falling back to `--muted` and `--border`. The globe demos
+  set them for a globe at night and show the populated places of the world,
+  from Natural Earth, summed per tile, in nine classes of YlOrRd.
 
 ### Changed
 
@@ -26,12 +51,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the ticks name them through `format`, and the entry of a bar as the
   ticks of x name it. The core sets the tooltip when the pointer lands on a
   mark and a glide never updates it, so it used to freeze a mid-glide number.
-- A mark on its way out of the data - a bar, a point, a segment of a ribbon
-  or a cell fading away - says nothing on hover.
+- A mark on its way out of the data - a bar, a point, a segment of a ribbon,
+  a cell, a tile or a dot fading away - says nothing on hover.
+- A turn - a drag or an arrow key - is divided by the zoom, so the chart
+  moves as far under the pointer zoomed in as zoomed out (ADR-0001).
+- The globe draws no side of a tile thinner than a pixel, projects the faces
+  of the tiles in front of the globe only, and builds a tooltip only for the
+  tile under the pointer: a globe of thousands of flat tiles turns about
+  twice as fast (ADR-0007).
+- The choropleth leaves out the land ring under a region it colors, so a
+  colored region is drawn once.
 - The wheel and a trackpad pinch zoom to the cursor: the point under it stays
   where it is, so the zoom moves `pan` of the view with it, and at the limits
   of the zoom the chart stands still. `+` and `-` zoom to the middle of the
   chart, as before (ADR-0001).
+
+### Fixed
+
+- The SVG renderer rounds the center and the radius of a circle to two
+  decimals, like a path: a sine's last bits differ between the server and
+  the browser, and the dots of the places chart no longer fail to hydrate.
+- The legend wraps where its entries do not fit in one row.
 
 ## [0.6.0] - 2026-11-05
 

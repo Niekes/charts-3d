@@ -27,6 +27,36 @@ export function RendererGrid({
   )
 }
 
+/** A labelled select below a demo, over the options of a demo's knob. */
+export function Select<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { id: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <label className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+      {label}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {options.map(({ id, label }) => (
+          <option key={id} value={id}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 /** The select over the renderers, below every demo. */
 export function RendererSelect({
   renderer,
@@ -35,20 +65,5 @@ export function RendererSelect({
   renderer: Renderer3D
   onChange: (renderer: Renderer3D) => void
 }) {
-  return (
-    <label className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-      Renderer
-      <select
-        value={renderer}
-        onChange={(e) => onChange(e.target.value as Renderer3D)}
-        className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        {renderers.map(({ id, label }) => (
-          <option key={id} value={id}>
-            {label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
+  return <Select label="Renderer" value={renderer} options={renderers} onChange={onChange} />
 }

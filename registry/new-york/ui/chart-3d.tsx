@@ -80,9 +80,9 @@ export type Mark3D = {
   tooltip?: Tooltip3D | (() => Tooltip3D | null)
   /**
    * The marks of the same element as this one: the faces of a bar, the
-   * segments of a flow. Pointing at a mark gives them an edge in the focus
-   * color - `--chart-3d-focus`, or their own fill lightened - until the
-   * pointer leaves the mark; the fill never changes on hover.
+   * segments of a flow. Pointing at a mark fills them with the focus color -
+   * `--chart-3d-focus`, or their own fill lightened - until the pointer
+   * leaves the mark; a stroke of their own stays.
    */
   groups?: string[]
 }
@@ -563,7 +563,9 @@ const ZERO = { x: 0, y: 0 }
 
 /**
  * `view` moved by one step. The tilt stops at the zenith and the nadir, the
- * zoom at 1/4 and 8. A zoom keeps the point `at` where it is, by the zoom
+ * zoom at 1/4 and 8, and a turn is divided by the zoom: zoomed in, a drag
+ * moves the picture under the pointer as far as zoomed out, and a key turns
+ * it as far on screen. A zoom keeps the point `at` where it is, by the zoom
  * after its limits, so the chart stands still at them; without `at` that
  * point is the origin of the chart, and the pan stays.
  */
@@ -571,13 +573,14 @@ function moved(view: View3D, move: Move, initial: View3D): View3D {
   if (move.reset) return initial
   const step = { yaw: 0, tilt: 0, zoom: 1, pan: { x: 0, y: 0 }, ...move }
   const pan = view.pan ?? { x: 0, y: 0 }
-  const zoom = clamp(0.25, 8, (view.zoom ?? 1) * step.zoom)
-  const k = zoom / (view.zoom ?? 1)
+  const from = view.zoom ?? 1
+  const zoom = clamp(0.25, 8, from * step.zoom)
+  const k = zoom / from
   const at = move.at ?? pan
   return {
     ...view,
-    yaw: view.yaw + step.yaw,
-    tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt),
+    yaw: view.yaw + step.yaw / from,
+    tilt: clamp(-Math.PI / 2, Math.PI / 2, view.tilt + step.tilt / from),
     zoom,
     pan: { x: at.x - (at.x - pan.x) * k + step.pan.x, y: at.y - (at.y - pan.y) * k + step.pan.y },
   }
@@ -1001,7 +1004,7 @@ function useFocus(): Focus3D {
   return focus
 }
 
-/** Whether an item shares a group with the focus: the hover highlights those items with an edge. */
+/** Whether an item shares a group with the focus: the hover lights those items. */
 function useLit(items: { groups?: string[] }[]) {
   const { focus } = useChart3D()
   const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
@@ -1217,7 +1220,7 @@ function paintGL(
     )
     gl.drawArrays(mode, 0, points.length)
   }
-  // A stroke - the focus edge, a ring - draws as a line loop over the outline,
+  // A stroke - a ring, a seam - draws as a line loop over the outline,
   // as wide as the platform gives a line.
   const [, widest] = (gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) as Float32Array | null) ?? [1, 1]
   gl.lineWidth(Math.min(1.5 * devicePixelRatio, widest))
@@ -1424,8 +1427,8 @@ function ChartGizmo3D({
 }
 
 /**
- * The focus edge of a fill: `--chart-3d-focus`, or the fill itself lightened,
- * so the highlight carries the color of what it highlights.
+ * The focus color of a fill, which a lit mark takes: `--chart-3d-focus`, or the
+ * fill itself lightened, so the highlight carries the color of what it highlights.
  */
 const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
 
@@ -1436,19 +1439,10 @@ const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${f
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, scene, repaint } = useChart3D()
   const lit = useLit(marks)
-  // The lit marks get an edge in the focus color - `--chart-3d-focus`, their own fill
-  // lightened unless set - unless they carry their own stroke: a background ring turns
-  // into the edge, a flow's inner faces keep their color, so no seams. The fill never changes
-  // on hover, and the order, and with it the depth, stays as painted.
-  const drawn = marks.map((mark) =>
-    lit(mark)
-      ? {
-          ...mark,
-          stroke:
-            mark.stroke && mark.stroke !== "var(--background)" ? mark.stroke : focusOf(mark.fill),
-        }
-      : mark
-  )
+  // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
+  // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
+  // inner faces their seams. The order, and with it the depth, stays as painted.
+  const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
   React.useLayoutEffect(() => {
     scene.current = drawn
     repaint()
@@ -1464,15 +1458,17 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
             d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
             fill={fill}
             stroke={stroke ?? fill}
-            strokeWidth={stroke === focusOf(fill) ? 1.5 : 0.5}
+            strokeWidth={0.5}
             strokeLinejoin="round"
           />
         ) : (
+          // Rounded like a path, so the server and the browser, whose last
+          // bits of a sine differ, write the same HTML.
           <circle
             key={key}
-            cx={points[0].x}
-            cy={points[0].y}
-            r={r}
+            cx={+points[0].x.toFixed(2)}
+            cy={+points[0].y.toFixed(2)}
+            r={+r.toFixed(2)}
             fill={fill}
             stroke={stroke}
             strokeWidth={stroke ? 1 : undefined}
@@ -1708,7 +1704,10 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
 
 function ChartLegend3D({ config }: { config: ChartConfig }) {
   return (
-    <div data-slot="chart-3d-legend" className="flex items-center justify-center gap-4 pt-3">
+    <div
+      data-slot="chart-3d-legend"
+      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3"
+    >
       {Object.entries(config).map(([key, item]) => (
         <div key={key} className="flex items-center gap-1.5">
           {item.icon ? (
@@ -1846,6 +1845,8 @@ type AxisLabel = {
   text: React.ReactNode
   opacity: number
   title?: boolean
+  /** The turn of the text in degrees: a title runs along its edge. */
+  angle?: number
 }
 
 /**
@@ -1963,8 +1964,8 @@ function edgeLabels(
   const start = along(edge, clamp(range.lo, range.hi, s0))
   const end = along(edge, clamp(range.lo, range.hi, s1))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-  const head: AxisLabel | undefined = title
-    ? { ...label(`${id}-title`, middle, title, 12, GAP + depth + GAP), title: true }
+  const head = title
+    ? titleLabel(`${id}-title`, axis, title, middle, n, GAP + depth + GAP)
     : undefined
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
@@ -1979,6 +1980,47 @@ function edgeLabels(
     opacity: ticks[i].opacity,
   }))
   return { chosen, ticks, title: head, line, marks }
+}
+
+/**
+ * The title of an axis, at `middle` of its edge: its text runs along the
+ * edge, square to its `normal`, `gap` beyond the tick labels, and never
+ * upside down, so a vertical edge reads bottom-to-top. Its box is the
+ * upright extent of the turned text, which the labels of the other axes
+ * keep clear of.
+ */
+function titleLabel(
+  key: string,
+  axis: keyof AxesSpec,
+  text: React.ReactNode,
+  middle: Point2D,
+  normal: Point2D,
+  gap: number
+): AxisLabel {
+  const h = 12
+  const long = textWidth(text, h)
+  // Square to the normal, which every edge has, where an axis of one tick has no line to run along.
+  // In whole tenths of a degree, so an edge a hair off the vertical does not flip from frame to frame.
+  let tenths = Math.round((Math.atan2(normal.x, -normal.y) * 1800) / Math.PI)
+  if (tenths >= 900) tenths -= 1800
+  else if (tenths < -900) tenths += 1800
+  const angle = tenths / 10
+  const [c, s] = [Math.cos((angle * Math.PI) / 180), Math.sin((angle * Math.PI) / 180)].map(
+    Math.abs
+  )
+  return {
+    key,
+    axis,
+    text,
+    angle,
+    title: true,
+    opacity: 1,
+    shift: ZERO,
+    // Along the edge, the text stands one line deep beside it, whatever its length.
+    at: beside(middle, normal, h, h, gap),
+    w: c * long + s * h,
+    h: s * long + c * h,
+  }
 }
 
 /**
@@ -2135,11 +2177,12 @@ function AxisLine3D({
  * A label of the chart box. Its place follows the camera at once; a change
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
-function AxisLabel3D({ label: { at, shift, opacity, text, title } }: { label: AxisLabel }) {
+function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { label: AxisLabel }) {
   return (
     <text
       x={at.x}
       y={at.y}
+      transform={angle ? `rotate(${angle} ${at.x} ${at.y})` : undefined}
       textAnchor="middle"
       dominantBaseline="central"
       style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
@@ -2180,6 +2223,117 @@ function worldBox(spec: AxesSpec, depth = 1): World {
     y: linear(spec.y.domain, [1, -1]),
     z: linear(spec.z.domain, [-depth, depth]),
   }
+}
+
+/**
+ * The point at `lon` and `lat`, in degrees, on the sphere of `radius` around
+ * the center of the world box: the prime meridian faces the viewer at yaw 0,
+ * east lies to the right and the north pole is up - towards -y, as the box
+ * counts y. The globe chart builds its tiles from it, since a chart may not
+ * do trigonometry of its own.
+ */
+function globe(lon: number, lat: number, radius = 1): Point3D {
+  const [theta, phi] = [lon, lat].map((degrees) => (degrees * Math.PI) / 180)
+  const flat = radius * Math.cos(phi)
+  return { x: flat * Math.sin(theta), y: -radius * Math.sin(phi), z: flat * Math.cos(theta) }
+}
+
+/** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
+const GLOBE_RADIUS = 1.15
+
+/**
+ * The camera without its perspective, a copy, since d3-3d shares the view of
+ * a camera it is handed: d3-geo has no perspective, so a geo chart projects
+ * its marks without one too, and they stay on the land.
+ */
+function orthographic(camera: Camera3DInstance) {
+  return camera3D()
+    .origin(camera.origin())
+    .scale(camera.scale())
+    .rotateX(camera.rotateX())
+    .rotateY(camera.rotateY())
+}
+
+/** What `earth` sets on a projection of d3-geo: the three setters it needs, each returning the projection. */
+export type GeoProjectionLike<P> = {
+  rotate(angles: [number, number]): P
+  scale(scale: number): P
+  translate(point: [number, number]): P
+}
+
+/**
+ * Sets a projection of d3-geo to the camera: its rotation in degrees, its
+ * scale at the radius of the globe and its origin, so the land turns, pans
+ * and zooms with the marks.
+ */
+function geoView<P extends GeoProjectionLike<P>>(camera: Camera3DInstance, projection: P) {
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  const { x, y } = camera.origin()
+  return projection
+    .rotate([degrees(camera.rotateY()), degrees(camera.rotateX())])
+    .scale(camera.scale() * GLOBE_RADIUS)
+    .translate([x, y])
+}
+
+/**
+ * Stands in for a canvas under d3-geo's `geoPath`: `marks(draw, key, fill)`
+ * runs `draw` and returns every ring it drew, cut at the horizon as d3-geo
+ * cuts it, as a polygon mark keyed `key-i`. A point is not a region: the ring
+ * its `moveTo` began goes with its `arc`.
+ */
+function ringSink() {
+  const rings: Point2D[][] = []
+  return {
+    beginPath: () => {
+      rings.length = 0
+    },
+    moveTo: (x: number, y: number) => {
+      rings.push([{ x, y }])
+    },
+    lineTo: (x: number, y: number) => {
+      rings.at(-1)!.push({ x, y })
+    },
+    closePath: () => {},
+    arc: () => {
+      rings.pop()
+    },
+    marks: (draw: () => void, key: string, fill: string): Mark3D[] => {
+      rings.length = 0
+      draw()
+      return rings.map((points, i) => ({ key: `${key}-${i}`, points, fill }))
+    },
+  }
+}
+
+/**
+ * The earth under the marks of a geo chart: the ocean and the land as marks,
+ * flat in `--chart-3d-ocean` and `--chart-3d-land`, falling back to the
+ * colors of the walls - scenery, grouped by nothing, with no tooltip, that
+ * neither enters nor glides. The chart hands in d3-geo's `geoOrthographic()`
+ * and `geoPath`, so the core carries no d3-geo; `earth` sets the projection
+ * to the camera and draws through a sink that collects every ring, cut at
+ * the horizon, as a polygon. `path` and `sink` come along for a chart that
+ * draws regions of its own: `sink.marks(() => path(feature), key, fill)`.
+ */
+function earth<
+  Feature,
+  P extends GeoProjectionLike<P>,
+  Path extends (object: Feature | { type: "Sphere" }) => unknown,
+>(
+  land: { features: Feature[] },
+  camera: Camera3DInstance,
+  projection: P,
+  geoPath: (projection: P, sink: ReturnType<typeof ringSink>) => Path
+) {
+  const sink = ringSink()
+  const path = geoPath(geoView(camera, projection), sink)
+  const marks = [
+    ...sink.marks(() => path({ type: "Sphere" }), "ocean", "var(--chart-3d-ocean, var(--muted))"),
+    ...land.features.flatMap((feature, i) =>
+      sink.marks(() => path(feature), `land-${i}`, "var(--chart-3d-land, var(--border))")
+    ),
+  ]
+  return { marks, path, sink }
 }
 
 /**
@@ -2297,6 +2451,10 @@ export {
   pad,
   linear,
   worldBox,
+  globe,
+  GLOBE_RADIUS,
+  orthographic,
+  earth,
   intoWorld,
   shade,
   faded,

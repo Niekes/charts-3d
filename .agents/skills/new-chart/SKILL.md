@@ -34,10 +34,10 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   naming what is highlighted together - the bar alone in the bar chart, the
   single point in the scatter -
   so that in every chart, while the pointer is on a mark, its tooltip shows and
-  exactly those marks get an edge in `var(--foreground)` (white in the dark
-  theme, black in the light; the fill never changes); when the pointer leaves
-  the mark or the chart, the edge clears. A chart never highlights anything
-  itself and has no pointer handlers.
+  exactly those marks light up: their fill takes the focus color -
+  `--chart-3d-focus`, or their own fill lightened - and a stroke of their own
+  stays (ADR-0008); when the pointer leaves the mark or the chart, the focus
+  clears. A chart never highlights anything itself and has no pointer handlers.
 - **Interaction only through the container.** A chart adds no key or gesture
   handlers; the camera moves through `SHORTCUTS`/`keymap` of
   `ChartContainer3D`. In the demos the standard gestures stay on - the platform
@@ -52,7 +52,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   (hover highlight).
 - **Project with d3-3d - the gates enforce it** (ADR-0003). The template
   check requires a d3-3d projection generator (`points3D`, `cubes3D`,
-  `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort`; fallow
+  `gridPlanes3D`, ...), imported and called, plus d3-3d's `sort` - or, for
+  a chart of regions alone, d3-geo's `geoPath` (ADR-0007); fallow
   forbids a chart trigonometry (`Math.cos/sin/tan/atan2` - hand-rolled
   projection), the DOM, a canvas and the event loop. Reach for a core helper
   first, then d3-3d or an allowed d3 module, never write your own; a new d3
@@ -84,7 +85,8 @@ events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
 least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
 webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
-chart clears both; new data glides in (`useTween`); the axes follow. New code
+chart clears both; new data glides in (`useTween`); the axes follow, where the
+chart has axes - the globe has none (ADR-0007). New code
 comes with its tests - the coverage gate is 98% in each metric.
 
 ## 4. Docs

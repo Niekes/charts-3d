@@ -1,0 +1,143 @@
+---
+title: Choropleth Chart 3D
+description: The regions of the land on a globe, each in the color of its class.
+---
+
+import ChoroplethChart3DDemo from "@/docs/examples/choropleth-chart-3d-demo"
+import ChoroplethChart3DUpdateDemo from "@/docs/examples/choropleth-chart-3d-update-demo"
+import ChoroplethChart3DEnterDemo from "@/docs/examples/choropleth-chart-3d-enter-demo"
+import ChoroplethChart3DRenderersDemo from "@/docs/examples/choropleth-chart-3d-renderers-demo"
+import ChoroplethChart3DManyDemo from "@/docs/examples/choropleth-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ChoroplethChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/choropleth-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The choropleth colors the regions of the land on a globe. An entry names a
+region by the `id` of its feature - in [world-atlas](https://github.com/topojson/world-atlas)
+the ISO 3166-1 numeric code, `"276"` for Germany - and the region takes the
+color of the entry's `series`, a config key per class; the `value` shows in
+its tooltip, titled by the `label` of the entry or the label of its series. A
+region without an entry stays land, and the last entry on a region wins.
+Nothing grows here: a region fades in with its entry and out without it, and
+one that changes its series leaves as one and enters as the other, since
+motion would mislead on a map.
+
+The demos show the countries of the world from the admin 0 file of
+[Natural Earth](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/)
+(public domain), each in the fifth of the countries its people fall in, in
+five steps of YlOrRd; France and Norway carry no ISO numeric code there and
+get theirs in `docs/examples/countries.ts`. The classes and the fifths live in
+`docs/examples/regions.ts`, not in the chart. The `land` is the one the
+[globe](/docs/components/globe-chart-3d) takes, with the same winding, and it
+turns, pans and zooms with the regions. A few hundred rings draw fine on SVG,
+so the demos start there.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/choropleth-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `ChoroplethChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array d3-geo lucide-react
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/choropleth-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/choropleth-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press the button: the countries are classed by their GDP instead of their
+people, and every country that changes its fifth fades from the one color to
+the other, over the `animationDuration` of its container.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ChoroplethChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/choropleth-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring and drop regions. A country that arrives fades in
+over the land; one that goes fades back to it, the mirror of its entering (see
+Enter in the [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Here the world arrives country by country, from the ones of a hundred million
+people down to every country; the fifths are taken among the countries shown,
+so a country may change its color as others join.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ChoroplethChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/choropleth-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ChoroplethChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/choropleth-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Every country colored, on `"canvas"`, the renderer for many marks, with the
+select for the same scene on SVG and WebGL. The size of a choropleth is its
+land's, not its data's: the 177 regions of world-atlas at 110m are 10,600
+points, which d3-geo cuts at the horizon on every turn of the camera, and a
+colored region is drawn once, in its color alone. At 50m the regions are
+100,000 points, and the cut alone took 100 ms a frame on a laptop, so the
+demos stay at 110m; a finer land is where the budget of this chart ends.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <ChoroplethChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/choropleth-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/choropleth-chart-3d.tsx"
+  name="ChoroplethChart3DProps"
+/>

@@ -155,16 +155,17 @@ describe("AreaChart3D", () => {
 })
 
 describe("AreaChart3D focus", () => {
-  const edge = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
   const tip = (host: HTMLElement) =>
     host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
 
-  test("pointing at a face highlights that face alone with an edge; the fill never changes; leaving clears it", async () => {
+  test("pointing at a face lights the fill of that face alone; leaving clears it", async () => {
     const view = await mount(chart(data))
     const before = marks(view.host).map((m) => m.fill)
-    const edged = () =>
+    const litOnes = () =>
       marks(view.host)
-        .filter((m) => m.el.getAttribute("stroke") === edge(m.fill))
+        .filter((m) => isLit(m.fill))
         .map((m) => m.el)
     // Just above the floor edge of the front of b, the nearer ribbon: the
     // front runs from the first entry down to the floor, along it, and back
@@ -174,25 +175,27 @@ describe("AreaChart3D focus", () => {
     const inside = [x, y - 3]
 
     await view.point(inside)
-    expect(edged()).toEqual([front.el])
-    expect(marks(view.host).map((m) => m.fill)).toEqual(before)
+    // The front alone lights up, its own fill lightened; every other fill stays.
+    expect(litOnes()).toEqual([front.el])
+    const after = marks(view.host).map((m) => m.fill)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f) : f)))
     // The front names the series alone.
     expect(tip(view.host)).toBe("B")
 
     // A segment of the top lights alone, the front goes dark.
     const top = marks(view.host).filter((m) => m.series === "b" && m.corners.length === 4)[1]
     await view.point(middle(top.corners))
-    expect(edged()).toEqual([top.el])
+    expect(litOnes()).toEqual([top.el])
 
     await view.point([5, 5])
-    expect(edged()).toEqual([])
+    expect(litOnes()).toEqual([])
     await view.point(inside)
     await act(() =>
       view.svg.dispatchEvent(
         new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })
       )
     )
-    expect(edged()).toEqual([])
+    expect(litOnes()).toEqual([])
     await view.unmount()
   })
 

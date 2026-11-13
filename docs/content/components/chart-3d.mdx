@@ -146,7 +146,7 @@ What a mark says is built from the data behind it, its values as the ticks name 
 
 ## Focus
 
-A mark or a label can name the groups it belongs to in `groups`. Pointing at a mark fades every mark and label that shares none of its groups to a quarter of its color. The marks fade in place, so the order they paint in, and with it the depth, stays as it was, on the canvas too. Off the marks and while a drag turns the chart the focus stays, so what is in focus can be followed from every side; leaving the chart ends it. Marks without groups never fade.
+A mark can name the groups it belongs to in `groups`. Pointing at a mark lights the fill of every mark that shares one of its groups - the faces of a bar, the segments of a flow - in the focus color: `--chart-3d-focus`, or its own fill lightened (see [Theming](/docs/theming)). A stroke of the mark's own stays, and nothing else changes, so the order the marks paint in, and with it the depth, stays as it was, on the canvas too. Off the mark or off the chart the focus clears; through a drag that turns the chart it stays, so what is in focus can be followed from every side. Marks without groups never light.
 
 ```tsx
 // The marks of a flow share its key; the marks of a node carry the keys of all its flows.
