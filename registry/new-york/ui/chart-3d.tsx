@@ -210,6 +210,9 @@ const modLabel = () => (mac() ? "⌘" : "Ctrl")
 /** The label of the Alt key: ⌥ on a Mac, Alt elsewhere. */
 const altLabel = () => (mac() ? "⌥" : "Alt")
 
+/** The platform never changes, so its store has nothing to tell. */
+const never = () => () => {}
+
 /** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
 const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
 
@@ -427,15 +430,15 @@ function ChartContainer3D({
     >
       <ChartStyle id={chartId} config={config} />
       <div className="relative rounded-lg has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50">
-        <svg
+        <ChartSvg3D
           viewBox={`0 0 ${width} ${height}`}
-          role="img"
-          {...keymapProps(keys, ariaLabel)}
+          keys={keys}
+          label={ariaLabel}
           onPointerLeave={leave}
           {...handlers}
         >
           <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
-        </svg>
+        </ChartSvg3D>
         <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
         <ChartGizmo3D camera={camera} corner={gizmo} />
         <ChartTooltip3D tip={tip} />
@@ -452,16 +455,33 @@ function chartIdOf(id: string | undefined, uniqueId: string) {
 }
 
 /**
- * What the svg says about its keymap: a label that names the drag and the
- * help key if they are on, the keys, the focus only if a key does something
- * and the grab cursor only if a drag does; without one, a touch scrolls the page.
+ * The svg of the chart, saying what `keys` do. The server knows no platform
+ * and says Ctrl; the store renders once more after hydration, with the
+ * modifier of the reader. The panel reads the platform directly: it opens on
+ * the client only.
  */
-function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement> {
+function ChartSvg3D({
+  keys,
+  label,
+  viewBox,
+  ...props
+}: React.ComponentProps<"svg"> & { keys: Keymap; label?: string }) {
+  const mod = React.useSyncExternalStore(never, modLabel, () => "Ctrl")
+  return <svg viewBox={viewBox} role="img" {...keymapProps(keys, mod, label)} {...props} />
+}
+
+/**
+ * What the svg says about its keymap: a label that names the `mod` drag and the
+ * help key if they are on, the keys, the focus only if a key does something
+ * and, if a drag does, `touch-pan-y`: a vertical swipe scrolls the page and
+ * every other touch reaches the chart.
+ */
+function keymapProps(keys: Keymap, mod: string, label?: string): React.SVGProps<SVGSVGElement> {
   const drag = keys.on("dragRotate") || keys.on("dragPan")
   const help = keys.help[0]
   const said = [
     "3D chart.",
-    keys.on("dragRotate") && `${modLabel()} and drag to rotate it.`,
+    keys.on("dragRotate") && `${mod} and drag to rotate it.`,
     help && `Press ${aria(help)} for all shortcuts.`,
   ]
   return {
@@ -471,7 +491,8 @@ function keymapProps(keys: Keymap, label?: string): React.SVGProps<SVGSVGElement
     className: cn(
       "block h-auto w-full outline-hidden select-none mask-x-from-96% mask-y-from-96%",
       // The default cursor stays, so a plain drag only inspects; the modifier and a drag rotate.
-      drag && "touch-none"
+      // A touch has no modifier, so its vertical swipe scrolls the page (ADR-0001).
+      drag && "touch-pan-y"
     ),
   }
 }

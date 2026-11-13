@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, type ReactElement } from "react"
-import { createRoot } from "react-dom/client"
+import { createRoot, hydrateRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 import { box, camera3D, cubes3D, points3D, type AxisSpec } from "d3-3d"
@@ -501,6 +501,18 @@ describe("shortcuts", () => {
     await chart.unmount()
   })
 
+  test("a vertical swipe on the chart scrolls the page", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    // A phone has no modifier to rotate with, so the chart must not trap its swipe.
+    expect(chart.svg.getAttribute("class")).toContain("touch-pan-y")
+    expect(chart.svg.getAttribute("class")).not.toContain("touch-none")
+    await chart.unmount()
+  })
+
   test("an action turned off does nothing and leaves its event to the browser", async () => {
     const chart = await mount(
       <ChartContainer3D
@@ -523,7 +535,7 @@ describe("shortcuts", () => {
     const read = () => view(chart.host)
     chart.svg.setPointerCapture = vi.fn()
     expect(chart.svg.getAttribute("aria-label")).toBe("Sales")
-    expect(chart.svg.getAttribute("class")).not.toContain("touch-none")
+    expect(chart.svg.getAttribute("class")).not.toContain("touch-")
 
     await chart.send(key("ArrowRight"))
     expect(read().yaw).toBeCloseTo(Math.PI / 36)
@@ -898,6 +910,29 @@ describe("pointer", () => {
 
     delete (navigator as { userAgentData?: unknown }).userAgentData
     await chart.unmount()
+  })
+
+  test("server HTML says Ctrl, and hydrated on a Mac the label says ⌘", async () => {
+    const element = (
+      <ChartContainer3D config={{}}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    const host = document.body.appendChild(document.createElement("div"))
+    // The server knows no platform.
+    host.innerHTML = renderToString(element)
+    expect(host.querySelector("svg")!.getAttribute("aria-label")).toContain("Ctrl and drag")
+
+    Object.defineProperty(navigator, "userAgentData", {
+      value: { platform: "MacIntel" },
+      configurable: true,
+    })
+    const root = await act(async () => hydrateRoot(host, element))
+    expect(host.querySelector("svg")!.getAttribute("aria-label")).toContain("⌘ and drag")
+
+    delete (navigator as { userAgentData?: unknown }).userAgentData
+    await act(async () => root.unmount())
+    host.remove()
   })
 
   test("a move within a mark keeps its tooltip, leaving the chart takes it away", async () => {

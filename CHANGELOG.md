@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context, on a page with more WebGL charts than the browser allows or when
   the GPU resets, falls back to `"canvas"` and keeps drawing, where it
   stayed blank (#22).
+- On a phone a vertical swipe on a chart scrolls the page: the svg carries
+  `touch-pan-y` where it took every touch with `touch-none`, for a drag a
+  touch cannot make without a modifier (ADR-0001).
 - The SVG renderer rounds the center and the radius of a circle to two
   decimals, like a path: a sine's last bits differ between the server and
   the browser, and the dots of the places chart no longer fail to hydrate.
