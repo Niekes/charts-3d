@@ -244,6 +244,9 @@ function stubGL() {
     bufferData: vi.fn(),
     drawArrays: vi.fn(),
     lineWidth: vi.fn(),
+    colorMask: vi.fn(),
+    stencilFunc: vi.fn(),
+    stencilOp: vi.fn(),
     getParameter: vi.fn(() => [1, 1]),
     createProgram: vi.fn(() => ({})),
     attachShader: vi.fn(),
@@ -259,8 +262,14 @@ function stubGL() {
     ARRAY_BUFFER: 0x8892,
     DYNAMIC_DRAW: 0x88e8,
     FLOAT: 0x1406,
-    TRIANGLES: 0x0004,
+    TRIANGLE_FAN: 0x0006,
     LINE_LOOP: 0x0002,
+    STENCIL_TEST: 0x0b90,
+    ALWAYS: 0x0207,
+    NOTEQUAL: 0x0205,
+    KEEP: 0x1e00,
+    INVERT: 0x150a,
+    ZERO: 0,
     ALIASED_LINE_WIDTH_RANGE: 0x846e,
     VERTEX_SHADER: 0x8b31,
     FRAGMENT_SHADER: 0x8b30,
@@ -1343,7 +1352,7 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  test("webgl paints the marks as triangles, in paint order, without a depth test, and the hover still finds them", async () => {
+  test("webgl paints the marks as fans, in paint order, without a depth test, and the hover still finds them", async () => {
     const { gl, ctx } = stubGL()
     const chart = await mount(
       <ChartContainer3D config={{}} renderer="webgl">
@@ -1354,13 +1363,15 @@ describe("renderer", () => {
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
-    // The square cuts into 2 triangles of 3 points, the dot into 12 segments
-    // of 3, and its white ring into a line loop of the 12 ring points.
-    expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
-      [0, 6],
-      [0, 36],
-      [0, 12],
+    // The square is a fan of its 4 corners, the dot one of its 12 ring
+    // points, and its white ring a line loop over the same 12.
+    expect(gl.drawArrays.mock.calls).toEqual([
+      [gl.TRIANGLE_FAN, 0, 4],
+      [gl.TRIANGLE_FAN, 0, 12],
+      [gl.LINE_LOOP, 0, 12],
     ])
+    // Nothing here has a dent, so nothing goes through the stencil.
+    expect(gl.stencilOp).not.toHaveBeenCalled()
     // The color of a mark as bytes from the 1×1 canvas, over 255.
     expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1, 1)
     expect(gl.uniform4f).toHaveBeenCalledWith({}, 10 / 255, 20 / 255, 30 / 255, 1)
@@ -1378,24 +1389,16 @@ describe("renderer", () => {
         <Marks3D marks={[{ ...marks[0], stroke: "white" }]} />
       </ChartContainer3D>
     )
-    // The square's 2 triangles, then its outline as a loop of its 4 corners.
-    expect(gl.drawArrays.mock.calls.map(([mode, first, count]) => [mode, first, count])).toEqual([
-      [gl.TRIANGLES, 0, 6],
+    // The square's fan, then its outline as a loop of the same 4 corners.
+    expect(gl.drawArrays.mock.calls).toEqual([
+      [gl.TRIANGLE_FAN, 0, 4],
       [gl.LINE_LOOP, 0, 4],
     ])
     await chart.unmount()
   })
 
-  test("webgl cuts a concave polygon ear by ear: its triangles cover it exactly, where a fan would spill over its dent", async () => {
+  test("webgl fills a polygon with a dent through the stencil: its fan marks the inside without color, then covers it once", async () => {
     const { gl } = stubGL()
-    type P = { x: number; y: number }
-    const area = (p: P[]) =>
-      Math.abs(
-        p.reduce(
-          (sum, a, i) => sum + a.x * p[(i + 1) % p.length].y - p[(i + 1) % p.length].x * a.y,
-          0
-        )
-      ) / 2
     // The front of a ribbon: down from the first point, along the floor, and
     // back along a line that dips between its two last points.
     const ribbon = [
@@ -1406,7 +1409,51 @@ describe("renderer", () => {
       { x: 300, y: 250 },
       { x: 200, y: 100 },
     ]
-    // A star that crosses itself has no inside to cover exactly, but it still paints.
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="webgl">
+        <Marks3D marks={[{ key: "ribbon", points: ribbon, fill: "red" }]} />
+      </ChartContainer3D>
+    )
+    // The fill needs a stencil buffer, which a context has only if asked for one.
+    expect(HTMLCanvasElement.prototype.getContext).toHaveBeenCalledWith("webgl", { stencil: true })
+    expect(gl.enable).toHaveBeenCalledWith(gl.STENCIL_TEST)
+    // The ring goes to the GPU as it is, once, and no triangle is cut on the CPU.
+    expect(gl.bufferData.mock.calls.map(([, xy]) => [...xy])).toEqual([
+      ribbon.flatMap((p) => [p.x, p.y]),
+    ])
+    expect(gl.drawArrays.mock.calls).toEqual([
+      [gl.TRIANGLE_FAN, 0, 6],
+      [gl.TRIANGLE_FAN, 0, 6],
+    ])
+    // The first fan flips the stencil with the color off, the second paints
+    // where it is left set - under an odd number of triangles - and clears it.
+    expect(gl.colorMask.mock.calls).toEqual([
+      [false, false, false, false],
+      [true, true, true, true],
+    ])
+    expect(gl.stencilOp.mock.calls).toEqual([
+      [gl.KEEP, gl.KEEP, gl.INVERT],
+      [gl.KEEP, gl.KEEP, gl.ZERO],
+    ])
+    expect(gl.stencilFunc.mock.calls.map(([when]) => when)).toEqual([gl.ALWAYS, gl.NOTEQUAL])
+    const order = [gl.colorMask, gl.drawArrays].map((spy) => spy.mock.invocationCallOrder)
+    expect(order[0][0]).toBeLessThan(order[1][0])
+    expect(order[1][0]).toBeLessThan(order[0][1])
+    expect(order[0][1]).toBeLessThan(order[1][1])
+    expect(gl.disable).toHaveBeenLastCalledWith(gl.STENCIL_TEST)
+
+    await chart.unmount()
+  })
+
+  test("webgl fills a polygon that crosses itself through the stencil too, so it fills as the hover finds it", async () => {
+    const { gl } = stubGL()
+    // A bowtie of four corners, and a star whose five corners all turn one way.
+    const bowtie = [
+      { x: 100, y: 100 },
+      { x: 200, y: 200 },
+      { x: 200, y: 100 },
+      { x: 100, y: 200 },
+    ]
     const star = [0, 2, 4, 1, 3].map((k) => ({
       x: 300 + 50 * Math.sin((k * 2 * Math.PI) / 5),
       y: 200 - 50 * Math.cos((k * 2 * Math.PI) / 5),
@@ -1415,21 +1462,14 @@ describe("renderer", () => {
       <ChartContainer3D config={{}} renderer="webgl">
         <Marks3D
           marks={[
-            { key: "ribbon", points: ribbon, fill: "red" },
+            { key: "bowtie", points: bowtie, fill: "red" },
             { key: "star", points: star, fill: "blue" },
           ]}
         />
       </ChartContainer3D>
     )
-    const triangles = (call: number) => {
-      const xy = [...(gl.bufferData.mock.calls[call] as unknown as [number, Float32Array])[1]]
-      return Array.from({ length: xy.length / 6 }, (_, i) =>
-        [0, 1, 2].map((k) => ({ x: xy[6 * i + 2 * k], y: xy[6 * i + 2 * k + 1] }))
-      )
-    }
-    expect(triangles(0)).toHaveLength(ribbon.length - 2)
-    expect(triangles(0).reduce((sum, t) => sum + area(t), 0)).toBeCloseTo(area(ribbon))
-    expect(triangles(1)).toHaveLength(star.length - 2)
+    expect(gl.drawArrays.mock.calls.map(([, , count]) => count)).toEqual([4, 4, 5, 5])
+    expect(gl.stencilOp).toHaveBeenCalledTimes(4)
 
     await chart.unmount()
   })
@@ -1507,12 +1547,12 @@ describe("parity", () => {
         expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
         expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
       } else if (gl) {
-        // The square cuts into 2 triangles of 3 points, the dot into 12 segments
-        // of 3, and its white ring into a line loop of the 12 ring points.
-        expect(gl.drawArrays.mock.calls.map(([, first, count]) => [first, count])).toEqual([
-          [0, 6],
-          [0, 36],
-          [0, 12],
+        // The square is a fan of its 4 corners, the dot one of its 12 ring
+        // points, and its white ring a line loop over the same 12.
+        expect(gl.drawArrays.mock.calls).toEqual([
+          [gl.TRIANGLE_FAN, 0, 4],
+          [gl.TRIANGLE_FAN, 0, 12],
+          [gl.LINE_LOOP, 0, 12],
         ])
       } else {
         expect(chart.svg.querySelector('path[fill="red"]')).not.toBeNull()
