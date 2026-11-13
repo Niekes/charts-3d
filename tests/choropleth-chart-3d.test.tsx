@@ -118,6 +118,38 @@ describe("ChoroplethChart3D", () => {
     expect(regions(html, "population")).toHaveLength(1)
     expect(regions(html, "quake")).toHaveLength(1)
   })
+
+  test("a region inside another is painted after it, whatever the order of the data, and the hole it lies in is not filled", () => {
+    // South Africa around Lesotho: the hole is the enclave, wound the other way.
+    const [outer, enclave] = [square("za", -20, -20, 40), square("ls", -5, -5, 10)]
+    const around: GeoJSON.Feature = {
+      ...outer,
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          (outer.geometry as GeoJSON.Polygon).coordinates[0],
+          [...(enclave.geometry as GeoJSON.Polygon).coordinates[0]].reverse(),
+        ],
+      },
+    }
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[
+            { code: "ls", n: 1, type: "quake" },
+            { code: "za", n: 2, type: "population" },
+          ]}
+          land={{ type: "FeatureCollection", features: [enclave, around] }}
+          id="code"
+          value="n"
+          series="type"
+        />
+      </ChartContainer3D>
+    )
+    expect(regions(html, "population")).toHaveLength(1)
+    expect(regions(html, "quake")).toHaveLength(1)
+    expect(html.indexOf("var(--color-population)")).toBeLessThan(html.indexOf("var(--color-quake)"))
+  })
 })
 
 describe("ChoroplethChart3D hover", () => {

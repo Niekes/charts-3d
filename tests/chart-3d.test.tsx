@@ -2478,6 +2478,22 @@ describe("geo helpers", () => {
     expect(sink.marks(() => path({ type: "Feature" }), "r", "red")).toEqual([
       { key: "r-0", points: marks[1].points, fill: "red" },
     ])
+    // A hole is a ring wound the other way than the largest, the outer one: it is left out, not filled.
+    const holed = () => {
+      sink.moveTo(1, 1)
+      sink.lineTo(1, 2)
+      sink.lineTo(2, 2)
+      sink.moveTo(0, 0)
+      sink.lineTo(9, 0)
+      sink.lineTo(9, 9)
+      sink.moveTo(20, 0)
+      sink.lineTo(21, 0)
+      sink.lineTo(21, 1)
+    }
+    expect(sink.marks(holed, "h", "red").map((m) => m.points[0])).toEqual([
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+    ])
   })
 })
 

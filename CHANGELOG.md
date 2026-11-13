@@ -72,6 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decimals, like a path: a sine's last bits differ between the server and
   the browser, and the dots of the places chart no longer fail to hydrate.
 - The legend wraps where its entries do not fit in one row.
+- A region inside another - Lesotho in South Africa - keeps its color and
+  its tooltip on the choropleth: the larger region is painted first, and
+  the hole of the region around it is no longer drawn as a second polygon
+  over it (#19).
 
 ## [0.6.0] - 2026-11-05
 
