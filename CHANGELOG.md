@@ -70,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The webgl renderer. Measured, it drew no faster than the canvas, because
+  projecting the marks on the CPU takes the time, not filling them: the
+  globe's 2,500 tiles ran at about 25 fps on both. `renderer="webgl"` still
+  works and draws on the canvas; the name is deprecated and goes in the next
+  major version. The chart no longer opens a WebGL context at all, so the
+  limit of about 16 per page and the fallback on a lost context are gone.
+
 - `chart-3d` no longer depends on `lucide-react`: the keyboard icon of the
   shortcut button is drawn in the core. A project that installed it for the
   charts alone may remove it.

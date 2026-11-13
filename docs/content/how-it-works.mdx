@@ -21,4 +21,4 @@ Because the charts are SVG, the first frame is part of the HTML. The pages of th
 
 ## Limits
 
-Sorting by depth is exact for bars on one floor and for points. Geometry that intersects itself, such as a very steep surface, can show artifacts. SVG stays fast up to a few thousand elements; beyond that a canvas or WebGL renderer is the better fit, and d3-3d provides the matrix for it.
+Sorting by depth is exact for bars on one floor and for points. Geometry that intersects itself, such as a very steep surface, can show artifacts. SVG stays fast up to a few thousand elements; beyond that the canvas renderer is the better fit.

@@ -22,9 +22,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 - **Data-driven, one scene.** Project the data with d3-3d on every render
   and hand the shapes to the core as `Mark3D`s (`Marks3D`) and `Label3D`s
   (`Labels3D`). The scene is the single data store - the d3 "bind data to
-  virtual elements" idea for canvas/webgl is the scene here: the canvas and
-  the webgl renderer paint it and the hover hit-tests it, whatever the
-  renderer. Never draw on a canvas yourself and never keep a copy of the
+  virtual elements" idea for the canvas is the scene here: the canvas
+  renderer paints it and the hover hit-tests it, whatever the renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
 - **Hover comes from the core.** Give every mark a `tooltip` - a function
   the core calls when the pointer lands on it, built from the data behind the
@@ -82,8 +81,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 Drive the chart the way a user does: render it, send pointer and keyboard
 events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
 `tests/chart-3d.test.tsx` (jsdom has no layout and no canvas). Cover at
-least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
-webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
+least: the marks draw as SVG and on the canvas (`renderer="canvas"`, and
+`"webgl"`, which draws on the canvas too); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
 chart clears both; new data glides in (`useTween`); the axes follow, where the
 chart has axes - the globe has none (ADR-0007). New code

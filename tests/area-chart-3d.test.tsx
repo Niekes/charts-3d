@@ -529,7 +529,7 @@ describe("AreaChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same ribbons, the front of each filled through the stencil", async () => {
+  test("canvas and webgl paint the same ribbons on the canvas, every face of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -543,37 +543,6 @@ describe("AreaChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    const gl = {
-      viewport: vi.fn(),
-      disable: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      useProgram: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4f: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      getAttribLocation: vi.fn(() => 0),
-      enableVertexAttribArray: vi.fn(),
-      bindBuffer: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      bufferData: vi.fn(),
-      drawArrays: vi.fn(),
-      lineWidth: vi.fn(),
-      colorMask: vi.fn(),
-      stencilFunc: vi.fn(),
-      stencilOp: vi.fn(),
-      getParameter: vi.fn(() => [1, 1]),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      getExtension: vi.fn(() => null),
-      isContextLost: vi.fn(() => false),
-      TRIANGLE_FAN: 6,
-    }
     // A canvas gives out one context only: another type on the same element is null.
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
       this: HTMLCanvasElement & { ctxType?: string },
@@ -581,7 +550,7 @@ describe("AreaChart3D renderers", () => {
     ) {
       if (this.ctxType && this.ctxType !== type) return null
       this.ctxType = type
-      return (type === "webgl" ? gl : ctx) as never
+      return (type === "2d" ? ctx : null) as never
     })
     vi.stubGlobal(
       "ResizeObserver",
@@ -604,14 +573,10 @@ describe("AreaChart3D renderers", () => {
     expect(marks(view.host)).toHaveLength(0)
     expect(ctx.fill).toHaveBeenCalledTimes(svg)
 
+    ctx.fill.mockClear()
     await view.render(scene("webgl"))
-    const counts = gl.drawArrays.mock.calls.map(([, , count]) => count)
-    // A quad is one fan of 4; the front of three entries and two floor corners
-    // is a fan of 5 drawn twice: into the stencil, then as its cover.
-    expect(counts.filter((c) => c === 5)).toHaveLength(4)
-    expect(counts.filter((c) => c === 4)).toHaveLength(6)
-    expect(counts).toHaveLength(10)
-    expect(gl.stencilOp).toHaveBeenCalledTimes(4)
+    expect(marks(view.host)).toHaveLength(0)
+    expect(ctx.fill).toHaveBeenCalledTimes(svg)
     await view.unmount()
   })
 })

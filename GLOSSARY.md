@@ -115,15 +115,15 @@ renderer and never keeps a copy of its own.
 _Avoid_: data binding, virtual DOM, custom elements
 
 **Renderer**:
-How the marks are drawn: as SVG elements, painted on a canvas, or
-filled on the GPU on webgl; the box, its labels, the tooltip and the legend
-stay SVG and HTML with every renderer.
+How the marks are drawn: as SVG elements, or painted on a canvas; the box,
+its labels, the tooltip and the legend stay SVG and HTML with every renderer.
+`"webgl"` is a deprecated name of the canvas.
 _Avoid_: painter, backend, layer
 
 **Fallback**:
 The renderer a chart draws with where the requested one is not to be had:
-webgl falls to canvas, canvas to SVG. A chart falls when it starts, and
-again when the browser takes its webgl away; it never climbs back on its own.
+canvas falls to SVG, where the browser has no canvas. A chart falls when it
+starts.
 _Avoid_: degradation, downgrade, polyfill
 
 **Mark shape**:
@@ -140,7 +140,7 @@ _Avoid_: pixel identity, visual equality
 
 **Renderer demo**:
 The docs section that shows one chart on every renderer, with a switch
-between `"svg"`, `"canvas"` and `"webgl"`.
+between `"svg"` and `"canvas"`.
 _Avoid_: renderer example, playground
 
 **Many demo**:

@@ -38,3 +38,10 @@ the dependencies of `chart-3d` in `registry.json` and lands in every installing
 project, so it has to earn its place - or, where one chart alone needs it, to
 the dependencies of that chart's item, which land only where the chart
 installs, as the globe's `d3-geo` does (ADR-0007).
+
+Update (2026-11-13): the webgl renderer is gone. Measured, it drew no faster
+than the canvas - projecting the marks on the CPU takes the time, not filling
+them - so `"webgl"` draws as `"canvas"` until the next major version drops
+the name. The contract stands for the two renderers left, and the parity test
+drives them both; `paintGL` is no longer among the places a new mark shape
+must reach.

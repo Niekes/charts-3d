@@ -50,13 +50,13 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
 ## Renderers
 
-The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks; `"webgl"` fills them on the GPU, for charts with the most.
+The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks.
 
 ```tsx
-<ChartContainer3D config={chartConfig} renderer="webgl">
+<ChartContainer3D config={chartConfig} renderer="canvas">
 ```
 
-The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has the requested renderer, `"webgl"` falling back to `"canvas"`, and stays SVG where it has none. A browser gives a page only so many WebGL contexts, about 16; a chart that loses its own, on a page with more charts than that or when the GPU resets, falls back to `"canvas"` and keeps drawing.
+The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none. `"webgl"` draws as `"canvas"`: measured, it drew no faster, as projecting the marks on the CPU takes the time, not filling them. It is deprecated and goes in the next major version.
 
 ## Shortcuts
 

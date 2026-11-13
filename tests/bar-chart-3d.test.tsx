@@ -777,45 +777,7 @@ describe("BarChart3D focus", () => {
 })
 
 describe("BarChart3D renderer switch", () => {
-  test("svg to canvas to webgl and back repaints each time, without error", async () => {
-    const gl = {
-      viewport: vi.fn(),
-      disable: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      useProgram: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4f: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      getAttribLocation: vi.fn(() => 0),
-      enableVertexAttribArray: vi.fn(),
-      bindBuffer: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      bufferData: vi.fn(),
-      drawArrays: vi.fn(),
-      lineWidth: vi.fn(),
-      // A lost context answers getParameter with null; the painter must not throw.
-      getParameter: vi.fn(() => null),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      getExtension: vi.fn(() => null),
-      isContextLost: vi.fn(() => false),
-      DEPTH_TEST: 1,
-      BLEND: 2,
-      SRC_ALPHA: 3,
-      ONE_MINUS_SRC_ALPHA: 4,
-      ARRAY_BUFFER: 5,
-      DYNAMIC_DRAW: 6,
-      FLOAT: 7,
-      TRIANGLES: 8,
-      VERTEX_SHADER: 9,
-      FRAGMENT_SHADER: 10,
-    }
+  test("svg to canvas to webgl, which draws on the canvas, and back repaints each time, without error", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -836,7 +798,7 @@ describe("BarChart3D renderer switch", () => {
     ) {
       if (this.ctxType && this.ctxType !== type) return null
       this.ctxType = type
-      return (type === "webgl" ? gl : ctx) as never
+      return (type === "2d" ? ctx : null) as never
     })
     vi.stubGlobal(
       "ResizeObserver",
@@ -866,9 +828,11 @@ describe("BarChart3D renderer switch", () => {
     expect(host.querySelector('svg path[fill^="color-mix"]')).toBeNull()
     expect(ctx.fill).toHaveBeenCalled()
 
+    const fills = ctx.fill.mock.calls.length
     await render("webgl")
     expect(host.querySelector("canvas")).not.toBeNull()
-    expect(gl.drawArrays).toHaveBeenCalled()
+    // "webgl" draws on the same canvas as "canvas".
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
 
     await render("svg")
     expect(host.querySelector("canvas")).toBeNull()
