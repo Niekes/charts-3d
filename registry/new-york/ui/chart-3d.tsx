@@ -1157,6 +1157,22 @@ function resolved(canvas: HTMLCanvasElement, css: string, cache: Map<string, str
   return color
 }
 
+/**
+ * Sizes `canvas` to its pixels on screen, or, where it has that size, clears
+ * it: setting the size throws its buffer away and makes a new one, every frame.
+ */
+function fitCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  const width = Math.round(canvas.clientWidth * devicePixelRatio)
+  const height = Math.round(canvas.clientHeight * devicePixelRatio)
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width
+    canvas.height = height
+    return
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+}
+
 /** Paints `marks` on `canvas`, from the view box of `width` to the pixels of the canvas. */
 function paint(
   canvas: HTMLCanvasElement,
@@ -1164,10 +1180,9 @@ function paint(
   width: number,
   color: (css: string) => string
 ) {
-  canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
-  canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
   // useRenderer draws on a canvas only where the browser gives one a 2D context.
   const ctx = canvas.getContext("2d")!
+  fitCanvas(canvas, ctx)
   const scale = canvas.width / width
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"

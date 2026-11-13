@@ -95,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A chart taken out of a container that stays takes its marks along: the
   hover showed the tooltips of its marks over the empty chart, and the canvas
   kept painting them.
+- The canvas renderer clears its canvas between frames instead of sizing it
+  again, which threw its buffer away and made a new one every frame.
 - `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
   for support hands its context back at once - and a chart that loses its
   context, on a page with more WebGL charts than the browser allows or when

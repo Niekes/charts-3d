@@ -30,6 +30,7 @@ import {
   useTweenAxes,
   worldBox,
   type ChartContainer3DProps,
+  type Mark3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 // React reports state updates outside act() unless the environment says it supports it.
@@ -244,10 +245,9 @@ const pointer = (
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
   const ctx = Object.fromEntries(
-    ["setTransform", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map((m) => [
-      m,
-      vi.fn(),
-    ])
+    ["setTransform", "clearRect", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map(
+      (m) => [m, vi.fn()]
+    )
   )
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
   vi.stubGlobal(
@@ -1396,6 +1396,36 @@ describe("renderer", () => {
     expect(ctx.fill.mock.calls.length).toBe(fills)
     await act(async () => root.render(chart(true)))
     expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("canvas keeps its pixels while its size stays: a repaint clears it instead, and a new size sizes it again", async () => {
+    const ctx = stubCanvas()
+    const size = { width: 320, height: 200 }
+    vi.spyOn(HTMLCanvasElement.prototype, "clientWidth", "get").mockImplementation(() => size.width)
+    vi.spyOn(HTMLCanvasElement.prototype, "clientHeight", "get").mockImplementation(
+      () => size.height
+    )
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (shown: Mark3D[]) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={shown} />
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(marks)))
+    const canvas = host.querySelector("canvas")!
+    expect([canvas.width, canvas.height]).toEqual([320 * devicePixelRatio, 200 * devicePixelRatio])
+    const set = vi.spyOn(canvas, "width", "set")
+    ctx.clearRect.mockClear()
+    await act(async () => root.render(chart(marks.slice(1))))
+    expect(set).not.toHaveBeenCalled()
+    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, canvas.width, canvas.height)
+
+    size.width = 480
+    await act(async () => root.render(chart(marks)))
+    expect(set).toHaveBeenCalledWith(480 * devicePixelRatio)
     await act(async () => root.unmount())
     host.remove()
   })
