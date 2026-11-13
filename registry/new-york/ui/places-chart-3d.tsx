@@ -9,10 +9,12 @@ import {
   Marks3D,
   earth,
   faded,
+  finite,
   globe,
   orthographic,
   useChart3D,
   useTween,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -108,9 +110,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, id }
   // An entry without a place on the globe has no dot.
-  const entries = data.filter(
-    (d) => Number.isFinite(Number(d[lon])) && Number.isFinite(Number(d[lat]))
-  )
+  const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
   const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
   // The area of a dot is its value, from 0, so a new one grows as it fades
   // in and a gone one shrinks as it fades out; the peak glides along, so no
@@ -172,7 +172,7 @@ function dotMark<T extends Record<string, unknown>>(
     key: p.name,
     points: [p.projected],
     r: reading.radius * Math.sqrt(share),
-    fill: faded(`var(--color-${place.key})`, presence),
+    fill: faded(colorOf(place.key), presence),
     stroke: faded("var(--background)", presence),
     groups: [p.name],
     tooltip: dotTooltip(p.name, place, entry, reading),
@@ -203,7 +203,7 @@ function dotTooltip<T extends Record<string, unknown>>(
                 {
                   label: fields.value,
                   value: format?.(value) ?? value,
-                  color: `var(--color-${key})`,
+                  color: colorOf(key),
                 },
               ]
             : []),

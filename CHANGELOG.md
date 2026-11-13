@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   land of the globe, falling back to `--muted` and `--border`. The globe demos
   set them for a globe at night and show the populated places of the world,
   from Natural Earth, summed per tile, in nine classes of YlOrRd.
+- `finite` and `colorOf` in the core, for a chart of your own: whether a
+  value is a number the chart can place, and the CSS variable of a config key.
 
 ### Changed
 
@@ -74,6 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An entry whose coordinate is `null`, an empty string or a boolean has no
+  mark: the scatter chart, the places and the globe read it as 0 and drew a
+  point on the floor, a dot or a tile at 0°, 0°. `finite` in the core tells a
+  number a chart can place.
+- A config key or a chart `id` with a character a CSS identifier cannot hold -
+  the space of `"Net sales"`, the dot of `"q1.sales"` - keeps its colors: the
+  container escapes it, where the browser dropped the rule and the marks drew
+  black. `colorOf` in the core names the variable of a key; a plain key reads
+  `var(--color-desktop)` as before.
 - `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
   for support hands its context back at once - and a chart that loses its
   context, on a page with more WebGL charts than the browser allows or when

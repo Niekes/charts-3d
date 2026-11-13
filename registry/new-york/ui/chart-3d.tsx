@@ -1467,6 +1467,18 @@ function ChartGizmo3D({
 }
 
 /**
+ * `text` as part of a CSS identifier: every character but an ASCII letter, a
+ * digit, `-` and `_` written as its escape, such as the space of "Net sales"
+ * or the dot of "q1.sales". Unescaped, it would end the name, and the browser
+ * would drop the rule that declares the color.
+ */
+const cssName = (text: string) =>
+  text.replace(/[^\w-]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `)
+
+/** The color of the config key `key`: the CSS variable the container declares for it. */
+const colorOf = (key: string) => `var(--color-${cssName(key)})`
+
+/**
  * The focus color of a fill, which a lit mark takes: `--chart-3d-focus`, or the
  * fill itself lightened, so the highlight carries the color of what it highlights.
  */
@@ -1565,7 +1577,8 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
   )
 }
 
-function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
+function ChartStyle({ id: raw, config }: { id: string; config: ChartConfig }) {
+  const id = cssName(raw)
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
   // The cursor names the gesture of the held modifier: the platform modifier
@@ -1597,7 +1610,7 @@ ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, item]) => {
     const color = item.theme?.[theme as keyof typeof item.theme] || item.color
-    return color ? `  --color-${key}: ${color};` : null
+    return color ? `  --color-${cssName(key)}: ${color};` : null
   })
   .join("\n")}
 }
@@ -1605,9 +1618,9 @@ ${colorConfig
           ),
         ]
           .join("\n")
-          // The id, the keys and the colors are the caller's text: escaped, a `<` in
-          // them cannot close the style element of a server-rendered page. Whether
-          // they are CSS stays with the caller.
+          // `cssName` has escaped the id and the keys; a color is the caller's text
+          // still, and with its `<` escaped it cannot close the style element of a
+          // server-rendered page. Whether it is CSS stays with the caller.
           .replaceAll("<", "\\3c "),
       }}
     />
@@ -1778,7 +1791,7 @@ function ChartLegend3D({ config }: { config: ChartConfig }) {
           {item.icon ? (
             <item.icon />
           ) : (
-            <span className="size-2 rounded-[2px]" style={{ background: `var(--color-${key})` }} />
+            <span className="size-2 rounded-[2px]" style={{ background: colorOf(key) }} />
           )}
           {item.label ?? key}
         </div>
@@ -2449,6 +2462,18 @@ function faded(color: string, opacity: number) {
 }
 
 /**
+ * Whether `value` is a number a chart can place: whatever `Number` reads as a
+ * finite number - a number, a string of one, a date, a bigint - but not what
+ * it reads as 0 for want of a value: null, a blank string and a boolean would
+ * draw an entry without a place at the origin.
+ */
+function finite(value: unknown) {
+  const isBlank = typeof value === "string" && value.trim() === ""
+  const isValue = value != null && typeof value !== "boolean" && !isBlank
+  return isValue && Number.isFinite(Number(value))
+}
+
+/**
  * The entries of `data` and their series, for a chart that lays the entries
  * out along x and the series along z, as the bar and the area chart do. The
  * name of every entry comes from its `index` field, the series are `keys` or
@@ -2528,7 +2553,9 @@ export {
   earth,
   intoWorld,
   shade,
+  colorOf,
   faded,
+  finite,
   useSeries,
   cubeMarks,
   useTween,

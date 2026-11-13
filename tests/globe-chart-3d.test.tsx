@@ -756,3 +756,24 @@ async function mount(element: ReactElement) {
   }
   return { host, svg, send, unmount }
 }
+
+describe("GlobeChart3D missing values", () => {
+  test("an entry whose place is null or empty has no tile, and none rises at 0°, 0°", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[
+            { lon: null, lat: null, population: 3 },
+            { lon: "", lat: "", population: 3 },
+          ]}
+          land={{ type: "FeatureCollection", features: [] }}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(faces(html)).toHaveLength(0)
+  })
+})

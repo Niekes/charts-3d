@@ -9,6 +9,7 @@ import {
   faded,
   useChart3D,
   useTween,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -123,7 +124,7 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
     const says = region?.key === key ? regionTooltip(region, reading) : undefined
     // Its group is the region alone, so hovering highlights every ring of it.
     return sink
-      .marks(() => path(feature), `region-${rid}-${key}`, faded(`var(--color-${key})`, opacity))
+      .marks(() => path(feature), `region-${rid}-${key}`, faded(colorOf(key), opacity))
       .map((mark) => ({ ...mark, groups: [rid], tooltip: says }))
   })
 
@@ -162,7 +163,7 @@ function regionTooltip<T extends Record<string, unknown>>(
     tooltip(
       {
         title: name ?? config[key]?.label ?? key,
-        items: [{ label: field, value: format?.(value) ?? value, color: `var(--color-${key})` }],
+        items: [{ label: field, value: format?.(value) ?? value, color: colorOf(key) }],
       },
       { entry }
     )

@@ -15,6 +15,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -93,7 +94,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
           barMarks({
             id: `${bar.name}-${bar.key}`,
             faces: bar.faces,
-            color: `var(--color-${bar.key})`,
+            color: colorOf(bar.key),
             tooltip: barTooltip(bar, entries.get(bar.name), target, { config, format, tooltip }),
             opacity: presence[bar.name],
           })
@@ -210,7 +211,7 @@ function barTooltip<T extends Record<string, unknown>>(
           {
             label: config[key]?.label ?? key,
             value: format.y?.(value) ?? value,
-            color: `var(--color-${key})`,
+            color: colorOf(key),
           },
         ],
       },

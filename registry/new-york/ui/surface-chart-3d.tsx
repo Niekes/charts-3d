@@ -23,6 +23,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
@@ -178,7 +179,7 @@ function quadMark(
   const t = Math.round(((height - ramp.lo) / (ramp.hi - ramp.lo || 1)) * 100)
   const shaded = shade(
     quad,
-    `color-mix(in oklch, var(--color-${ramp.high}) ${t}%, var(--color-${ramp.low}))`
+    `color-mix(in oklch, ${colorOf(ramp.high)} ${t}%, ${colorOf(ramp.low)})`
   )
   // A corner only one of the tweens still knows is on its way out and stays unseen.
   const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))

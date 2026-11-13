@@ -13,9 +13,11 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  colorOf,
   cubeMarks,
   earth,
   faded,
+  finite,
   globe,
   intoWorld,
   linear,
@@ -129,7 +131,9 @@ describe("ChartContainer3D", () => {
     const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"))
     expect(html.split("</style>")).toHaveLength(2)
     expect(html).not.toContain("<script")
-    expect(style).toContain(".dark [data-chart=chart-\\3c /style>")
+    // The id and the keys are escaped whole, as parts of a CSS identifier.
+    expect(style).toContain(".dark [data-chart=chart-\\3c \\2f style\\3e ")
+    expect(style).toContain("--color-\\3c \\2f style\\3e ")
     expect(style).toContain("--color-b: \\3c /style>")
   })
 
@@ -2719,5 +2723,35 @@ describe("marks", () => {
     expect(lazy).toHaveBeenCalledTimes(1)
     expect(chart.host.textContent).toContain("Lazy")
     await chart.unmount()
+  })
+})
+
+describe("finite", () => {
+  test("a finite number and a string that reads as one are numbers a chart can place", () => {
+    expect([0, -1.5, "5", " 2e3 "].map(finite)).toEqual([true, true, true, true])
+  })
+
+  test("so is what reads as a number: a date, the time it stands for, and a bigint", () => {
+    expect([new Date(2024, 0, 1), 10n].map(finite)).toEqual([true, true])
+  })
+
+  test("what Number alone reads as 0, or not as a number, is none", () => {
+    const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
+    expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("colorOf", () => {
+  test("names the variable of a config key, a plain key as it is", () => {
+    expect(colorOf("desktop")).toBe("var(--color-desktop)")
+    expect(colorOf("net_sales-2024")).toBe("var(--color-net_sales-2024)")
+  })
+
+  test("escapes everything but ASCII letters, digits, - and _, so every browser reads the name, and no two keys share one", () => {
+    expect(colorOf("Net sales")).toBe("var(--color-Net\\20 sales)")
+    expect(colorOf("q1.sales")).toBe("var(--color-q1\\2e sales)")
+    expect(colorOf("Umsätze")).toBe("var(--color-Ums\\e4 tze)")
+    expect(colorOf("😀")).toBe("var(--color-\\1f600 )")
+    expect(colorOf("日本")).not.toBe(colorOf("中国"))
   })
 })

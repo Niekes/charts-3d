@@ -889,3 +889,31 @@ describe("BarChart3D renderer switch", () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe("BarChart3D names that are no CSS identifiers", () => {
+  const chart = (
+    <ChartContainer3D id="q1.sales" config={{ "Net sales": { color: "red" } }} legend>
+      <BarChart3D data={[{ month: "Jan", "Net sales": 1 }]} index="month" />
+    </ChartContainer3D>
+  )
+
+  test("a chart id with a dot still scopes its colors: the rule that declares them selects the chart", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () => root.render(chart))
+    const style = host.querySelector("style")!.textContent!
+    const selector = style.match(/ (\[data-chart=[^\n]*\]) \{\n {2}--color/)![1]
+    expect(host.querySelector(selector)).toBe(host.querySelector("[data-slot=chart-3d]"))
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a series with a space keeps its color: the variable is declared, and read by the bars and the legend, under the escaped name", () => {
+    const html = renderToString(chart)
+    // A space in a CSS identifier is written `\20 `.
+    expect(html).toContain("--color-Net\\20 sales: red;")
+    expect(html).toContain('fill="color-mix(in oklch, var(--color-Net\\20 sales)')
+    expect(html).toContain("background:var(--color-Net\\20 sales)")
+    expect(html).not.toContain("--color-Net sales")
+  })
+})

@@ -23,6 +23,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -232,7 +233,7 @@ function ribbonMarks(
   line: LinePoint[],
   tooltip: (names: string[]) => Mark3D["tooltip"]
 ): Mark3D[] {
-  const color = `var(--color-${key})`
+  const color = colorOf(key)
   const spans = (f: RibbonFace) =>
     f.face === "top" ? [line[f.segment].name, line[f.segment + 1].name] : []
   return faces.map((f) => {
@@ -269,7 +270,7 @@ function ribbonTooltip<T extends Record<string, unknown>>(
     return entry ? [entry] : []
   })
   if (spanned.length < names.length) return undefined
-  const color = `var(--color-${key})`
+  const color = colorOf(key)
   return () =>
     tooltip(
       {

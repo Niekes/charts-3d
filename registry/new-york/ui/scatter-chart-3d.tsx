@@ -9,10 +9,12 @@ import {
   Marks3D,
   axis,
   faded,
+  finite,
   useChart3D,
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -77,7 +79,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const fields = { x, y, z }
   // An entry without a place in the box has no point.
-  const data = all.filter((d) => [x, y, z].every((f) => Number.isFinite(Number(d[f]))))
+  const data = all.filter((d) => [x, y, z].every((f) => finite(d[f])))
   const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
   const entries = new Map(names.map((name, i) => [name, data[i]]))
   const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
@@ -100,7 +102,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       key: p.name,
       points: [p.projected],
       r: radii[p.name],
-      fill: faded(`var(--color-${key(p.name)})`, opacity[p.name]),
+      fill: faded(colorOf(key(p.name)), opacity[p.name]),
       // Its group is the point alone, so hovering highlights that point only.
       groups: [p.name],
       // Ringed by the background, so that points in front stand out.

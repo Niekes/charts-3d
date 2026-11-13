@@ -17,11 +17,13 @@ import {
   axis,
   earth,
   faded,
+  finite,
   globe,
   orthographic,
   shade,
   useChart3D,
   useTween,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -182,9 +184,9 @@ function tileValues<T extends Record<string, unknown>>(
 ) {
   const tiles = new Map<string, Tile<T>>()
   for (const d of data) {
-    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     // An entry without a place on the globe has no tile.
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue
+    if (!finite(d[fields.lon]) || !finite(d[fields.lat])) continue
+    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
     tiles.set(center, {
@@ -267,7 +269,7 @@ function tileTooltip<T extends Record<string, unknown>>(
       {
         title: name ?? config[key]?.label ?? key,
         items: [
-          { label: fields.value, value: format?.(value) ?? value, color: `var(--color-${key})` },
+          { label: fields.value, value: format?.(value) ?? value, color: colorOf(key) },
           { label: fields.lat, value: lat },
           { label: fields.lon, value: lon },
         ],
@@ -285,7 +287,7 @@ function prismMark(face: Polygon<Point3D, Face>, presence: number, tooltip: Mark
   return {
     key: `${face.id}-${face.part}`,
     points: face.map((p) => p.projected),
-    fill: faded(shade(face, `var(--color-${tile(face.id).key})`), presence),
+    fill: faded(shade(face, colorOf(tile(face.id).key)), presence),
     groups: [face.id],
     tooltip,
   }

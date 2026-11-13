@@ -491,3 +491,23 @@ async function mount(element: ReactElement) {
   }
   return { host, svg, send, unmount }
 }
+
+describe("PlacesChart3D missing values", () => {
+  test("an entry whose place is null or empty has no dot, and none lands at 0°, 0°", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <PlacesChart3D
+          data={[
+            { lon: null, lat: null },
+            { lon: "", lat: "" },
+            { lon: 10, lat: 50 },
+          ]}
+          land={land}
+          lon="lon"
+          lat="lat"
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(1)
+  })
+})

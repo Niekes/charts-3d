@@ -19,7 +19,7 @@ const chartConfig = {
 } satisfies ChartConfig
 ```
 
-The container turns every key into a CSS variable, `--color-desktop` and `--color-mobile`, scoped to the chart. `color` is used in both themes, `theme` sets one color per theme.
+The container turns every key into a CSS variable, `--color-desktop` and `--color-mobile`, scoped to the chart. A key may hold any text: a character a CSS identifier cannot hold, such as the space of `Net sales`, is escaped, and a chart of your own reads the variable of a key with `colorOf(key)`. `color` is used in both themes, `theme` sets one color per theme.
 
 The container writes its `id`, the keys and the colors into a `<style>` element and keeps them from closing it, but it does not check that they are CSS: validate any of them that comes from your users.
 
