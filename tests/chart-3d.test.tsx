@@ -835,6 +835,125 @@ describe("pointer", () => {
     await chart.unmount()
   })
 
+  test("a plain drag that turns nothing says, until a moment after the lift, which drag would", async () => {
+    vi.useFakeTimers()
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    const hint = () => chart.host.querySelector('[data-slot="chart-3d-hint"]')!
+    const drag = async (to: number, init: MouseEventInit = {}) => {
+      await chart.send(pointer("pointerdown", 100, 100, undefined, { button: 0, ...init }))
+      await chart.send(pointer("pointermove", to, 100, undefined, init))
+    }
+
+    // The status is there before it says anything, so a screen reader hears its first word.
+    expect(hint().getAttribute("role")).toBe("status")
+    expect(hint().textContent).toBe("")
+    // A press that wanders a few pixels is a click, not a miss.
+    await drag(105)
+    expect(hint().textContent).toBe("")
+    await chart.send(pointer("pointerup", 105, 100))
+    // A drag that turns the camera, or pans it, missed nothing.
+    await drag(140, { ctrlKey: true })
+    await chart.send(pointer("pointerup", 140, 100))
+    await drag(140, { altKey: true })
+    await chart.send(pointer("pointerup", 140, 100))
+    expect(hint().textContent).toBe("")
+
+    // A plain drag names the gesture and the label of the panel.
+    await drag(140)
+    expect(hint().textContent).toBe("CtrlDragRotate")
+    await chart.send(pointer("pointerup", 140, 100))
+    await act(() => vi.advanceTimersByTime(1400))
+    expect(hint().getAttribute("data-state")).toBe("open")
+    await act(() => vi.advanceTimersByTime(100))
+    expect(hint().getAttribute("data-state")).toBe("closed")
+    await act(() => vi.advanceTimersByTime(200))
+    expect(hint().textContent).toBe("")
+
+    // Released beyond the chart, a plain drag only leaves it: the hint goes all the same,
+    await drag(140)
+    await chart.send(pointer("pointerleave", 700, 100))
+    await act(() => vi.advanceTimersByTime(1700))
+    expect(hint().textContent).toBe("")
+    // and the press is over, so the mouse coming back without a button misses nothing.
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
+    await chart.send(pointer("pointerleave", 104, 100))
+    await chart.send(pointer("pointermove", 140, 100))
+    expect(hint().textContent).toBe("")
+    // The right button opens a menu; it misses nothing.
+    await drag(140, { button: 2 })
+    expect(hint().textContent).toBe("")
+
+    await chart.unmount()
+    vi.useRealTimers()
+  })
+
+  test("one finger dragged sideways says that two fingers turn the chart", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const hint = () => chart.host.querySelector('[data-slot="chart-3d-hint"]')!.textContent
+    const finger = (type: string, clientX: number, clientY: number, isPrimary = true) =>
+      Object.assign(pointer(type, clientX, clientY), { pointerType: "touch", isPrimary })
+
+    // Up or down, the finger scrolls the page.
+    await chart.send(finger("pointerdown", 100, 100))
+    await chart.send(finger("pointermove", 103, 140))
+    expect(hint()).toBe("")
+    await chart.send(finger("pointercancel", 103, 140))
+    // A second finger makes it a pinch, which misses nothing.
+    await chart.send(finger("pointerdown", 100, 100))
+    await chart.send(finger("pointerdown", 200, 100, false))
+    await chart.send(finger("pointermove", 140, 100))
+    expect(hint()).toBe("")
+    await chart.send(finger("pointerup", 140, 100))
+    // Sideways, it inspects and names the gesture that would have turned the chart.
+    await chart.send(finger("pointerdown", 100, 100))
+    await chart.send(finger("pointermove", 140, 103))
+    expect(hint()).toBe("Two-finger dragRotate")
+
+    await chart.unmount()
+  })
+
+  test("the hint follows the keymap: an action off misses nothing, a renamed one says its name", async () => {
+    const off = await mount(
+      <ChartContainer3D config={{}} keymap={{ dragRotate: false }}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    await off.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
+    await off.send(pointer("pointermove", 140, 100))
+    expect(off.host.querySelector('[data-slot="chart-3d-hint"]')!.textContent).toBe("")
+    await off.unmount()
+
+    const chart = await mount(
+      <ChartContainer3D config={{}} keymap={{ dragPan: false, touchOrbit: { label: "Spin" } }}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const hint = () => chart.host.querySelector('[data-slot="chart-3d-hint"]')!.textContent
+    const finger = (type: string, clientX: number) =>
+      Object.assign(pointer(type, clientX, 100), { pointerType: "touch", isPrimary: true })
+
+    // With no pan, an Alt drag turns nothing either: it misses.
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { altKey: true }))
+    await chart.send(pointer("pointermove", 140, 100, undefined, { altKey: true }))
+    expect(hint()).toBe("CtrlDragRotate")
+    await chart.send(pointer("pointerup", 140, 100))
+    // A renamed gesture says its own label.
+    await chart.send(finger("pointerdown", 100))
+    await chart.send(finger("pointermove", 140))
+    expect(hint()).toBe("Two-finger dragSpin")
+
+    await chart.unmount()
+  })
+
   test("a pinch lifting its fingers leaves no mark lit", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>

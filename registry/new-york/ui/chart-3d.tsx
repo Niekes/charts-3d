@@ -292,6 +292,12 @@ function shortcutsOf(keymap: Keymap3D | false) {
 
 type Shortcut = ReturnType<typeof shortcutsOf>[number]
 
+/** The keys or the gesture of a shortcut as the panel writes them, with the modifiers of the reader's platform. */
+const partsOf = ({ keys, gesture }: Pick<Shortcut, "keys" | "gesture">) =>
+  (gesture ?? split(keys[0])).map((k) =>
+    k === "Mod" ? modLabel() : k === "Alt" ? altLabel() : (KBD[k] ?? k)
+  )
+
 /**
  * The rows of the shortcut panel: the actions by label, the keys of a row in
  * groups of the same modifiers, left of its gestures, each a group of its own.
@@ -299,9 +305,7 @@ type Shortcut = ReturnType<typeof shortcutsOf>[number]
 function rowsOf(shortcuts: Shortcut[]) {
   const rows = new Map<string, { keys: Map<string, string[]>; gestures: string[][] }>()
   for (const { label, keys, gesture } of shortcuts) {
-    const parts = (gesture ?? split(keys[0])).map((k) =>
-      k === "Mod" ? modLabel() : k === "Alt" ? altLabel() : (KBD[k] ?? k)
-    )
+    const parts = partsOf({ keys, gesture })
     const row = rows.get(label) ?? { keys: new Map<string, string[]>(), gestures: [] }
     if (gesture) row.gestures.push(parts)
     else {
@@ -320,8 +324,8 @@ function rowsOf(shortcuts: Shortcut[]) {
 
 /**
  * What a keymap does: the actions that are on, the step of each key, the help
- * keys and the rows of the panel. Without the `panel`, the help keys have
- * nothing to open and are off.
+ * keys, the rows of the panel and the hint of a gesture. Without the `panel`,
+ * the help keys have nothing to open and are off.
  */
 function keymapOf(keymap: Keymap3D | false, panel: boolean) {
   const all = shortcutsOf(keymap)
@@ -336,6 +340,10 @@ function keymapOf(keymap: Keymap3D | false, panel: boolean) {
     label: all.find((s) => s.action === "help")!.label,
     aria: on.flatMap((s) => s.keys.map(aria)).join(" "),
     rows: panel ? rowsOf(on) : [],
+    hint: (action: Gesture3D) => {
+      const shortcut = on.find((s) => s.action === action)
+      return shortcut && { label: shortcut.label, gesture: partsOf(shortcut) }
+    },
   }
 }
 
@@ -420,14 +428,10 @@ function ChartContainer3D({
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
-    requested,
-    width,
-    height,
-    tooltip
-  )
+  const drawing = useScene(requested, width, height, tooltip)
+  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
-  const { view, handlers } = useOrbit(defaultView, width, keys, hide, hover)
+  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
     () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration }),
@@ -455,6 +459,7 @@ function ChartContainer3D({
         <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
         <ChartGizmo3D camera={camera} corner={gizmo} />
         <ChartTooltip3D tip={tip} />
+        <ChartHint3D {...hint} />
       </div>
       <ChartShortcuts3D {...keys} />
       {legend && <ChartLegend3D config={config} />}
@@ -860,7 +865,7 @@ function useOrbit(
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
-  const { ref, touching } = useGestures(jump, keys, width, setOrbiting)
+  const { ref, touching, hint } = useGestures(jump, keys, width, setOrbiting)
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
   const keyHandlers = useKeys(keys, step, setOrbiting)
@@ -907,7 +912,7 @@ function useOrbit(
     "data-alt": keys.on("dragPan") && held.alt ? true : undefined,
   }
 
-  return { view, handlers }
+  return { view, handlers, hint }
 }
 
 type OrbitHandlers = React.SVGProps<SVGSVGElement> & {
@@ -966,7 +971,7 @@ function useKeys(
   return { onKeyDown, onKeyUp }
 }
 
-/** A ref for the svg that hands it to the listeners of the wheel and of two fingers. */
+/** A ref for the svg that hands it to the listeners of the wheel, of two fingers and of a missed drag. */
 function useGestures(
   jump: (to: (from: View3D) => View3D) => void,
   keys: Keymap,
@@ -975,14 +980,83 @@ function useGestures(
 ) {
   const wheel = useWheelZoom(jump, keys.on("wheelZoom"), width)
   const touch = useTouch(jump, keys, width, setOrbiting)
+  const missed = useMissedDrag(keys)
   const ref = React.useCallback(
     (svg: SVGSVGElement | null) => {
-      const off = [wheel(svg), touch.ref(svg)]
+      const off = [wheel(svg), touch.ref(svg), missed.ref(svg)]
       return () => off.forEach((f) => f?.())
     },
-    [wheel, touch.ref]
+    [wheel, touch.ref, missed.ref]
   )
-  return { ref, touching: touch.touching }
+  return { ref, touching: touch.touching, hint: missed.hint }
+}
+
+// How far a press goes before it is a drag that missed, how long its hint
+// stays after the lift and how long it fades, in pixels and ms.
+const MISS_DISTANCE = 8
+const HINT = 1500
+const HINT_FADE = 200
+
+/**
+ * A ref for the svg that watches for a drag that turns nothing - the mouse
+ * without a modifier, or one finger sideways, `MISS_DISTANCE` or further -
+ * and the hint that names what would have turned the chart: the gesture of
+ * `dragRotate` or `touchOrbit`, none where `keys` has it off. The hint stays
+ * `HINT` after the lift, fades for `HINT_FADE` and then says nothing.
+ */
+function useMissedDrag(keys: Keymap) {
+  const [missed, setMissed] = React.useState<"dragRotate" | "touchOrbit">()
+  const [open, setOpen] = React.useState(false)
+  const [mouse, finger, pan] = [keys.on("dragRotate"), keys.on("touchOrbit"), keys.on("dragPan")]
+  const ref = React.useCallback(
+    (svg: SVGSVGElement | null) => {
+      if (!svg) return
+      let press: (Point2D & { touch: boolean }) | null = null
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const down = (e: PointerEvent) => {
+        const touch = e.pointerType === "touch"
+        // A second finger makes a pinch, a modifier a turn or a pan: neither misses.
+        const plain = touch ? finger && e.isPrimary : mouse && !platformMod(e) && !(pan && e.altKey)
+        press = plain && e.button === 0 ? { x: e.clientX, y: e.clientY, touch } : null
+      }
+      const move = (e: PointerEvent) => {
+        const [dx, dy] = press ? [e.clientX - press.x, e.clientY - press.y] : [0, 0]
+        if (!press || Math.hypot(dx, dy) < MISS_DISTANCE) return
+        // Up or down, a finger scrolls the page.
+        if (!press.touch || Math.abs(dx) > Math.abs(dy)) {
+          clearTimeout(timer)
+          setMissed(press.touch ? "touchOrbit" : "dragRotate")
+          setOpen(true)
+        }
+        press = null
+      }
+      const up = () => {
+        press = null
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          setOpen(false)
+          timer = setTimeout(() => setMissed(undefined), HINT_FADE)
+        }, HINT)
+      }
+      // A plain drag holds no capture: released beyond the chart, it only leaves it.
+      const listeners = {
+        pointerdown: down,
+        pointermove: move,
+        pointerup: up,
+        pointercancel: up,
+        pointerleave: up,
+      }
+      for (const [type, f] of Object.entries(listeners))
+        svg.addEventListener(type, f as EventListener)
+      return () => {
+        clearTimeout(timer)
+        for (const [type, f] of Object.entries(listeners))
+          svg.removeEventListener(type, f as EventListener)
+      }
+    },
+    [mouse, finger, pan]
+  )
+  return { ref, hint: { shown: missed && keys.hint(missed), open } }
 }
 
 /** The point (`x`, `y`) of the client in the units of the view box of `svg`, `width` wide, from its middle. */
@@ -1640,6 +1714,35 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * The hint of a drag that missed, in the top left corner of the chart, which
+ * no other part takes: always there, empty while it has nothing to say, so a
+ * screen reader hears its first word.
+ */
+function ChartHint3D({
+  shown,
+  open,
+}: {
+  shown?: { label: string; gesture: string[] }
+  open: boolean
+}) {
+  return (
+    <div
+      role="status"
+      data-slot="chart-3d-hint"
+      data-state={open ? "open" : "closed"}
+      className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-2 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 shadow-xl motion-safe:transition-opacity data-[state=closed]:opacity-0"
+    >
+      {shown && (
+        <>
+          <KbdGroup3D group={shown.gesture} />
+          <span className="text-muted-foreground">{shown.label}</span>
+        </>
+      )}
     </div>
   )
 }
