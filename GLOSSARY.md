@@ -213,7 +213,7 @@ _Avoid_: dolly, scale, zoom to the centre (the wheel)
 What the pointer does to move the camera - a drag with a modifier, the wheel
 with one, two fingers - as the shortcut panel names it beside the keys of the
 same action.
-_Avoid_: hint, mouse shortcut
+_Avoid_: hint (the line of a missed drag, below), mouse shortcut
 
 **Hint**:
 The line that names the gesture a drag missed: a drag without the platform

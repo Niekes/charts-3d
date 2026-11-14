@@ -874,6 +874,20 @@ describe("pointer", () => {
     await act(() => vi.advanceTimersByTime(200))
     expect(hint().textContent).toBe("")
 
+    // Released beyond the chart, a plain drag only leaves it: the hint goes all the same,
+    await drag(140)
+    await chart.send(pointer("pointerleave", 700, 100))
+    await act(() => vi.advanceTimersByTime(1700))
+    expect(hint().textContent).toBe("")
+    // and the press is over, so the mouse coming back without a button misses nothing.
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
+    await chart.send(pointer("pointerleave", 104, 100))
+    await chart.send(pointer("pointermove", 140, 100))
+    expect(hint().textContent).toBe("")
+    // The right button opens a menu; it misses nothing.
+    await drag(140, { button: 2 })
+    expect(hint().textContent).toBe("")
+
     await chart.unmount()
     vi.useRealTimers()
   })
@@ -907,9 +921,19 @@ describe("pointer", () => {
     await chart.unmount()
   })
 
-  test("a drag whose gesture is off misses nothing", async () => {
+  test("the hint follows the keymap: an action off misses nothing, a renamed one says its name", async () => {
+    const off = await mount(
+      <ChartContainer3D config={{}} keymap={{ dragRotate: false }}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    await off.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
+    await off.send(pointer("pointermove", 140, 100))
+    expect(off.host.querySelector('[data-slot="chart-3d-hint"]')!.textContent).toBe("")
+    await off.unmount()
+
     const chart = await mount(
-      <ChartContainer3D config={{}} keymap={{ dragRotate: false, touchOrbit: { label: "Spin" } }}>
+      <ChartContainer3D config={{}} keymap={{ dragPan: false, touchOrbit: { label: "Spin" } }}>
         <Marks3D marks={marks} />
       </ChartContainer3D>
     )
@@ -917,9 +941,10 @@ describe("pointer", () => {
     const finger = (type: string, clientX: number) =>
       Object.assign(pointer(type, clientX, 100), { pointerType: "touch", isPrimary: true })
 
-    await chart.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
-    await chart.send(pointer("pointermove", 140, 100))
-    expect(hint()).toBe("")
+    // With no pan, an Alt drag turns nothing either: it misses.
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { altKey: true }))
+    await chart.send(pointer("pointermove", 140, 100, undefined, { altKey: true }))
+    expect(hint()).toBe("CtrlDragRotate")
     await chart.send(pointer("pointerup", 140, 100))
     // A renamed gesture says its own label.
     await chart.send(finger("pointerdown", 100))

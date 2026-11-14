@@ -428,8 +428,8 @@ function ChartContainer3D({
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const parts = useScene(requested, width, height, tooltip)
-  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = parts
+  const drawing = useScene(requested, width, height, tooltip)
+  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
   const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
@@ -1006,7 +1006,7 @@ const HINT_FADE = 200
 function useMissedDrag(keys: Keymap) {
   const [missed, setMissed] = React.useState<"dragRotate" | "touchOrbit">()
   const [open, setOpen] = React.useState(false)
-  const [mouse, finger] = [keys.on("dragRotate"), keys.on("touchOrbit")]
+  const [mouse, finger, pan] = [keys.on("dragRotate"), keys.on("touchOrbit"), keys.on("dragPan")]
   const ref = React.useCallback(
     (svg: SVGSVGElement | null) => {
       if (!svg) return
@@ -1015,7 +1015,7 @@ function useMissedDrag(keys: Keymap) {
       const down = (e: PointerEvent) => {
         const touch = e.pointerType === "touch"
         // A second finger makes a pinch, a modifier a turn or a pan: neither misses.
-        const plain = touch ? finger && e.isPrimary : mouse && !platformMod(e) && !e.altKey
+        const plain = touch ? finger && e.isPrimary : mouse && !platformMod(e) && !(pan && e.altKey)
         press = plain && e.button === 0 ? { x: e.clientX, y: e.clientY, touch } : null
       }
       const move = (e: PointerEvent) => {
@@ -1037,7 +1037,14 @@ function useMissedDrag(keys: Keymap) {
           timer = setTimeout(() => setMissed(undefined), HINT_FADE)
         }, HINT)
       }
-      const listeners = { pointerdown: down, pointermove: move, pointerup: up, pointercancel: up }
+      // A plain drag holds no capture: released beyond the chart, it only leaves it.
+      const listeners = {
+        pointerdown: down,
+        pointermove: move,
+        pointerup: up,
+        pointercancel: up,
+        pointerleave: up,
+      }
       for (const [type, f] of Object.entries(listeners))
         svg.addEventListener(type, f as EventListener)
       return () => {
@@ -1046,9 +1053,9 @@ function useMissedDrag(keys: Keymap) {
           svg.removeEventListener(type, f as EventListener)
       }
     },
-    [mouse, finger]
+    [mouse, finger, pan]
   )
-  return { ref, hint: { hint: missed && keys.hint(missed), open } }
+  return { ref, hint: { shown: missed && keys.hint(missed), open } }
 }
 
 /** The point (`x`, `y`) of the client in the units of the view box of `svg`, `width` wide, from its middle. */
@@ -1715,10 +1722,10 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
  * empty while it has nothing to say, so a screen reader hears its first word.
  */
 function ChartHint3D({
-  hint,
+  shown,
   open,
 }: {
-  hint?: { label: string; gesture: string[] }
+  shown?: { label: string; gesture: string[] }
   open: boolean
 }) {
   return (
@@ -1728,10 +1735,10 @@ function ChartHint3D({
       data-state={open ? "open" : "closed"}
       className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 shadow-xl motion-safe:transition-opacity data-[state=closed]:opacity-0"
     >
-      {hint && (
+      {shown && (
         <>
-          <KbdGroup3D group={hint.gesture} />
-          <span className="text-muted-foreground">{hint.label}</span>
+          <KbdGroup3D group={shown.gesture} />
+          <span className="text-muted-foreground">{shown.label}</span>
         </>
       )}
     </div>
