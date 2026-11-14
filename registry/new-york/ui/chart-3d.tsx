@@ -646,8 +646,8 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  * that is new starts at `enter`, or where it ends; a key that is gone glides
  * back to `enter`, the mirror of its entering - without one it stands where
  * it is - and leaves when the glide is done. Without time, or with reduced
- * motion, the numbers jump. At rest it hands back the record it was given:
- * read it, never write to it.
+ * motion, the numbers jump. At rest it hands back the record of its target,
+ * no copy, so no frame rebuilds it: read it, never write to it.
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
   const { animationDuration: duration = 600 } = useChart3D()

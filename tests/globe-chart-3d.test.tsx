@@ -850,10 +850,14 @@ describe("GlobeChart3D with a new step", () => {
 })
 
 describe("GlobeChart3D while the camera turns, its tiles", () => {
-  // Thirty tiles on the near side of the globe, clear of the equator: the margin of half a tile the globe keeps lies at 2.5°.
+  // Thirty tiles of 5° on the near side of the globe, each entry at the
+  // center of its tile. Their corners keep clear of the angles the globe
+  // takes the cosine of anyway: the margin of half a tile, 2.5°, and the
+  // tilt of the camera, 35°.
+  const rows = [12.5, 22.5, 42.5, 52.5, 62.5]
   const data = Array.from({ length: 30 }, (_, i) => ({
-    lon: (i % 6) * 10,
-    lat: 10 + Math.floor(i / 6) * 10,
+    lon: 2.5 + (i % 6) * 10,
+    lat: rows[Math.floor(i / 6)],
     v: i + 1,
   }))
 
@@ -898,15 +902,15 @@ describe("GlobeChart3D while the camera turns, its tiles", () => {
 
   test("stand where they stood: no corner is placed on the globe again for the turn", async () => {
     const globe = await turning()
-    // A corner lies half a tile, 2.5°, north or south of the center of its tile.
-    const edges = new Set(
+    // The latitudes of the corners, in radians: half a tile, 2.5°, north and south of each center.
+    const corners = new Set(
       data.flatMap((d) => [d.lat - 2.5, d.lat + 2.5]).map((lat) => (lat * Math.PI) / 180)
     )
     const cos = vi.spyOn(Math, "cos")
     await globe.turn()
-    const corners = cos.mock.calls.filter(([angle]) => edges.has(angle))
+    const placed = cos.mock.calls.filter(([angle]) => corners.has(angle))
     cos.mockRestore()
-    expect(corners).toEqual([])
+    expect(placed).toEqual([])
     await globe.unmount()
   })
 })

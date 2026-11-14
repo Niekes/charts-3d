@@ -303,9 +303,9 @@ function prismFaces(
     const bottom = shapes.get(id)!.ground
     const lift = (heights[id] / ceiling) * HEIGHT
     // A point on the globe scales with its radius: the top is the ground, lifted.
-    const k = (GLOBE_RADIUS + lift) / GLOBE_RADIUS
+    const lifted = (GLOBE_RADIUS + lift) / GLOBE_RADIUS
     const top = Object.assign(
-      bottom.map((p) => ({ x: p.x * k, y: p.y * k, z: p.z * k })),
+      bottom.map((p) => ({ x: p.x * lifted, y: p.y * lifted, z: p.z * lifted })),
       { id, part: "top" as const }
     )
     if (lift * scale < 1) return [top]
