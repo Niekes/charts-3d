@@ -437,3 +437,17 @@ the client. The npm dependencies stay external.
 Add it to `registry/new-york/ui/chart-3d.tsx`, export it from the export list
 at the end of the file and cover it with a test in `tests/chart-3d.test.tsx`.
 `fallow health --coverage-gaps` reports an export that no test reaches.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues of Niekes/charts-3d, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
