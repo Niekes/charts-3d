@@ -57,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `useTween` hands back the record of its target, no copy, while nothing
+  glides: read it, never write to it.
+
 - The docs say which exports semver covers from 1.0.0: the charts,
   `ChartContainer3D`, `ChartLegend3D`, their props and the types they take.
   What a chart is built from - `Axes3D`, `Marks3D`, the hooks, `Mark3D` and
@@ -100,6 +103,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The globe turns faster with thousands of tiles: it reads every tile from
+  its id once, places its corners on the globe once and lifts them by its
+  height, and makes its tooltip once, not at every frame. The many demo,
+  about 5,200 tiles on the canvas, went from 34 ms a frame to 20 ms (29 to
+  50 fps; minified build, headless Chrome, median of five runs).
 - A tap on a mark shows its tooltip on a phone, and lifting the finger
   keeps it until a tap elsewhere; before, a phone showed no tooltip at all.
 - A tooltip tells the new value of its mark at the next move of the
