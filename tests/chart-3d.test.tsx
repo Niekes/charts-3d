@@ -2708,3 +2708,27 @@ describe("the charts while the camera turns", () => {
     }
   )
 })
+
+describe("useTween at rest", () => {
+  test("hands back the very record it was given, so no frame rebuilds the numbers", async () => {
+    const values = { a: 1, b: 2 }
+    const seen: Record<string, number>[] = []
+    function Tween() {
+      seen.push(useTween(values, 0))
+      return null
+    }
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={{}}>
+          <Tween />
+        </ChartContainer3D>
+      )
+    )
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every((shown) => shown === values)).toBe(true)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})

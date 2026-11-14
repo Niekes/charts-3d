@@ -646,7 +646,8 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  * that is new starts at `enter`, or where it ends; a key that is gone glides
  * back to `enter`, the mirror of its entering - without one it stands where
  * it is - and leaves when the glide is done. Without time, or with reduced
- * motion, the numbers jump.
+ * motion, the numbers jump. At rest it hands back the record it was given:
+ * read it, never write to it.
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
   const { animationDuration: duration = 600 } = useChart3D()
@@ -686,13 +687,15 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
 
 /** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends, a gone one gliding back to `enter` until the glide is done. */
 function tweenNumbers({ from, to, t }: Tween, enter?: number) {
+  // At the end the numbers themselves - no float drift stays in the data - and
+  // the very record, so no frame at rest rebuilds it.
+  if (t >= 1) return to
   const s = t * t * (3 - 2 * t)
-  const gone = t >= 1 ? [] : Object.entries(from).filter(([k]) => !(k in to))
+  const gone = Object.entries(from).filter(([k]) => !(k in to))
   return Object.fromEntries([
     ...Object.entries(to).map(([k, end]) => {
       const start = from[k] ?? enter ?? end
-      // At the end the number itself, so no float drift stays in the data.
-      return [k, t >= 1 ? end : start + (end - start) * s]
+      return [k, start + (end - start) * s]
     }),
     // A gone key glides back to `enter`, the mirror of its entering - without
     // one it stands where it is - and leaves when the glide is done.

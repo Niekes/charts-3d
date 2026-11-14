@@ -131,11 +131,13 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   const { ceiling } = useTween({ ceiling: axis(0, peak).domain[1] })
 
   const eye = orthographic(camera)
-  const near = nearTiles(Object.keys(heights), step, eye)
-  const reading = { config, fields, format, tooltip }
+  const ids = Object.keys(heights)
+  const shapes = useShapes(ids, step)
+  const tooltips = useTileTooltips(tiles, { config, fields, format, tooltip })
+  const near = nearTiles(ids, shapes, step, eye)
   const prisms = polygons3D<Point3D>()
     .camera(eye)
-    .data<Face>(prismFaces(near, heights, ceiling, step, eye.scale()))
+    .data<Face>(prismFaces(near, shapes, heights, ceiling, eye.scale()))
     // Mirror tiles share a depth to the last bit, which the server and the
     // browser round differently: rounded, they tie, and the grid order paints
     // west before east on both, so the server HTML hydrates.
@@ -147,7 +149,9 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
     // and hides what lies behind its center plane, as the ocean disc is drawn
     // first and a side of a far tile turned to the camera would show through.
     .filter((face) => face.ccw && face.centroid.z > 0)
-    .map((face) => prismMark(face, presence[face.id], tileTooltip(tiles.get(face.id), reading)))
+    .map((face) =>
+      prismMark(face, shapes.get(face.id)!.key, presence[face.id], tooltips.get(face.id))
+    )
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...prisms]} />
@@ -177,20 +181,62 @@ function useTiles<T extends Record<string, unknown>>(
   }, [data, lon, lat, value, series, label, step, fallback])
 }
 
+/** Where a tile stands: the config key of its color, its center and its corners on the globe. */
+type Shape = { key: string; center: Point3D; ground: Point3D[] }
+
+/**
+ * The shape of every tile `ids` names, read from its id once and not at
+ * every frame the camera turns - the gone ones too, while they shrink - and
+ * forgotten with the tile, so the memory stays the size of the globe.
+ */
+function useShapes(ids: string[], step: number) {
+  const memory = React.useRef({ step, shapes: new Map<string, Shape>() })
+  if (memory.current.step !== step) memory.current = { step, shapes: new Map() }
+  const { shapes } = memory.current
+  for (const id of ids) {
+    if (shapes.has(id)) continue
+    const { lon, lat, key } = tile(id)
+    shapes.set(id, {
+      key,
+      center: globe(lon, lat, GLOBE_RADIUS),
+      ground: corners(lon, lat, step, GLOBE_RADIUS),
+    })
+  }
+  if (shapes.size > ids.length) {
+    const live = new Set(ids)
+    for (const id of shapes.keys()) if (!live.has(id)) shapes.delete(id)
+  }
+  return shapes
+}
+
+/**
+ * What every tile says on hover, made once per change of the tiles or of
+ * what reads them, not at every frame the camera turns; every face of a tile
+ * shares it.
+ */
+function useTileTooltips<T extends Record<string, unknown>>(
+  tiles: Map<string, Tile<T>>,
+  { config, fields, format, tooltip }: Reading<T>
+) {
+  // The fields one by one: the record of them is new at every render.
+  const { lon, lat, value, series, label } = fields
+  return React.useMemo(() => {
+    const reading = { config, fields: { lon, lat, value, series, label }, format, tooltip }
+    return new Map([...tiles].map(([id, t]) => [id, tileTooltip(t, reading)]))
+  }, [tiles, config, lon, lat, value, series, label, format, tooltip])
+}
+
 /**
  * The ids of the tiles whose center lies in front of the center plane of the
  * globe, or less than half a tile behind it: every face of any other tile is
  * behind the plane too, and projecting those only to cull them cost half the
  * frame.
  */
-function nearTiles(ids: string[], step: number, eye: Camera3DInstance) {
+function nearTiles(ids: string[], shapes: Map<string, Shape>, step: number, eye: Camera3DInstance) {
   // Half a tile in the world box - y points down, so the north is negative:
   // a corner lies at most this far in front of its center.
   const edge = -globe(0, step / 2, GLOBE_RADIUS).y
-  const centers = ids.map((id) => {
-    const { lon, lat } = tile(id)
-    return { id, ...globe(lon, lat, GLOBE_RADIUS) }
-  })
+  const centers = ids.map((id) => ({ id, ...shapes.get(id)!.center }))
   return points3D<{ id: string } & Point3D>()
     .camera(eye)
     .data(centers)
@@ -248,20 +294,21 @@ function tile(id: string) {
  */
 function prismFaces(
   ids: string[],
+  shapes: Map<string, Shape>,
   heights: Record<string, number>,
   ceiling: number,
-  step: number,
   scale: number
 ): Face[] {
   return ids.flatMap((id) => {
-    const { lon, lat } = tile(id)
+    const bottom = shapes.get(id)!.ground
     const lift = (heights[id] / ceiling) * HEIGHT
-    const top = Object.assign(corners(lon, lat, step, GLOBE_RADIUS + lift), {
-      id,
-      part: "top" as const,
-    })
+    // A point on the globe scales with its radius: the top is the ground, lifted.
+    const k = (GLOBE_RADIUS + lift) / GLOBE_RADIUS
+    const top = Object.assign(
+      bottom.map((p) => ({ x: p.x * k, y: p.y * k, z: p.z * k })),
+      { id, part: "top" as const }
+    )
     if (lift * scale < 1) return [top]
-    const bottom = corners(lon, lat, step, GLOBE_RADIUS)
     return [
       top,
       ...bottom.map((b, i) => {
@@ -286,14 +333,12 @@ function corners(lon: number, lat: number, step: number, radius: number): Point3
  * nothing.
  */
 function tileTooltip<T extends Record<string, unknown>>(
-  found: Tile<T> | undefined,
+  { id, value, name, entries }: Tile<T>,
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
-  if (!found) return undefined
-  const { id, value, name, entries } = found
-  const { lon, lat, key } = tile(id)
-  return () =>
-    tooltip(
+  return () => {
+    const { lon, lat, key } = tile(id)
+    return tooltip(
       {
         title: name ?? config[key]?.label ?? key,
         items: [
@@ -304,6 +349,7 @@ function tileTooltip<T extends Record<string, unknown>>(
       },
       { entries }
     )
+  }
 }
 
 /**
@@ -311,11 +357,16 @@ function tileTooltip<T extends Record<string, unknown>>(
  * series and faded to its presence. Its group is the tile alone, so hovering
  * highlights one tile, not its series.
  */
-function prismMark(face: Polygon<Point3D, Face>, presence: number, tooltip: Mark3D["tooltip"]) {
+function prismMark(
+  face: Polygon<Point3D, Face>,
+  key: string,
+  presence: number,
+  tooltip: Mark3D["tooltip"]
+) {
   return {
     key: `${face.id}-${face.part}`,
     points: face.map((p) => p.projected),
-    fill: faded(shade(face, colorOf(tile(face.id).key)), presence),
+    fill: faded(shade(face, colorOf(key)), presence),
     groups: [face.id],
     tooltip,
   }

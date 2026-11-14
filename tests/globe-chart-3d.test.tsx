@@ -4,7 +4,12 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import {
+  ChartContainer3D,
+  useChart3D,
+  type Mark3D,
+  type Renderer3D,
+} from "@/registry/new-york/ui/chart-3d"
 import { GlobeChart3D } from "@/registry/new-york/ui/globe-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -779,5 +784,129 @@ describe("GlobeChart3D step", () => {
       )
     expect(faces(html()).length).toBeGreaterThan(0)
     for (const step of [0, -5, NaN, Infinity, 400]) expect(html(step)).toBe(html())
+  })
+})
+
+describe("GlobeChart3D while the camera turns", () => {
+  test("no tile is read from its id again: the data has not changed", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const data = [
+      { lon: 10, lat: 10, v: 1 },
+      { lon: 40, lat: -20, v: 2 },
+    ]
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="v" />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    const before = host.innerHTML
+    const split = vi.spyOn(String.prototype, "split")
+    await act(() =>
+      svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }))
+    )
+    // A tile's id is its center and its series: "12.5,12.5,population".
+    const read = split.mock.contexts.filter((id) => /^-?[\d.]+,-?[\d.]+,/.test(String(id)))
+    split.mockRestore()
+    expect(host.innerHTML).not.toBe(before)
+    expect(read).toEqual([])
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})
+
+describe("GlobeChart3D with a new step", () => {
+  test("a tile whose center stays draws at the width of the new step", async () => {
+    // At 1° and at 3° alike the tile of 1.5°, 1.5° is centered there, so its id stays.
+    const data = [{ lon: 1.5, lat: 1.5, v: 1 }]
+    const globeOf = (step: number) => (
+      <ChartContainer3D config={config}>
+        <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="v" step={step} />
+      </ChartContainer3D>
+    )
+    const mounted = async (step: number) => {
+      const host = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(host)
+      await act(async () => root.render(globeOf(step)))
+      const paths = () => [...host.querySelectorAll("path")].map((p) => p.getAttribute("d"))
+      const unmount = async () => {
+        await act(async () => root.unmount())
+        host.remove()
+      }
+      return { root, paths, unmount }
+    }
+    const turned = await mounted(1)
+    const narrow = turned.paths()
+    await act(async () => turned.root.render(globeOf(3)))
+    const fresh = await mounted(3)
+    expect(turned.paths()).not.toEqual(narrow)
+    expect(turned.paths()).toEqual(fresh.paths())
+    await turned.unmount()
+    await fresh.unmount()
+  })
+})
+
+describe("GlobeChart3D while the camera turns, its tiles", () => {
+  // Thirty tiles on the near side of the globe, clear of the equator: the margin of half a tile the globe keeps lies at 2.5°.
+  const data = Array.from({ length: 30 }, (_, i) => ({
+    lon: (i % 6) * 10,
+    lat: 10 + Math.floor(i / 6) * 10,
+    v: i + 1,
+  }))
+
+  /** Mounts the globe with a reader of its scene, and turns it by a key. */
+  async function turning() {
+    let scene: { current: Mark3D[] } = { current: [] }
+    function Scene() {
+      scene = useChart3D().scene
+      return null
+    }
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D data={data} land={land} lon="lon" lat="lat" value="v" />
+          <Scene />
+        </ChartContainer3D>
+      )
+    )
+    const svg = host.querySelector("svg")!
+    const turn = () =>
+      act(() =>
+        svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }))
+      )
+    const unmount = async () => {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+    return { scene: () => scene.current, turn, unmount }
+  }
+
+  test("keep the tooltip of every tile: none is made again for the turn", async () => {
+    const globe = await turning()
+    const before = new Map(globe.scene().map((m) => [m.key, m.tooltip]))
+    await globe.turn()
+    const after = globe.scene().filter((m) => before.get(m.key))
+    expect(after.length).toBeGreaterThan(0)
+    expect(after.every((m) => m.tooltip === before.get(m.key))).toBe(true)
+    await globe.unmount()
+  })
+
+  test("stand where they stood: no corner is placed on the globe again for the turn", async () => {
+    const globe = await turning()
+    // A corner lies half a tile, 2.5°, north or south of the center of its tile.
+    const edges = new Set(
+      data.flatMap((d) => [d.lat - 2.5, d.lat + 2.5]).map((lat) => (lat * Math.PI) / 180)
+    )
+    const cos = vi.spyOn(Math, "cos")
+    await globe.turn()
+    const corners = cos.mock.calls.filter(([angle]) => edges.has(angle))
+    cos.mockRestore()
+    expect(corners).toEqual([])
+    await globe.unmount()
   })
 })
