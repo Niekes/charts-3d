@@ -1,0 +1,4 @@
+scripts:
+  setup: |
+    npm ci
+setupAgentStartupPolicy: wait-for-setup
