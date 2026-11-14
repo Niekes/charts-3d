@@ -118,7 +118,7 @@ export function SurfaceChart3D({
   const marks = grid
     .data(points)
     .sort(sort)
-    .map((quad) =>
+    .flatMap((quad) =>
       quadMark(
         quad,
         fade,
@@ -168,7 +168,9 @@ function cellTooltip(
 
 /**
  * The mark of one cell: its quad, shaded by the color ramp at its height and
- * faded in place by `fade` while the cell enters or leaves.
+ * faded in place by `fade` while the cell enters or leaves. It is named by
+ * the row and column it starts at, as d3-3d numbers its quads anew as the
+ * grid grows.
  */
 function quadMark(
   quad: GridPlane<GridPoint>,
@@ -184,13 +186,14 @@ function quadMark(
   )
   // A corner only one of the tweens still knows is on its way out and stays unseen.
   const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))
+  const cell = `${Math.min(...quad.map((p) => p.r))}-${Math.min(...quad.map((p) => p.c))}`
   return {
-    key: quad.plane,
+    key: cell,
     points: quad.map((p) => p.projected),
     fill:
       seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
     // Its group is the cell, so hovering it lights the cell alone.
-    groups: [quad.plane],
+    groups: [cell],
     tooltip,
   }
 }

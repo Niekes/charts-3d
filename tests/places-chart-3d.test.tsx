@@ -78,6 +78,8 @@ describe("PlacesChart3D", () => {
             { lon: 15, lat: 15 },
             { lon: 15, lat: 45 },
             { lon: "n/a", lat: 45 },
+            // JSON writes a missing place as null, which is no 0°/0°.
+            { lon: null, lat: null },
           ]}
           land={none}
           lon="lon"
@@ -89,13 +91,14 @@ describe("PlacesChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
-  test("series names the config key of the color of each dot; a value that is not a number stands as 0", () => {
+  test("series names the config key of the color of each dot; a value that is not a finite number stands as 0", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>
         <PlacesChart3D
           data={[
             { lon: 15, lat: 15, people: 10, kind: "capital" },
             { lon: 15, lat: 45, people: "n/a", kind: "city" },
+            { lon: 15, lat: 75, people: Infinity, kind: "city" },
           ]}
           land={none}
           lon="lon"
@@ -106,7 +109,8 @@ describe("PlacesChart3D", () => {
       </ChartContainer3D>
     )
     expect(radii(html, "capital")).toEqual([6])
-    expect(radii(html, "city")).toEqual([0])
+    expect(radii(html, "city")).toEqual([0, 0])
+    expect(html).not.toContain("NaN")
   })
 
   test("places of no value at all draw dots of no size, not NaN", () => {

@@ -4,7 +4,7 @@ import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
 import { chartData, step } from "@/docs/examples/globe-chart-3d-demo"
 import { land } from "@/docs/examples/land"
-import { compact, night, populationConfig } from "@/docs/examples/population"
+import { compact, populationConfig } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same tiles, read two ways: a tile rises to the people of its metro
@@ -16,7 +16,7 @@ export default function GlobeChart3DUpdateDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={populationConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={populationConfig} renderer={renderer} legend>
         <GlobeChart3D
           data={chartData}
           land={land}

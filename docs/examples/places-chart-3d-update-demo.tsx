@@ -4,7 +4,7 @@ import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { PlacesChart3D } from "@/components/ui/places-chart-3d"
 import { land } from "@/docs/examples/land"
 import { chartData } from "@/docs/examples/places-chart-3d-demo"
-import { compact, night, placeConfig } from "@/docs/examples/population"
+import { compact, placeConfig } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same places, read two ways: a dot is as large as the people of its
@@ -15,7 +15,7 @@ export default function PlacesChart3DUpdateDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={placeConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={placeConfig} renderer={renderer} legend>
         <PlacesChart3D
           data={chartData}
           land={land}

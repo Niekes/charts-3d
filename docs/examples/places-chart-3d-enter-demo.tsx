@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { PlacesChart3D } from "@/components/ui/places-chart-3d"
 import { land } from "@/docs/examples/land"
-import { PlaceSelect, compact, night, placeConfig, placeRows } from "@/docs/examples/population"
+import { PlaceSelect, compact, placeConfig, placeRows } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The world place by place: lowering the bar, the smaller places grow out of
@@ -15,7 +15,7 @@ export default function PlacesChart3DEnterDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={placeConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={placeConfig} renderer={renderer} legend>
         <PlacesChart3D
           data={placeRows(min)}
           land={land}

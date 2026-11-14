@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- On a touch screen two fingers turn the chart and pinch it to the point
+  between them, while one finger scrolls the page and a tap inspects:
+  `touchOrbit` and `pinchZoom` in the shortcut panel and in `keymap`
+  (ADR-0001).
+- `numeric` and `finite`, the core helpers the charts read numbers with:
+  `null` and `""` are missing, not 0, and an infinite value stands as 0.
 - `tooltip` on every chart: a function of what the mark would say, a title
   and its items, and of the data behind the mark - the entry and series key
   of a bar, the entry of a point, the series key and the spanned entries of
@@ -102,6 +108,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   height, and makes its tooltip once, not at every frame. The many demo,
   about 5,200 tiles on the canvas, went from 34 ms a frame to 20 ms (29 to
   50 fps; minified build, headless Chrome, median of five runs).
+- A tap on a mark shows its tooltip on a phone, and lifting the finger
+  keeps it until a tap elsewhere; before, a phone showed no tooltip at all.
+- A tooltip tells the new value of its mark at the next move of the
+  pointer once new data arrives, instead of the one it showed before.
+- The cells of a surface keep their names as the grid grows, so the lit
+  cell and its tooltip stay the same cell.
+- Without `id`, a scatter point keeps its name when an entry before it
+  gains or loses its place.
+- The published types start with no `"use client"`, which broke projects
+  with `skipLibCheck: false`, and load the GeoJSON types `land` names.
+- The globe gathers the entries of a tile in one list, where it copied it
+  per entry.
 - Turning the camera no longer compares the data mark by mark: the charts
   build the numbers they glide once per change of the data, and `useTween`
   compares a record only when it is a new one. With 5,000 points the scatter

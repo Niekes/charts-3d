@@ -371,6 +371,66 @@ describe("SurfaceChart3D transitions", () => {
   })
 })
 
+describe("SurfaceChart3D keys", () => {
+  test("a cell keeps its name as the grid grows: the one hovered stays lit and still tells its own value", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const draw = (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    await draw([
+      [1, 2, 9],
+      [3, 4, 9],
+    ])
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const tip = () => host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
+    const cells = () =>
+      [...svg.querySelectorAll("path")].filter((p) => {
+        const fill = p.getAttribute("fill") ?? ""
+        return fill.startsWith("color-mix") || fill.startsWith("var(--chart-3d-focus")
+      })
+    const hover = (path: Element) => {
+      const corners = path.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
+      )
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+    // The first cell, of the corners 1, 2, 3 and 4, the one that says 2.5.
+    const first = async () => {
+      for (const cell of cells()) {
+        await hover(cell)
+        if (tip().includes("2.5")) return cell.getAttribute("d")
+      }
+    }
+    expect(await first()).toBeDefined()
+
+    // A column more renumbers the quads of d3-3d; the cell lit is still the first.
+    await draw([
+      [1, 2, 9, 9],
+      [3, 4, 9, 9],
+    ])
+    const lit = cells().filter((p) => p.getAttribute("fill")!.startsWith("var(--chart-3d-focus"))
+    expect(lit).toHaveLength(1)
+    const outline = lit[0].getAttribute("d")
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 5, clientY: 5 }))
+    )
+    expect(await first()).toBe(outline)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+})
+
 describe("SurfaceChart3D focus", () => {
   const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
   const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")

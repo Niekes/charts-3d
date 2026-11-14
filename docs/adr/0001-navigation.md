@@ -64,3 +64,22 @@ took every touch (`touch-none`) for a drag that a phone, having no modifier,
 could never make, so a chart taller than half the screen trapped the reader.
 It now carries `touch-pan-y`: the browser scrolls on a vertical swipe, and a
 tap and a sideways drag still reach the chart and inspect.
+
+Amended 2026-11-13: two fingers orbit and zoom on a touch screen. A phone
+has no modifier and no arrow keys, so the chart could not be turned there at
+all. Two fingers are one gesture, as on a map: the movement of the point
+between them turns the camera, the change of their distance zooms, both at
+once, and the zoom goes to that point as the wheel's goes to the cursor. One
+finger keeps what it had - a vertical swipe scrolls the page, a tap and a
+sideways drag inspect - so the chart still never traps the reader. There is
+no pan on touch: two fingers cannot both turn and pan. Considered and
+rejected: one finger rotates (tricharts offers it as `touchRotate`), because
+it takes the page scroll; a toolbar of rotate and zoom buttons, a fourth
+overlay for what the gesture and the keys already do. The browser would take
+a two-finger vertical drag for a scroll under `touch-pan-y`, so the core
+claims the touch itself once the second finger lands - only fingers that
+landed on the chart count, so a thumb resting beside it leaves the scroll
+alone, and a scroll the browser has begun stays the browser's. While two
+fingers hold the chart, its tooltip goes, as in a drag, rather than jumping
+from one finger to the other. Both are actions of
+`SHORTCUTS`, off through `keymap` like any other.

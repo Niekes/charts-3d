@@ -268,14 +268,20 @@ describe("GlobeChart3D props", () => {
     expect(faces(out, "population").length).toBeGreaterThan(0)
   })
 
+  test("an entry whose place is null has no tile: null is no 0°/0°", () => {
+    expect(faces(html([{ lon: null, lat: null, n: 1 }]))).toHaveLength(0)
+  })
+
   test("the far edge and beyond fall into the last tile, an entry without a place has none, a value that is not a number stands as 0", () => {
     const out = html([
       { lon: 180, lat: 90, n: 1 },
       { lon: 400, lat: -100, n: 1 },
       { lon: "n/a", lat: 45, n: 1 },
       { lon: 15, lat: 45, n: "n/a" },
+      { lon: -45, lat: -45, n: Infinity },
     ])
     expect(out).not.toContain("NaN")
+    expect(out).not.toContain("Infinity")
     // The three entries with a place share no tile: the top of each is a face, at least.
     expect(faces(out).length).toBeGreaterThanOrEqual(2)
   })

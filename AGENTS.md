@@ -107,7 +107,8 @@ Two consequences worth remembering:
 - **The core knows nothing about the charts.** It holds the container, the
   camera and its shortcuts and gizmo, the axes, the marks and their
   renderers, the tooltip and the helpers (`axis`, `linear`, `worldBox`,
-  `shade`, `faded`, `useSeries`).
+  `shade`, `faded`, `useSeries`, and `numeric` and `finite`, which read a
+  field of the data as a number).
   A helper that two charts need moves here.
 
 ### The chart template
@@ -304,7 +305,7 @@ every renderer, so text stays sharp and the theme stays in CSS.
 ### Interaction
 
 The camera moves through one table, `SHORTCUTS` in the core: an action per
-row, with its default keys, or the hint of its gesture, and its label. The
+row, with its default keys, or its gesture, and its label. The
 keys of an action move the camera, and the shortcut panel - the keyboard
 button and `?` - lists every action that is on, one row per label. A new
 gesture is a new action, so the panel never misses one.
@@ -325,8 +326,10 @@ gesture is a new action, so the panel never misses one.
   modifier** ([ADR-0001](docs/adr/0001-navigation.md)): ⌘ on a Mac, Ctrl on
   Windows and Linux, and a drag rotates; a plain drag only inspects, with the
   default cursor. Alt - ⌥ on a Mac - and a drag pans, and a double click
-  resets. The panel
-  shows each gesture with its hint, so a chart needs no gesture of its own.
+  resets. On a touch screen two fingers turn the camera and their pinch
+  zooms, through the core's own listener, as the wheel; one finger is left
+  to the page. The panel
+  names each gesture, so a chart needs no gesture of its own.
 - **The wheel zooms only with the platform modifier** - ⌘ on a Mac, Ctrl
   elsewhere, and the panel says so - while Ctrl keeps zooming on a Mac too,
   because a trackpad pinch arrives as Ctrl and the wheel; the wheel alone

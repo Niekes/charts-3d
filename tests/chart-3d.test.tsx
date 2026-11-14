@@ -146,6 +146,18 @@ describe("ChartContainer3D", () => {
     expect(style).toContain("--color-b: \\3c /style>")
   })
 
+  test("an id with a dot, a space or a quote still names its chart in the style", async () => {
+    const chart = await mount(
+      <ChartContainer3D id={'sales 2024.q1"'} config={{ a: { color: "red" } }}>
+        {null}
+      </ChartContainer3D>
+    )
+    const style = chart.host.querySelector("style")!.textContent!
+    const selector = style.match(/^(\[data-chart=.*?\]) svg\[data-mod/m)![1]
+    expect(chart.host.querySelector(selector)).toBe(chart.host.querySelector("[data-chart]"))
+    await chart.unmount()
+  })
+
   test("nor can the id of a chart without colors", () => {
     const html = renderToString(
       <ChartContainer3D id="</style><script>" config={{}}>
@@ -234,6 +246,27 @@ function Camera() {
   )
 }
 const view = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
+
+/**
+ * A touch event with a finger on the chart at each of `on` and, if any, more
+ * on the screen beside it, since jsdom builds no touch list. A touch the
+ * browser has begun to scroll with is not `cancelable`.
+ */
+const fingers = (
+  type: string,
+  on: [number, number][],
+  {
+    elsewhere = [],
+    cancelable = true,
+  }: { elsewhere?: [number, number][]; cancelable?: boolean } = {}
+) => {
+  const list = (at: [number, number][]) => at.map(([clientX, clientY]) => ({ clientX, clientY }))
+  return Object.assign(new Event(type, { bubbles: true, cancelable }), {
+    targetTouches: list(on),
+    touches: list([...on, ...elsewhere]),
+  })
+}
+const touch = (type: string, ...on: [number, number][]) => fingers(type, on)
 
 const pointer = (
   type: string,
@@ -416,9 +449,9 @@ describe("shortcuts", () => {
     await chart.send(key("?"))
 
     expect(rows(chart.host)).toEqual([
-      ["Rotate", "←→↑↓", "CtrlDrag"],
+      ["Rotate", "←→↑↓", "CtrlDrag", "Two-finger drag"],
       ["Pan", "Shift←→↑↓", "AltDrag"],
-      ["Zoom", "+−", "CtrlScroll"],
+      ["Zoom", "+−", "CtrlScroll", "Pinch"],
       ["Reset", "0", "Double-click"],
       ["Keyboard shortcuts", "?"],
     ])
@@ -475,6 +508,121 @@ describe("shortcuts", () => {
     await chart.unmount()
   })
 
+  test("two fingers dragged turn the camera, and one finger is left to the page", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    const read = () => view(chart.host)
+
+    // One finger moves nothing and stays the browser's: a swipe scrolls the page.
+    const one = touch("touchmove", [150, 150])
+    await chart.send(touch("touchstart", [100, 150]))
+    await chart.send(one)
+    expect(one.defaultPrevented).toBe(false)
+    expect(read().yaw).toBe(0)
+
+    // The second finger lands, and both move 46 pixels to the right: the
+    // point between them does too, as far as a drag of the mouse turns.
+    await chart.send(touch("touchstart", [150, 150], [250, 150]))
+    const two = touch("touchmove", [196, 150], [296, 150])
+    await chart.send(two)
+    expect(two.defaultPrevented).toBe(true)
+    expect(read().yaw).toBeCloseTo(Math.PI / 5)
+    expect(read().scale).toBe(120)
+    expect(chart.svg.getAttribute("data-orbiting")).toBe("true")
+
+    // Spread apart around the same point, they zoom and turn nothing.
+    await chart.send(touch("touchmove", [146, 150], [346, 150]))
+    expect(read().scale).toBe(240)
+    expect(read().yaw).toBeCloseTo(Math.PI / 5)
+    expect(chart.svg.getAttribute("data-orbiting")).toBe("false")
+
+    // A finger lifted ends the gesture: the one left turns nothing.
+    await chart.send(touch("touchend", [196, 150]))
+    await chart.send(touch("touchmove", [296, 150]))
+    expect(read().yaw).toBeCloseTo(Math.PI / 5)
+
+    await chart.unmount()
+  })
+
+  test("two fingers pinch the zoom to the point between them, and turn nothing where orbiting is off", async () => {
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: 0, tilt: 0 }}
+        keymap={{ touchOrbit: false }}
+      >
+        <Camera />
+      </ChartContainer3D>
+    )
+    // The svg is drawn at half its view box, as in the test of the wheel.
+    chart.svg.getBoundingClientRect = () =>
+      ({ left: 10, top: 50, width: 320, height: 200 }) as DOMRect
+    const read = () => view(chart.host)
+
+    // The fingers 100 apart around (220, 200), then 200 apart around it:
+    // twice as close, to the point between them, and the move turns nothing.
+    await chart.send(touch("touchstart", [170, 200], [270, 200]))
+    await chart.send(touch("touchmove", [120, 200], [320, 200]))
+    expect(read()).toEqual({ origin: { x: 220, y: 100 }, scale: 240, yaw: 0 })
+    expect(chart.svg.getAttribute("data-orbiting")).toBe("false")
+
+    await chart.unmount()
+  })
+
+  test("two fingers drop the tooltip, and a finger off the chart or a scroll begun stays the page's", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const read = () => view(chart.host)
+
+    // Each finger is a pointer too, and would carry the tooltip from one to the other.
+    await chart.send(pointer("pointermove", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+    await chart.send(touch("touchstart", [150, 150], [250, 150]))
+    await chart.send(pointer("pointermove", 150, 150))
+    expect(chart.host.textContent).not.toContain("Square")
+    await chart.send(touch("touchend", [150, 150]))
+    await chart.send(pointer("pointermove", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+
+    // One finger on the chart and a thumb resting beside it: the page scrolls.
+    const thumb = fingers("touchmove", [[150, 200]], { elsewhere: [[600, 380]] })
+    await chart.send(fingers("touchstart", [[150, 150]], { elsewhere: [[600, 380]] }))
+    await chart.send(thumb)
+    expect(thumb.defaultPrevented).toBe(false)
+
+    // The second finger lands while the page already scrolls: the browser keeps it.
+    await chart.send(
+      fingers(
+        "touchstart",
+        [
+          [150, 150],
+          [250, 150],
+        ],
+        { cancelable: false }
+      )
+    )
+    await chart.send(
+      fingers(
+        "touchmove",
+        [
+          [196, 150],
+          [296, 150],
+        ],
+        { cancelable: false }
+      )
+    )
+    expect(read().yaw).toBe(0)
+
+    await chart.unmount()
+  })
+
   test("a vertical swipe on the chart scrolls the page", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
@@ -498,7 +646,9 @@ describe("shortcuts", () => {
           reset: false,
           doubleClickReset: false,
           wheelZoom: false,
+          pinchZoom: false,
           dragRotate: false,
+          touchOrbit: false,
           dragPan: false,
         }}
       >
@@ -526,6 +676,12 @@ describe("shortcuts", () => {
     const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })
     await chart.send(space)
     expect(space.defaultPrevented).toBe(false)
+    // Two fingers are left to the browser too.
+    await chart.send(touch("touchstart", [150, 150], [250, 150]))
+    const fingers = touch("touchmove", [196, 150], [396, 150])
+    await chart.send(fingers)
+    expect(fingers.defaultPrevented).toBe(false)
+    expect(read().scale).toBe(120)
     // Without a drag, a press and a move hover the marks.
     await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
     await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
@@ -587,7 +743,7 @@ describe("shortcuts", () => {
     expect(button.getAttribute("aria-controls")).toBe(panel.id)
 
     expect(rows(chart.host).slice(0, 2)).toEqual([
-      ["Rotate", "→↑↓", "CtrlDrag"],
+      ["Rotate", "→↑↓", "CtrlDrag", "Two-finger drag"],
       ["Links drehen", "←"],
     ])
     expect(rows(chart.host).at(-1)).toEqual(["Tastenkürzel", "h"])
@@ -650,6 +806,59 @@ function rows(host: HTMLElement) {
 }
 
 describe("pointer", () => {
+  test("a finger shows the tooltip of the mark it taps, which stays when it lifts, until a tap beside it", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const finger = (type: string, clientX: number, clientY: number, init: MouseEventInit = {}) =>
+      Object.assign(pointer(type, clientX, clientY, undefined, init), { pointerType: "touch" })
+
+    // A tap moves nothing: the press alone inspects.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+    // Lifting, the finger leaves the chart; what it tapped stays shown.
+    await chart.send(finger("pointerup", 150, 150))
+    await chart.send(finger("pointerout", 150, 150, { relatedTarget: document.body }))
+    expect(chart.host.textContent).toContain("Square")
+    // A tap beside every mark clears it.
+    await chart.send(finger("pointerdown", 300, 300))
+    expect(chart.host.textContent).not.toContain("Square")
+
+    // So does a tap off the chart, on the page or on another chart.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(chart.host.textContent).toContain("Square")
+    await act(() => document.body.dispatchEvent(finger("pointerdown", 900, 900)))
+    expect(chart.host.textContent).not.toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("a pinch lifting its fingers leaves no mark lit", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[{ ...marks[0], groups: ["square"] }, marks[1]]} />
+      </ChartContainer3D>
+    )
+    const finger = (type: string, clientX: number, clientY: number, init: MouseEventInit = {}) =>
+      Object.assign(pointer(type, clientX, clientY, undefined, init), { pointerType: "touch" })
+    const square = () => chart.host.querySelector('path[d^="M100,100"]')!.getAttribute("fill")
+
+    // The first finger lands on the square, the second beside it: the pinch drops the tooltip.
+    await chart.send(finger("pointerdown", 150, 150))
+    expect(square()).toMatch(/^var\(--chart-3d-focus/)
+    await chart.send(touch("touchstart", [150, 150], [250, 150]))
+    await chart.send(finger("pointermove", 150, 150))
+    expect(chart.host.textContent).not.toContain("Square")
+    // The fingers lift, and leave the chart: the square goes dark again.
+    await chart.send(touch("touchend"))
+    await chart.send(finger("pointerout", 150, 150, { relatedTarget: document.body }))
+    expect(square()).toBe("red")
+
+    await chart.unmount()
+  })
+
   test("a press that wanders a few pixels stays a click, a drag turns the camera", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
@@ -1048,6 +1257,63 @@ describe("Marks3D", () => {
 
     await chart.unmount()
   })
+  test("new data under a resting pointer tells the new value as soon as the pointer moves", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const draw = (value: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>
+            <Marks3D
+              marks={[{ ...marks[0], tooltip: () => ({ items: [{ label: "n", value }] }) }]}
+            />
+          </ChartContainer3D>
+        )
+      )
+    await draw(10)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const move = (clientX: number) =>
+      act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY: 150 }))
+      )
+    const tip = () => host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent
+
+    await move(150)
+    expect(tip()).toBe("n10")
+    // The same mark, by its key, now of another value.
+    await draw(7)
+    await move(160)
+    expect(tip()).toBe("n7")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("marks taken out of the chart leave the scene: nothing is left to hover", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const draw = (shown: boolean) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{}}>{shown && <Marks3D marks={marks} />}</ChartContainer3D>
+        )
+      )
+    await draw(true)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await draw(false)
+    await act(() =>
+      svg.dispatchEvent(
+        new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 })
+      )
+    )
+    expect(host.textContent).not.toContain("Square")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a tooltip given as a function is made when the pointer lands on the mark; null shows none", async () => {
     const lazy = vi.fn(() => ({ items: [{ label: "Lazy", value: 1 }] }))
     const chart = await mount(

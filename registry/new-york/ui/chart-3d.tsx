@@ -158,7 +158,13 @@ export type KeyAction3D =
   | "help"
 
 /** The gestures of the pointer, which `keymap` can turn off or rename but not rebind; the shortcut panel shows each with its modifier on the reader's platform. */
-export type Gesture3D = "dragRotate" | "dragPan" | "wheelZoom" | "doubleClickReset"
+export type Gesture3D =
+  | "dragRotate"
+  | "touchOrbit"
+  | "dragPan"
+  | "wheelZoom"
+  | "pinchZoom"
+  | "doubleClickReset"
 
 /**
  * The shortcuts of a chart over their defaults, per action: `false` turns an
@@ -174,27 +180,29 @@ export type Keymap3D = {
 type Action3D = KeyAction3D | Gesture3D
 
 // The shortcuts of a chart, in the order of the shortcut panel: the keys of
-// an action move the camera, a gesture shows its hint, and the panel lists
+// an action move the camera, a gesture shows how it is made, and the panel lists
 // every action that is on, so the two never disagree. `keymap` overrides them.
 const SHORTCUTS: Record<
   Action3D,
-  { label: string; keys?: string[]; hint?: string[]; move?: Move }
+  { label: string; keys?: string[]; gesture?: string[]; move?: Move }
 > = {
-  dragRotate: { label: "Rotate", hint: ["Mod", "Drag"] },
+  dragRotate: { label: "Rotate", gesture: ["Mod", "Drag"] },
+  touchOrbit: { label: "Rotate", gesture: ["Two-finger drag"] },
   rotateLeft: { label: "Rotate", keys: ["ArrowLeft"], move: { yaw: -KEY_STEP } },
   rotateRight: { label: "Rotate", keys: ["ArrowRight"], move: { yaw: KEY_STEP } },
   rotateUp: { label: "Rotate", keys: ["ArrowUp"], move: { tilt: -KEY_STEP } },
   rotateDown: { label: "Rotate", keys: ["ArrowDown"], move: { tilt: KEY_STEP } },
-  dragPan: { label: "Pan", hint: ["Alt", "Drag"] },
+  dragPan: { label: "Pan", gesture: ["Alt", "Drag"] },
   panLeft: { label: "Pan", keys: ["Shift+ArrowLeft"], move: { pan: { x: -PAN_STEP, y: 0 } } },
   panRight: { label: "Pan", keys: ["Shift+ArrowRight"], move: { pan: { x: PAN_STEP, y: 0 } } },
   panUp: { label: "Pan", keys: ["Shift+ArrowUp"], move: { pan: { x: 0, y: -PAN_STEP } } },
   panDown: { label: "Pan", keys: ["Shift+ArrowDown"], move: { pan: { x: 0, y: PAN_STEP } } },
   zoomIn: { label: "Zoom", keys: ["Plus", "="], move: { zoom: ZOOM_STEP } },
   zoomOut: { label: "Zoom", keys: ["-"], move: { zoom: 1 / ZOOM_STEP } },
-  wheelZoom: { label: "Zoom", hint: ["Mod", "Scroll"] },
+  wheelZoom: { label: "Zoom", gesture: ["Mod", "Scroll"] },
+  pinchZoom: { label: "Zoom", gesture: ["Pinch"] },
   reset: { label: "Reset", keys: ["0"], move: { reset: true } },
-  doubleClickReset: { label: "Reset", hint: ["Double-click"] },
+  doubleClickReset: { label: "Reset", gesture: ["Double-click"] },
   help: { label: "Keyboard shortcuts", keys: ["?"] },
 }
 
@@ -277,7 +285,7 @@ function shortcutsOf(keymap: Keymap3D | false) {
       ...SHORTCUTS[action],
       ...(Array.isArray(own) ? { keys: own } : own || {}),
     }
-    const on = own !== false && (shortcut.hint !== undefined || keys.length > 0)
+    const on = own !== false && (shortcut.gesture !== undefined || keys.length > 0)
     return { ...shortcut, action, on, keys: keys.map(combo) }
   })
 }
@@ -290,12 +298,12 @@ type Shortcut = ReturnType<typeof shortcutsOf>[number]
  */
 function rowsOf(shortcuts: Shortcut[]) {
   const rows = new Map<string, { keys: Map<string, string[]>; gestures: string[][] }>()
-  for (const { label, keys, hint } of shortcuts) {
-    const parts = (hint ?? split(keys[0])).map((k) =>
+  for (const { label, keys, gesture } of shortcuts) {
+    const parts = (gesture ?? split(keys[0])).map((k) =>
       k === "Mod" ? modLabel() : k === "Alt" ? altLabel() : (KBD[k] ?? k)
     )
     const row = rows.get(label) ?? { keys: new Map<string, string[]>(), gestures: [] }
-    if (hint) row.gestures.push(parts)
+    if (gesture) row.gestures.push(parts)
     else {
       const group = parts.slice(0, -1).join("+")
       const known = row.keys.get(group)
@@ -478,11 +486,11 @@ function ChartSvg3D({
 /**
  * What the svg says about its keymap: a label that names the `mod` drag and the
  * help key if they are on, the keys, the focus only if a key does something
- * and, if a drag does, `touch-pan-y`: a vertical swipe scrolls the page and
- * every other touch reaches the chart.
+ * and, if a drag or two fingers do, `touch-pan-y`: a vertical swipe scrolls
+ * the page and every other touch reaches the chart.
  */
 function keymapProps(keys: Keymap, mod: string, label?: string): React.SVGProps<SVGSVGElement> {
-  const drag = keys.on("dragRotate") || keys.on("dragPan")
+  const drag = (["dragRotate", "dragPan", "touchOrbit", "pinchZoom"] as const).some(keys.on)
   const help = keys.help[0]
   const said = [
     "3D chart.",
@@ -685,10 +693,13 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
   return shown
 }
 
-/** The numbers of `tween` on screen: `from` eased into `to`, a new key from `enter` or where it ends, a gone one gliding back to `enter` until the glide is done. */
+/**
+ * The numbers of `tween` on screen: `from` eased into `to`, a new key from
+ * `enter` or where it ends, a gone one gliding back to `enter` until the
+ * glide is done. At rest, as while the camera turns, they are the target
+ * itself: nothing to build.
+ */
 function tweenNumbers({ from, to, t }: Tween, enter?: number) {
-  // At the end the numbers themselves - no float drift stays in the data - and
-  // the very record, so no frame at rest rebuilds it.
   if (t >= 1) return to
   const s = t * t * (3 - 2 * t)
   const gone = Object.entries(from).filter(([k]) => !(k in to))
@@ -831,9 +842,12 @@ function between(from: View3D, to: View3D, k: number): View3D {
 /**
  * The view of the camera, and the handlers that move it, as far as `keys`
  * has them on: a drag turns it, or pans it while Alt is held, the keys step
- * it, Ctrl or ⌘ with the wheel zooms it and a double click resets it.
+ * it, Ctrl or ⌘ with the wheel zooms it and a double click resets it - a
+ * drag following the pointer at once, a key and a double click gliding.
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
- * runs when a press becomes a drag, `onHover` on a move without one.
+ * runs when a press becomes a drag, `onHover` on a move without one - but
+ * under two fingers, where the tooltip would jump from one to the other, it
+ * goes, as in a drag.
  */
 function useOrbit(
   defaultView: View3D,
@@ -846,8 +860,7 @@ function useOrbit(
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
-  const ref = useWheelZoom(jump, keys.on("wheelZoom"), width)
-  // A drag follows the pointer at once, a key and a double click glide.
+  const { ref, touching } = useGestures(jump, keys, width, setOrbiting)
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
   const keyHandlers = useKeys(keys, step, setOrbiting)
@@ -859,7 +872,8 @@ function useOrbit(
   const handlers: OrbitHandlers = {
     ref,
     onPointerDown: (e) => {
-      // Alt held, the drag pans; the platform modifier held, it turns.
+      // A finger inspects where it lands, a tap having no move; Alt held, the drag pans, Mod turns.
+      if (e.pointerType === "touch") return onHover(e)
       const pans = keys.on("dragPan") && e.altKey
       if (pans || (keys.on("dragRotate") && platformMod(e))) {
         drag.current = { x: e.clientX, y: e.clientY, moved: false, rotate: !pans }
@@ -867,7 +881,7 @@ function useOrbit(
     },
     onPointerMove: (e) => {
       const d = drag.current
-      if (!d) return onHover(e)
+      if (!d) return touching.current ? onDragStart() : onHover(e)
       // A drag moves only while its modifier is held: the platform modifier
       // turning, Alt panning.
       if (d.rotate ? !platformMod(e) : !e.altKey) return release()
@@ -952,6 +966,106 @@ function useKeys(
   return { onKeyDown, onKeyUp }
 }
 
+/** A ref for the svg that hands it to the listeners of the wheel and of two fingers. */
+function useGestures(
+  jump: (to: (from: View3D) => View3D) => void,
+  keys: Keymap,
+  width: number,
+  setOrbiting: (orbiting: boolean) => void
+) {
+  const wheel = useWheelZoom(jump, keys.on("wheelZoom"), width)
+  const touch = useTouch(jump, keys, width, setOrbiting)
+  const ref = React.useCallback(
+    (svg: SVGSVGElement | null) => {
+      const off = [wheel(svg), touch.ref(svg)]
+      return () => off.forEach((f) => f?.())
+    },
+    [wheel, touch.ref]
+  )
+  return { ref, touching: touch.touching }
+}
+
+/** The point (`x`, `y`) of the client in the units of the view box of `svg`, `width` wide, from its middle. */
+function inViewBox(svg: SVGSVGElement, width: number, x: number, y: number) {
+  const box = svg.getBoundingClientRect()
+  const k = width / box.width
+  return { x: (x - box.left - box.width / 2) * k, y: (y - box.top - box.height / 2) * k }
+}
+
+/** Two fingers as one: the point between them and their distance, in the pixels of the client. */
+type Pinch = { x: number; y: number; d: number }
+
+const pinchOf = (a: Touch, b: Touch): Pinch => ({
+  x: (a.clientX + b.clientX) / 2,
+  y: (a.clientY + b.clientY) / 2,
+  d: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY),
+})
+
+/**
+ * The step of the camera from the fingers `last` to `now`: the move of the
+ * point between them turns it, if `orbit`, as far as a drag of the mouse, and
+ * the change of their distance zooms it, if `zoom`. Two fingers on one pixel
+ * have no distance to zoom from.
+ */
+function pinchStep(last: Pinch, now: Pinch, orbit: boolean, zoom: boolean): Move {
+  const [dx, dy] = orbit ? [now.x - last.x, now.y - last.y] : [0, 0]
+  return { yaw: dx * DRAG, tilt: dy * DRAG, zoom: zoom ? now.d / Math.max(last.d, 1) : 1 }
+}
+
+/**
+ * A ref for the svg that turns the camera with two fingers on it and zooms it
+ * with their pinch, as far as `keys` has them on: the move of the point
+ * between them turns, the change of their distance zooms to that point, both
+ * at once. One finger is left to the browser, which scrolls the page with it
+ * (ADR-0001), and so is a touch it has begun to scroll. The listeners are the
+ * core's own: only one that is not passive keeps the browser from scrolling
+ * under two fingers. `touching` is true while two fingers hold the chart.
+ */
+function useTouch(
+  jump: (to: (from: View3D) => View3D) => void,
+  keys: Keymap,
+  width: number,
+  setOrbiting: (orbiting: boolean) => void
+) {
+  const orbit = keys.on("touchOrbit")
+  const zoom = keys.on("pinchZoom")
+  const touching = React.useRef(false)
+  const ref = React.useCallback(
+    (svg: SVGSVGElement | null) => {
+      if (!svg || !(orbit || zoom)) return
+      let last: Pinch | null = null
+      const onTouch = (e: TouchEvent) => {
+        // Only fingers that landed on the chart count, and a touch the browser
+        // scrolls with can no longer be cancelled: it stays the browser's.
+        if (e.targetTouches.length !== 2 || !e.cancelable) {
+          if (last) setOrbiting(false)
+          touching.current = false
+          last = null
+          return
+        }
+        e.preventDefault()
+        touching.current = true
+        const now = pinchOf(e.targetTouches[0], e.targetTouches[1])
+        if (last) {
+          const step = {
+            ...pinchStep(last, now, orbit, zoom),
+            at: inViewBox(svg, width, now.x, now.y),
+          }
+          jump((v) => moved(v, step, v))
+          setOrbiting(Boolean(step.yaw || step.tilt))
+        }
+        last = now
+      }
+      const events = ["touchstart", "touchmove", "touchend", "touchcancel"]
+      for (const type of events)
+        svg.addEventListener(type, onTouch as EventListener, { passive: false })
+      return () => events.forEach((type) => svg.removeEventListener(type, onTouch as EventListener))
+    },
+    [jump, orbit, zoom, width, setOrbiting]
+  )
+  return { ref, touching }
+}
+
 /**
  * A ref for the svg that zooms the view to the cursor with the platform
  * modifier and the wheel, if `on`. Ctrl and the wheel zooms on a Mac too, because a trackpad
@@ -970,13 +1084,7 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean,
       const onWheel = (e: WheelEvent) => {
         if (!platformMod(e) && !e.ctrlKey) return
         e.preventDefault()
-        // The cursor, in the units of the view box, from the middle of the svg.
-        const box = svg.getBoundingClientRect()
-        const k = width / box.width
-        const at = {
-          x: (e.clientX - box.left - box.width / 2) * k,
-          y: (e.clientY - box.top - box.height / 2) * k,
-        }
+        const at = inViewBox(svg, width, e.clientX, e.clientY)
         jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200), at }, v))
         svg.dataset.zoom = e.deltaY < 0 ? "in" : "out"
         clearTimeout(timer)
@@ -995,12 +1103,14 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean,
 /**
  * The tooltip of the mark under the pointer, the one painted last, and the
  * focus on its groups. The highlight follows the mark: `hover` sets the
- * tooltip only when the pointer moves onto another mark, and the focus only
- * when the groups change, so a move within a mark does not render the chart
- * again; off the mark and when the pointer leaves the chart, `leave` drops
- * both. While a drag turns the chart under the captured pointer, `hide`
- * drops the tooltip and keeps the focus, so a flow does not flash away and
- * can be followed from every side.
+ * tooltip only when the pointer moves onto another mark, or onto new data
+ * under the same one, and the focus only when the groups change, so a move
+ * within a mark of a chart at rest does not render it again; off the mark and
+ * when the pointer leaves the chart, `leave` drops both. A finger lifting
+ * leaves the chart too: what it tapped stays until a tap elsewhere, on the
+ * chart or off it. While a drag turns the chart under the captured pointer,
+ * `hide` drops the tooltip and keeps the focus, so a flow does not flash away
+ * and can be followed from every side.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -1010,10 +1120,19 @@ function useHover(
   focus: Focus3D
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
+  const svg = React.useRef<SVGSVGElement>(null)
+  const { set } = tip
+  const clear = React.useCallback(() => {
+    hovered.current = undefined
+    focus.set(undefined)
+    set(null)
+  }, [focus, set])
+  useTapElsewhere(svg, clear)
   const show = (mark?: Mark3D) => {
     // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
     focus.set(mark?.groups)
-    if (mark?.key === hovered.current?.key) return
+    // The tooltip decides what shows: the same one says the same, new data under the same mark another.
+    if (mark?.tooltip === hovered.current?.tooltip) return
     hovered.current = mark
     const tooltip = mark?.tooltip
     tip.set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
@@ -1021,6 +1140,7 @@ function useHover(
 
   return {
     hover: (e: React.PointerEvent<SVGSVGElement>) => {
+      svg.current = e.currentTarget
       const rect = e.currentTarget.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
@@ -1031,8 +1151,22 @@ function useHover(
       hovered.current = undefined
       tip.set(null)
     },
-    leave: () => show(undefined),
+    leave: (e: React.PointerEvent) => {
+      // A pinch dropped the tooltip already: lifting its fingers drops the focus too.
+      if (e.pointerType !== "touch" || !hovered.current) show(undefined)
+    },
   }
+}
+
+/** Calls `clear` when a finger taps anywhere but `svg`: on the page, or on another chart. */
+function useTapElsewhere(svg: React.RefObject<SVGSVGElement | null>, clear: () => void) {
+  React.useEffect(() => {
+    const tap = (e: PointerEvent) => {
+      if (e.pointerType === "touch" && !svg.current?.contains(e.target as Node)) clear()
+    }
+    document.addEventListener("pointerdown", tap)
+    return () => document.removeEventListener("pointerdown", tap)
+  }, [svg, clear])
 }
 
 /** A store for the groups in focus, which tells its listeners only when the groups change. */
@@ -1430,24 +1564,25 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
   )
 }
 
-function ChartStyle({ id: raw, config }: { id: string; config: ChartConfig }) {
-  const id = cssName(raw)
+function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
+  // The id escaped whole, as a CSS identifier, so a dot or a space keeps it one selector.
+  const scope = `[data-chart=${cssName(id)}]`
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
   // The cursor names the gesture of the held modifier: the platform modifier
   // a hand (Alt, held with it, wins, as it does on pointer down), Alt the four
   // arrows of the pan, the wheel zoom its direction, and a turning drag grabbing.
   const entering = ["text", "line", "path"]
-    .map((el) => `[data-chart=${id}] [data-slot="chart-3d-axes"] ${el}`)
+    .map((el) => `${scope} [data-slot="chart-3d-axes"] ${el}`)
     .join(", ")
   const base = `@keyframes chart-3d-axes-in { from { opacity: 0; } }
 ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
 @media (prefers-reduced-motion: reduce) { ${entering} { animation: none; } }
-[data-chart=${id}] svg[data-mod="true"] { cursor: grab; }
-[data-chart=${id}] svg[data-alt="true"] { cursor: move; }
-[data-chart=${id}] svg[data-zoom="in"] { cursor: zoom-in; }
-[data-chart=${id}] svg[data-zoom="out"] { cursor: zoom-out; }
-[data-chart=${id}] svg[data-orbiting="true"] { cursor: grabbing; }`
+${scope} svg[data-mod="true"] { cursor: grab; }
+${scope} svg[data-alt="true"] { cursor: move; }
+${scope} svg[data-zoom="in"] { cursor: zoom-in; }
+${scope} svg[data-zoom="out"] { cursor: zoom-out; }
+${scope} svg[data-orbiting="true"] { cursor: grabbing; }`
 
   // No colors, no rule per theme.
   const themes = colorConfig.length ? Object.entries(THEMES) : []
@@ -1459,7 +1594,7 @@ ${entering} { animation: chart-3d-axes-in 300ms ease-out; }
           base,
           ...themes.map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} ${scope} {
 ${colorConfig
   .map(([key, item]) => {
     const color = item.theme?.[theme as keyof typeof item.theme] || item.color

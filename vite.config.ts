@@ -65,7 +65,9 @@ export default defineConfig({
     dts: true,
     // A bundler drops the directive of a module, so the package gets it back
     // on top: the components use hooks, and Next.js has to load them on the client.
-    banner: '"use client"',
+    // The types take no directive, a statement where none may stand, but the
+    // GeoJSON namespace their `land` names, which nothing else there loads.
+    banner: { js: '"use client"', dts: '/// <reference types="geojson" />' },
     inputOptions: {
       // The banner puts the directive back, so the warning that it is dropped is noise.
       onLog(level, log, handler) {

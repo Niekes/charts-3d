@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { ChoroplethChart3D } from "@/components/ui/choropleth-chart-3d"
 import { land } from "@/docs/examples/land"
-import { compact, night } from "@/docs/examples/population"
+import { compact } from "@/docs/examples/population"
 import { regionConfig, regionRows } from "@/docs/examples/regions"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
@@ -15,7 +15,7 @@ export default function ChoroplethChart3DDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={regionConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={regionConfig} renderer={renderer} legend>
         <ChoroplethChart3D
           data={chartData}
           land={land}
