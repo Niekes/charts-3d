@@ -628,47 +628,7 @@ describe("GlobeChart3D transitions", () => {
 })
 
 describe("GlobeChart3D renderer switch", () => {
-  test("svg to canvas to webgl and back repaints each time, without error", async () => {
-    const gl = {
-      viewport: vi.fn(),
-      disable: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      useProgram: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4f: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      getAttribLocation: vi.fn(() => 0),
-      enableVertexAttribArray: vi.fn(),
-      bindBuffer: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      bufferData: vi.fn(),
-      drawArrays: vi.fn(),
-      lineWidth: vi.fn(),
-      colorMask: vi.fn(),
-      stencilFunc: vi.fn(),
-      stencilOp: vi.fn(),
-      getParameter: vi.fn(() => null),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      getExtension: vi.fn(() => null),
-      isContextLost: vi.fn(() => false),
-      DEPTH_TEST: 1,
-      BLEND: 2,
-      SRC_ALPHA: 3,
-      ONE_MINUS_SRC_ALPHA: 4,
-      ARRAY_BUFFER: 5,
-      DYNAMIC_DRAW: 6,
-      FLOAT: 7,
-      TRIANGLES: 8,
-      VERTEX_SHADER: 9,
-      FRAGMENT_SHADER: 10,
-    }
+  test("svg to canvas to webgl, which draws on the canvas, and back repaints each time, without error", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -689,7 +649,7 @@ describe("GlobeChart3D renderer switch", () => {
     ) {
       if (this.ctxType && this.ctxType !== type) return null
       this.ctxType = type
-      return (type === "webgl" ? gl : ctx) as never
+      return (type === "2d" ? ctx : null) as never
     })
     vi.stubGlobal(
       "ResizeObserver",
@@ -726,8 +686,10 @@ describe("GlobeChart3D renderer switch", () => {
     expect(host.querySelector('svg path[fill^="color-mix"]')).toBeNull()
     expect(ctx.fill).toHaveBeenCalled()
 
+    const fills = ctx.fill.mock.calls.length
     await render("webgl")
-    expect(gl.drawArrays).toHaveBeenCalled()
+    // "webgl" draws on the same canvas as "canvas".
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
 
     await render("svg")
     expect(host.querySelector("canvas")).toBeNull()
@@ -756,3 +718,66 @@ async function mount(element: ReactElement) {
   }
   return { host, svg, send, unmount }
 }
+
+describe("GlobeChart3D missing values", () => {
+  test("an entry whose place is null or empty has no tile, and none rises at 0°, 0°", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[
+            { lon: null, lat: null, population: 3 },
+            { lon: "", lat: "", population: 3 },
+          ]}
+          land={{ type: "FeatureCollection", features: [] }}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(faces(html)).toHaveLength(0)
+  })
+})
+
+describe("GlobeChart3D values that are no numbers", () => {
+  test("an infinite value stands as 0, as one that is not a number: the globe draws as with 0", () => {
+    const html = (population: number) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[
+              { lon: 15, lat: 45, population },
+              { lon: -15, lat: 15, population: 3 },
+            ]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={30}
+          />
+        </ChartContainer3D>
+      )
+    expect(html(Infinity)).toBe(html(0))
+  })
+})
+
+describe("GlobeChart3D step", () => {
+  test("a step that makes no tiles - 0, below 0, NaN, Infinity, wider than 180 - draws the tiles of the default", () => {
+    const html = (step?: number) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[{ lon: 15, lat: 45, population: 3 }]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={step}
+          />
+        </ChartContainer3D>
+      )
+    expect(faces(html()).length).toBeGreaterThan(0)
+    for (const step of [0, -5, NaN, Infinity, 400]) expect(html(step)).toBe(html())
+  })
+})

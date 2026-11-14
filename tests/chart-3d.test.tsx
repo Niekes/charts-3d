@@ -13,10 +13,13 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  colorOf,
   cubeMarks,
   earth,
   faded,
+  finite,
   globe,
+  nonNegative,
   intoWorld,
   linear,
   orthographic,
@@ -28,7 +31,15 @@ import {
   useTweenAxes,
   worldBox,
   type ChartContainer3DProps,
+  type Mark3D,
 } from "@/registry/new-york/ui/chart-3d"
+import { AreaChart3D } from "@/registry/new-york/ui/area-chart-3d"
+import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
+import { ChoroplethChart3D } from "@/registry/new-york/ui/choropleth-chart-3d"
+import { GlobeChart3D } from "@/registry/new-york/ui/globe-chart-3d"
+import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
+import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
+import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
 
 // React reports state updates outside act() unless the environment says it supports it.
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -129,7 +140,9 @@ describe("ChartContainer3D", () => {
     const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"))
     expect(html.split("</style>")).toHaveLength(2)
     expect(html).not.toContain("<script")
-    expect(style).toContain(".dark [data-chart=chart-\\3c /style>")
+    // The id and the keys are escaped whole, as parts of a CSS identifier.
+    expect(style).toContain(".dark [data-chart=chart-\\3c \\2f style\\3e ")
+    expect(style).toContain("--color-\\3c \\2f style\\3e ")
     expect(style).toContain("--color-b: \\3c /style>")
   })
 
@@ -240,10 +253,9 @@ const pointer = (
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
   const ctx = Object.fromEntries(
-    ["setTransform", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map((m) => [
-      m,
-      vi.fn(),
-    ])
+    ["setTransform", "clearRect", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map(
+      (m) => [m, vi.fn()]
+    )
   )
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
   vi.stubGlobal(
@@ -254,83 +266,6 @@ function stubCanvas() {
     }
   )
   return ctx
-}
-
-/** A webgl context of spies, and a 2D context that reads colors back as bytes, on every canvas. */
-function stubGL() {
-  const lose = { loseContext: vi.fn() }
-  const gl = {
-    getExtension: vi.fn((): typeof lose | null => lose),
-    isContextLost: vi.fn(() => false),
-    viewport: vi.fn(),
-    disable: vi.fn(),
-    enable: vi.fn(),
-    blendFunc: vi.fn(),
-    useProgram: vi.fn(),
-    uniform2f: vi.fn(),
-    uniform4f: vi.fn(),
-    getUniformLocation: vi.fn(() => ({})),
-    getAttribLocation: vi.fn(() => 0),
-    enableVertexAttribArray: vi.fn(),
-    bindBuffer: vi.fn(),
-    vertexAttribPointer: vi.fn(),
-    bufferData: vi.fn(),
-    drawArrays: vi.fn(),
-    lineWidth: vi.fn(),
-    colorMask: vi.fn(),
-    stencilFunc: vi.fn(),
-    stencilOp: vi.fn(),
-    getParameter: vi.fn(() => [1, 1]),
-    createProgram: vi.fn(() => ({})),
-    attachShader: vi.fn(),
-    linkProgram: vi.fn(),
-    createShader: vi.fn(() => ({})),
-    shaderSource: vi.fn(),
-    compileShader: vi.fn(),
-    createBuffer: vi.fn(() => ({})),
-    DEPTH_TEST: 0x0b71,
-    BLEND: 0x0be2,
-    SRC_ALPHA: 0x0302,
-    ONE_MINUS_SRC_ALPHA: 0x0303,
-    ARRAY_BUFFER: 0x8892,
-    DYNAMIC_DRAW: 0x88e8,
-    FLOAT: 0x1406,
-    TRIANGLE_FAN: 0x0006,
-    LINE_LOOP: 0x0002,
-    STENCIL_TEST: 0x0b90,
-    ALWAYS: 0x0207,
-    NOTEQUAL: 0x0205,
-    KEEP: 0x1e00,
-    INVERT: 0x150a,
-    ZERO: 0,
-    ALIASED_LINE_WIDTH_RANGE: 0x846e,
-    VERTEX_SHADER: 0x8b31,
-    FRAGMENT_SHADER: 0x8b30,
-  }
-  const ctx = {
-    setTransform: vi.fn(),
-    beginPath: vi.fn(),
-    lineTo: vi.fn(),
-    closePath: vi.fn(),
-    arc: vi.fn(),
-    fill: vi.fn(),
-    stroke: vi.fn(),
-    clearRect: vi.fn(),
-    fillRect: vi.fn(),
-    fillStyle: "",
-    getImageData: vi.fn(() => ({ data: [10, 20, 30, 255] })),
-  }
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
-    (type: string) => (type === "webgl" ? gl : ctx) as never
-  )
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      disconnect() {}
-    }
-  )
-  return { gl, ctx, lose }
 }
 
 describe("shortcuts", () => {
@@ -1370,6 +1305,145 @@ describe("renderer", () => {
 
     await chart.unmount()
   })
+  test("several sets of marks in one container all draw and answer the hover, in the order they are placed", async () => {
+    const ctx = stubCanvas()
+    const [square, dot] = marks
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (both: boolean) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[square]} />
+        {both && <Marks3D marks={[dot]} />}
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(true)))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    // The square of the first set is painted, before the dot of the second.
+    const corners = ctx.lineTo.mock.calls as number[][]
+    const first = corners.map(([x, y]) => x === 100 && y === 100).lastIndexOf(true)
+    expect(first).toBeGreaterThanOrEqual(0)
+    expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+    expect(ctx.lineTo.mock.invocationCallOrder[first]).toBeLessThan(
+      ctx.arc.mock.invocationCallOrder.at(-1)!
+    )
+    // Each set answers the hover.
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.textContent).toContain("Square")
+    await act(() => svg.dispatchEvent(pointer("pointermove", 400, 100)))
+    expect(host.textContent).toContain("Dot")
+    // The second set leaves; the first stays.
+    await act(async () => root.render(chart(false)))
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.textContent).toContain("Square")
+    ctx.arc.mockClear()
+    ctx.lineTo.mockClear()
+    await act(async () => root.render(chart(false)))
+    expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
+    expect(ctx.arc).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a set that mounts later but sits earlier in the tree is drawn under the later ones, on every renderer", async () => {
+    const square = (key: string, at: number) => ({
+      key,
+      points: [
+        { x: at, y: at },
+        { x: at + 100, y: at },
+        { x: at + 100, y: at + 100 },
+        { x: at, y: at + 100 },
+      ],
+      fill: "red",
+      tooltip: { items: [{ label: key, value: 1 }] },
+    })
+    for (const renderer of ["svg", "canvas"] as const) {
+      const ctx = stubCanvas()
+      const host = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(host)
+      const chart = (early: boolean) => (
+        <ChartContainer3D config={{}} renderer={renderer}>
+          {early && <Marks3D marks={[square("Under", 150)]} />}
+          <Marks3D marks={[square("Over", 100)]} />
+        </ChartContainer3D>
+      )
+      await act(async () => root.render(chart(false)))
+      await act(async () => root.render(chart(true)))
+      const svg = host.querySelector("svg")!
+      svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+      // Where the two overlap, the later one in the tree is on top: the hover finds it.
+      await act(() => svg.dispatchEvent(pointer("pointermove", 175, 175)))
+      expect(host.textContent).toContain("Over")
+      if (renderer === "canvas") {
+        // The last paint draws the earlier set first.
+        const corners = ctx.lineTo.mock.calls as number[][]
+        const xs = corners.map(([x]) => x)
+        expect(xs.lastIndexOf(150)).toBeGreaterThanOrEqual(0)
+        expect(xs.lastIndexOf(150)).toBeLessThan(xs.lastIndexOf(100))
+      }
+      await act(async () => root.unmount())
+      host.remove()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test("a chart taken out of its container leaves no marks: the hover finds none and the canvas paints none", async () => {
+    const ctx = stubCanvas()
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (shown: boolean) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        {shown && <Marks3D marks={marks} />}
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(true)))
+    const fills = ctx.fill.mock.calls.length
+    const paints = ctx.setTransform.mock.calls.length
+    await act(async () => root.render(chart(false)))
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await act(() => svg.dispatchEvent(pointer("pointermove", 150, 150)))
+    expect(host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    // The canvas painted once more when the marks left, and filled nothing.
+    expect(ctx.setTransform.mock.calls.length).toBeGreaterThan(paints)
+    expect(ctx.fill.mock.calls.length).toBe(fills)
+    await act(async () => root.render(chart(true)))
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("canvas keeps its pixels while its size stays: a repaint clears it instead, and a new size sizes it again", async () => {
+    const ctx = stubCanvas()
+    const size = { width: 320, height: 200 }
+    vi.spyOn(HTMLCanvasElement.prototype, "clientWidth", "get").mockImplementation(() => size.width)
+    vi.spyOn(HTMLCanvasElement.prototype, "clientHeight", "get").mockImplementation(
+      () => size.height
+    )
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (shown: Mark3D[]) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={shown} />
+      </ChartContainer3D>
+    )
+    await act(async () => root.render(chart(marks)))
+    const canvas = host.querySelector("canvas")!
+    expect([canvas.width, canvas.height]).toEqual([320 * devicePixelRatio, 200 * devicePixelRatio])
+    const set = vi.spyOn(canvas, "width", "set")
+    ctx.clearRect.mockClear()
+    await act(async () => root.render(chart(marks.slice(1))))
+    expect(set).not.toHaveBeenCalled()
+    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, canvas.width, canvas.height)
+
+    size.width = 480
+    await act(async () => root.render(chart(marks)))
+    expect(set).toHaveBeenCalledWith(480 * devicePixelRatio)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {
     const ctx = stubCanvas()
     const bare = { key: "bare", points: [{ x: 300, y: 300 }], r: 5, fill: "green" }
@@ -1406,11 +1480,11 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  test("webgl falls back to canvas where the browser has no webgl but a 2D context", async () => {
+  test("webgl draws on the canvas, as canvas does, and asks the browser for no webgl context", async () => {
     const ctx = stubCanvas()
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
-      (type: string) => (type === "2d" ? ctx : null) as never
-    )
+    const contexts = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockImplementation((type: string) => (type === "2d" ? ctx : null) as never)
     const chart = await mount(
       <ChartContainer3D config={{}} renderer="webgl">
         <Marks3D marks={marks} />
@@ -1419,245 +1493,9 @@ describe("renderer", () => {
     expect(chart.host.querySelector("canvas")).not.toBeNull()
     expect(chart.svg.querySelector("path, circle")).toBeNull()
     expect(ctx.fill).toHaveBeenCalled()
+    expect(contexts.mock.calls.map(([type]) => type)).not.toContain("webgl")
 
     await chart.unmount()
-  })
-
-  test("webgl paints the marks as fans, in paint order, without a depth test, and the hover still finds them", async () => {
-    const { gl, ctx } = stubGL()
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(chart.host.querySelector("canvas")).not.toBeNull()
-    expect(chart.svg.querySelector("path, circle")).toBeNull()
-    expect(gl.disable).toHaveBeenCalledWith(gl.DEPTH_TEST)
-    expect(gl.enable).toHaveBeenCalledWith(gl.BLEND)
-    // The square is a fan of its 4 corners, the dot one of its 12 ring
-    // points, and its white ring a line loop over the same 12.
-    expect(gl.drawArrays.mock.calls).toEqual([
-      [gl.TRIANGLE_FAN, 0, 4],
-      [gl.TRIANGLE_FAN, 0, 12],
-      [gl.LINE_LOOP, 0, 12],
-    ])
-    // Nothing here has a dent, so nothing goes through the stencil.
-    expect(gl.stencilOp).not.toHaveBeenCalled()
-    // The color of a mark as bytes from the 1×1 canvas, over 255.
-    expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 1, 1)
-    expect(gl.uniform4f).toHaveBeenCalledWith({}, 10 / 255, 20 / 255, 30 / 255, 1)
-
-    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
-    expect(chart.host.textContent).toContain("Square")
-
-    await chart.unmount()
-  })
-
-  test("webgl strokes a polygon that carries a stroke as a line loop over its corners", async () => {
-    const { gl } = stubGL()
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={[{ ...marks[0], stroke: "white" }]} />
-      </ChartContainer3D>
-    )
-    // The square's fan, then its outline as a loop of the same 4 corners.
-    expect(gl.drawArrays.mock.calls).toEqual([
-      [gl.TRIANGLE_FAN, 0, 4],
-      [gl.LINE_LOOP, 0, 4],
-    ])
-    await chart.unmount()
-  })
-
-  test("webgl fills a polygon with a dent through the stencil: its fan marks the inside without color, then covers it once", async () => {
-    const { gl } = stubGL()
-    // The front of a ribbon: down from the first point, along the floor, and
-    // back along a line that dips between its two last points.
-    const ribbon = [
-      { x: 100, y: 200 },
-      { x: 100, y: 300 },
-      { x: 400, y: 300 },
-      { x: 400, y: 100 },
-      { x: 300, y: 250 },
-      { x: 200, y: 100 },
-    ]
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={[{ key: "ribbon", points: ribbon, fill: "red" }]} />
-      </ChartContainer3D>
-    )
-    // The fill needs a stencil buffer, which a context has only if asked for one.
-    expect(HTMLCanvasElement.prototype.getContext).toHaveBeenCalledWith("webgl", { stencil: true })
-    expect(gl.enable).toHaveBeenCalledWith(gl.STENCIL_TEST)
-    // The ring goes to the GPU as it is, once, and no triangle is cut on the CPU.
-    expect(gl.bufferData.mock.calls.map(([, xy]) => [...xy])).toEqual([
-      ribbon.flatMap((p) => [p.x, p.y]),
-    ])
-    expect(gl.drawArrays.mock.calls).toEqual([
-      [gl.TRIANGLE_FAN, 0, 6],
-      [gl.TRIANGLE_FAN, 0, 6],
-    ])
-    // The first fan flips the stencil with the color off, the second paints
-    // where it is left set - under an odd number of triangles - and clears it.
-    expect(gl.colorMask.mock.calls).toEqual([
-      [false, false, false, false],
-      [true, true, true, true],
-    ])
-    expect(gl.stencilOp.mock.calls).toEqual([
-      [gl.KEEP, gl.KEEP, gl.INVERT],
-      [gl.KEEP, gl.KEEP, gl.ZERO],
-    ])
-    expect(gl.stencilFunc.mock.calls.map(([when]) => when)).toEqual([gl.ALWAYS, gl.NOTEQUAL])
-    const order = [gl.colorMask, gl.drawArrays].map((spy) => spy.mock.invocationCallOrder)
-    expect(order[0][0]).toBeLessThan(order[1][0])
-    expect(order[1][0]).toBeLessThan(order[0][1])
-    expect(order[0][1]).toBeLessThan(order[1][1])
-    expect(gl.disable).toHaveBeenLastCalledWith(gl.STENCIL_TEST)
-
-    await chart.unmount()
-  })
-
-  test("webgl fills a polygon that crosses itself through the stencil too, so it fills as the hover finds it", async () => {
-    const { gl } = stubGL()
-    // A bowtie of four corners, and a star whose five corners all turn one way.
-    const bowtie = [
-      { x: 100, y: 100 },
-      { x: 200, y: 200 },
-      { x: 200, y: 100 },
-      { x: 100, y: 200 },
-    ]
-    const star = [0, 2, 4, 1, 3].map((k) => ({
-      x: 300 + 50 * Math.sin((k * 2 * Math.PI) / 5),
-      y: 200 - 50 * Math.cos((k * 2 * Math.PI) / 5),
-    }))
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D
-          marks={[
-            { key: "bowtie", points: bowtie, fill: "red" },
-            { key: "star", points: star, fill: "blue" },
-          ]}
-        />
-      </ChartContainer3D>
-    )
-    expect(gl.drawArrays.mock.calls.map(([, , count]) => count)).toEqual([4, 4, 5, 5])
-    expect(gl.stencilOp).toHaveBeenCalledTimes(4)
-
-    await chart.unmount()
-  })
-
-  test("webgl reads a color once and serves later repaints from the cache", async () => {
-    const { ctx } = stubGL()
-    const host = document.body.appendChild(document.createElement("div"))
-    const root = createRoot(host)
-    const render = () =>
-      act(async () =>
-        root.render(
-          <ChartContainer3D config={{}} renderer="webgl">
-            <Marks3D marks={marks} />
-          </ChartContainer3D>
-        )
-      )
-    await render()
-    const reads = ctx.getImageData.mock.calls.length
-    await render()
-    expect(ctx.getImageData.mock.calls.length).toBe(reads)
-
-    await act(async () => root.unmount())
-    host.remove()
-  })
-
-  test("webgl compiles its program and buffer once, and repaints when the theme changes", async () => {
-    const { gl } = stubGL()
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    const drawn = gl.drawArrays.mock.calls.length
-    await act(async () => {
-      document.documentElement.classList.add("dark")
-      // A MutationObserver reports after the change, not during it.
-      await new Promise((resolve) => setTimeout(resolve))
-    })
-    expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(drawn)
-    expect(gl.createProgram).toHaveBeenCalledTimes(1)
-    expect(gl.createBuffer).toHaveBeenCalledTimes(1)
-
-    document.documentElement.classList.remove("dark")
-    await chart.unmount()
-  })
-
-  test("webgl hands the context of its probe back, so a chart holds one context, not two", async () => {
-    const { gl, lose } = stubGL()
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(gl.getExtension).toHaveBeenCalledWith("WEBGL_lose_context")
-    expect(lose.loseContext).toHaveBeenCalledTimes(1)
-
-    await chart.unmount()
-  })
-
-  test("webgl still draws where the browser cannot take the context of the probe back", async () => {
-    const { gl } = stubGL()
-    gl.getExtension.mockReturnValue(null)
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(gl.drawArrays).toHaveBeenCalled()
-
-    await chart.unmount()
-  })
-
-  test("a chart that loses its webgl context falls back to canvas, and the hover still finds its marks", async () => {
-    const { gl, ctx } = stubGL()
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    const lost = chart.host.querySelector("canvas")!
-    const drawn = gl.drawArrays.mock.calls.length
-    await act(async () => lost.dispatchEvent(new Event("webglcontextlost")))
-
-    // A canvas that gave out a webgl context cannot give a 2D one: a new one takes its place.
-    const canvas = chart.host.querySelector("canvas")
-    expect(canvas).not.toBeNull()
-    expect(canvas).not.toBe(lost)
-    expect(chart.svg.querySelector("path, circle")).toBeNull()
-    expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
-    expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
-    expect(gl.drawArrays.mock.calls.length).toBe(drawn)
-
-    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
-    expect(chart.host.textContent).toContain("Square")
-
-    await chart.unmount()
-  })
-
-  test("a repaint on a lost webgl context draws nothing and compiles nothing", async () => {
-    const { gl } = stubGL()
-    gl.isContextLost.mockReturnValue(true)
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(gl.createProgram).not.toHaveBeenCalled()
-    expect(gl.drawArrays).not.toHaveBeenCalled()
-
-    await chart.unmount()
-  })
-})
-
-describe("parity", () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.unstubAllGlobals()
   })
 
   // One scene with every mark shape: the shared square and dot, each its own group.
@@ -1665,8 +1503,8 @@ describe("parity", () => {
 
   test("one scene draws every mark and hovers the same on svg, canvas and webgl", async () => {
     for (const renderer of ["svg", "canvas", "webgl"] as const) {
-      const ctx = renderer === "canvas" ? stubCanvas() : null
-      const gl = renderer === "webgl" ? stubGL().gl : null
+      // "webgl" draws on the canvas, as "canvas" does.
+      const ctx = renderer === "svg" ? null : stubCanvas()
       let read: { current: { fill: string; stroke?: string }[] } = { current: [] }
       function Scene() {
         read = useChart3D().scene
@@ -1683,14 +1521,6 @@ describe("parity", () => {
       if (ctx) {
         expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
         expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
-      } else if (gl) {
-        // The square is a fan of its 4 corners, the dot one of its 12 ring
-        // points, and its white ring a line loop over the same 12.
-        expect(gl.drawArrays.mock.calls).toEqual([
-          [gl.TRIANGLE_FAN, 0, 4],
-          [gl.TRIANGLE_FAN, 0, 12],
-          [gl.LINE_LOOP, 0, 12],
-        ])
       } else {
         expect(chart.svg.querySelector('path[fill="red"]')).not.toBeNull()
         expect(chart.svg.querySelector('circle[fill="blue"]')).not.toBeNull()
@@ -1698,7 +1528,7 @@ describe("parity", () => {
 
       // The pointer on the square: the same tooltip, and the same lit fill in
       // the scene, on every renderer (ADR-0008).
-      const painted = ctx ? ctx.fill.mock.calls.length : gl ? gl.drawArrays.mock.calls.length : 0
+      const painted = ctx ? ctx.fill.mock.calls.length : 0
       await chart.send(pointer("pointermove", 150, 150))
       expect(chart.host.textContent).toContain("Square")
       expect(read.current.map((mark) => mark.fill)).toEqual([
@@ -1707,7 +1537,6 @@ describe("parity", () => {
       ])
       // The hover reaches the reader: a canvas repaints, the SVG fills the square lit.
       if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
-      else if (gl) expect(gl.drawArrays.mock.calls.length).toBeGreaterThan(painted)
       else
         expect(
           chart.svg.querySelector(
@@ -2786,4 +2615,96 @@ describe("marks", () => {
     expect(chart.host.textContent).toContain("Lazy")
     await chart.unmount()
   })
+})
+
+describe("finite", () => {
+  test("a finite number and a string that reads as one are numbers a chart can place", () => {
+    expect([0, -1.5, "5", " 2e3 "].map(finite)).toEqual([true, true, true, true])
+  })
+
+  test("so is what reads as a number: a date, the time it stands for, and a bigint", () => {
+    expect([new Date(2024, 0, 1), 10n].map(finite)).toEqual([true, true])
+  })
+
+  test("what Number alone reads as 0, or not as a number, is none", () => {
+    const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
+    expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("nonNegative", () => {
+  test("an amount to size a mark by: a number, or a string of one, from 0 up", () => {
+    expect([3, "2.5", 0].map(nonNegative)).toEqual([3, 2.5, 0])
+  })
+
+  test("below 0, or no finite number, stands as 0", () => {
+    expect([-1, Infinity, -Infinity, NaN, null, "", "abc"].map(nonNegative)).toEqual([
+      0, 0, 0, 0, 0, 0, 0,
+    ])
+  })
+})
+
+describe("colorOf", () => {
+  test("names the variable of a config key, a plain key as it is", () => {
+    expect(colorOf("desktop")).toBe("var(--color-desktop)")
+    expect(colorOf("net_sales-2024")).toBe("var(--color-net_sales-2024)")
+  })
+
+  test("escapes everything but ASCII letters, digits, - and _, so every browser reads the name, and no two keys share one", () => {
+    expect(colorOf("Net sales")).toBe("var(--color-Net\\20 sales)")
+    expect(colorOf("q1.sales")).toBe("var(--color-q1\\2e sales)")
+    expect(colorOf("Umsätze")).toBe("var(--color-Ums\\e4 tze)")
+    expect(colorOf("😀")).toBe("var(--color-\\1f600 )")
+    expect(colorOf("日本")).not.toBe(colorOf("中国"))
+  })
+})
+
+describe("the charts while the camera turns", () => {
+  // Twenty entries: a record of them has more keys than the twelve ends of the axes.
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    name: `n${i}`,
+    a: i,
+    lon: i * 10 - 95,
+    lat: 0,
+    x: i,
+    y: i % 3,
+    z: i % 5,
+  }))
+  const land: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
+  const grid = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => r + c))
+  const charts: [string, ReactElement][] = [
+    ["bar", <BarChart3D data={many} index="name" />],
+    ["area", <AreaChart3D data={many} index="name" />],
+    ["scatter", <ScatterChart3D data={many} x="x" y="y" z="z" id="name" />],
+    ["surface", <SurfaceChart3D data={grid} />],
+    ["places", <PlacesChart3D data={many} land={land} lon="lon" lat="lat" id="name" />],
+    ["globe", <GlobeChart3D data={many} land={land} lon="lon" lat="lat" value="a" />],
+    ["choropleth", <ChoroplethChart3D data={many} land={land} id="name" value="a" />],
+  ]
+
+  test.each(charts)(
+    "the %s chart compares no record of its data again: the data has not changed",
+    async (_, chart) => {
+      const host = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(host)
+      await act(async () =>
+        root.render(<ChartContainer3D config={{ a: { color: "red" } }}>{chart}</ChartContainer3D>)
+      )
+      const svg = host.querySelector("svg")!
+      const before = host.innerHTML
+      const stringify = vi.spyOn(JSON, "stringify")
+      await act(() =>
+        svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }))
+      )
+      const records = stringify.mock.calls.filter(
+        ([v]) => typeof v === "object" && v !== null && Object.keys(v).length > 12
+      )
+      stringify.mockRestore()
+      // The turn drew the chart anew, from the same data.
+      expect(host.innerHTML).not.toBe(before)
+      expect(records).toEqual([])
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  )
 })

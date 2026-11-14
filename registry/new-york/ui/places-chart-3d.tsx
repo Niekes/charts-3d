@@ -9,10 +9,13 @@ import {
   Marks3D,
   earth,
   faded,
+  finite,
+  nonNegative,
   globe,
   orthographic,
   useChart3D,
   useTween,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -34,7 +37,7 @@ export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string
   lat: keyof T & string
   /**
    * The field of the value of an entry: the area of its dot, relative to the
-   * largest; a value below 0, or none, stands as 0.
+   * largest; a value below 0, or one that is not a finite number, stands as 0.
    * @defaultValue every dot the same size
    */
   value?: keyof T & string
@@ -107,19 +110,9 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 }: PlacesChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, id }
-  // An entry without a place on the globe has no dot.
-  const entries = data.filter(
-    (d) => Number.isFinite(Number(d[lon])) && Number.isFinite(Number(d[lat]))
-  )
-  const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
-  // The area of a dot is its value, from 0, so a new one grows as it fades
-  // in and a gone one shrinks as it fades out; the peak glides along, so no
-  // dot jumps when the largest leaves.
-  const target = Object.fromEntries(
-    entries.map((d, i) => [names[i], value ? Math.max(0, Number(d[value]) || 0) : 1])
-  )
+  const { entries, names, target, present } = useDots(data, fields)
   const sizes = useTween(target, 0)
-  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
+  const opacity = useTween(present, 0)
   const { peak } = useTween({ peak: Math.max(0, ...Object.values(target)) })
   const place = usePlaces(names, entries, fields, Object.keys(config)[0], sizes)
 
@@ -155,6 +148,31 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 }
 
 /**
+ * The entries with a place on the globe, the name of each, their values and
+ * their presence - built once per change of the data, not at every frame the
+ * camera turns.
+ */
+function useDots<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
+  const { lon, lat, value, id } = fields
+  return React.useMemo(() => {
+    // An entry without a place on the globe has no dot.
+    const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
+    const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
+    return {
+      entries,
+      names,
+      // The area of a dot is its value, from 0, so a new one grows as it fades
+      // in and a gone one shrinks as it fades out; the peak glides along, so no
+      // dot jumps when the largest leaves.
+      target: Object.fromEntries(
+        entries.map((d, i) => [names[i], value ? nonNegative(d[value]) : 1])
+      ),
+      present: Object.fromEntries(names.map((name) => [name, 1])),
+    }
+  }, [data, lon, lat, value, id])
+}
+
+/**
  * The mark of one dot: a circle whose area is its share of the peak, in the
  * color of its series, faded to its presence and ringed by the background so
  * that dots in front stand out. Its group is the dot alone, so hovering
@@ -172,7 +190,7 @@ function dotMark<T extends Record<string, unknown>>(
     key: p.name,
     points: [p.projected],
     r: reading.radius * Math.sqrt(share),
-    fill: faded(`var(--color-${place.key})`, presence),
+    fill: faded(colorOf(place.key), presence),
     stroke: faded("var(--background)", presence),
     groups: [p.name],
     tooltip: dotTooltip(p.name, place, entry, reading),
@@ -192,7 +210,7 @@ function dotTooltip<T extends Record<string, unknown>>(
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = fields.value ? Math.max(0, Number(entry[fields.value]) || 0) : 0
+  const value = fields.value ? nonNegative(entry[fields.value]) : 0
   return () =>
     tooltip(
       {
@@ -203,7 +221,7 @@ function dotTooltip<T extends Record<string, unknown>>(
                 {
                   label: fields.value,
                   value: format?.(value) ?? value,
-                  color: `var(--color-${key})`,
+                  color: colorOf(key),
                 },
               ]
             : []),

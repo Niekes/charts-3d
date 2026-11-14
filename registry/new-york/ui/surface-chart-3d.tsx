@@ -23,12 +23,14 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
+  finite,
   type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type SurfaceChart3DProps = {
-  /** The heights on the grid, `data[row][column]`. */
+  /** The heights on the grid, `data[row][column]`; one that is not a finite number stands at the lowest of the others. */
   data: number[][]
   /**
    * The data values the first and the last column (x) and row (z) stand for.
@@ -65,7 +67,7 @@ export type SurfaceChart3DProps = {
  * of the chart config, by default its first two.
  */
 export function SurfaceChart3D({
-  data,
+  data: raw,
   domain = {},
   colors,
   format,
@@ -74,15 +76,14 @@ export function SurfaceChart3D({
 }: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
-  const [floor = 0, peak = 0] = extent(data.flat())
-  const target = gridValues(data)
+  const { data, floor, peak, target, present } = useGrid(raw)
   // The heights glide cell by cell, so the surface, its color ramp and the y
   // axis follow. Coming and going is a fade in place - a new border cell
   // fades in where it belongs, a gone one fades out where it stands and
   // leaves when the glide is done - so the surface never moves where data
   // merely appears or disappears.
   const heights = gridHeights(useTween(target), floor)
-  const fade = useTween(Object.fromEntries(Object.keys(target).map((k) => [k, 1])), 0)
+  const fade = useTween(present, 0)
   const rows = data.length
   const columns = data[0]?.length ?? 0
   const [x0, x1] = domain.x ?? [0, columns - 1]
@@ -122,7 +123,7 @@ export function SurfaceChart3D({
         quad,
         fade,
         { lo, hi, low, high },
-        cellTooltip(quad, data, { format, titles, tooltip })
+        cellTooltip(quad, raw, { format, titles, tooltip })
       )
     )
 
@@ -141,7 +142,8 @@ type GridPoint = Point3D & { r: number; c: number }
  * What a cell says on hover, made when the pointer lands on it: its height,
  * the mean of its four corners in the data, as the ticks of y name it - or
  * what `tooltip` makes of that. A cell on its way out of the data says
- * nothing.
+ * nothing, and so does one with a height that is no number, where the
+ * stand-in at the floor would make a value up.
  */
 function cellTooltip(
   quad: GridPlane<GridPoint>,
@@ -152,7 +154,7 @@ function cellTooltip(
     tooltip = (tip) => tip,
   }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  if (quad.some((p) => data[p.r]?.[p.c] === undefined)) return undefined
+  if (quad.some((p) => !finite(data[p.r]?.[p.c]))) return undefined
   return () => {
     const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
@@ -178,7 +180,7 @@ function quadMark(
   const t = Math.round(((height - ramp.lo) / (ramp.hi - ramp.lo || 1)) * 100)
   const shaded = shade(
     quad,
-    `color-mix(in oklch, var(--color-${ramp.high}) ${t}%, var(--color-${ramp.low}))`
+    `color-mix(in oklch, ${colorOf(ramp.high)} ${t}%, ${colorOf(ramp.low)})`
   )
   // A corner only one of the tweens still knows is on its way out and stays unseen.
   const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))
@@ -191,6 +193,30 @@ function quadMark(
     groups: [quad.plane],
     tooltip,
   }
+}
+
+/**
+ * The grid with every height a number, its lowest and highest height, the
+ * height of every cell and its presence - built once per change of the data,
+ * not at every frame the camera turns.
+ */
+function useGrid(raw: number[][]) {
+  return React.useMemo(() => {
+    const grid = cleanGrid(raw)
+    const target = gridValues(grid.data)
+    return { ...grid, target, present: Object.fromEntries(Object.keys(target).map((k) => [k, 1])) }
+  }, [raw])
+}
+
+/**
+ * The grid with every height a number: one that is not - NaN, Infinity -
+ * stands at the lowest of the others, so one cell cannot blank the surface.
+ * With the lowest and the highest height, 0 for a grid without one.
+ */
+function cleanGrid(raw: number[][]) {
+  const [floor = 0, peak = 0] = extent(raw.flat().filter(finite))
+  const data = raw.map((row) => row.map((y) => (finite(y) ? y : floor)))
+  return { data, floor, peak }
 }
 
 /** The height of every cell, keyed by its row and column, gliding into new data. */

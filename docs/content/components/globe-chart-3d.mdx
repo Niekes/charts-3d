@@ -133,7 +133,7 @@ one class to enter as another where the newcomers lift it over a bound.
 
 ## Renderers
 
-The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -150,7 +150,7 @@ Tiles of 1°, nearly every place its own spark, five thousand tiles over the
 land - and the chart stays interactive. A tile thinner than a pixel draws its
 top alone, so the globe projects a face per flat tile, not five. The scene is
 one list of marks, so the demo starts on `"canvas"`, the renderer for many
-marks, and the select shows the same scene on SVG and WebGL.
+marks, and the select shows the same scene on SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

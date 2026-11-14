@@ -172,6 +172,24 @@ describe("SurfaceChart3D tooltip", () => {
     await view.unmount()
   })
 
+  test("a cell with a height that is no number says nothing, where its stand-in would make one up", async () => {
+    const seen: unknown[] = []
+    const view = await hovered(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [10, NaN],
+            [20, 30],
+          ]}
+          tooltip={(tip, cell) => (seen.push(cell), tip)}
+        />
+      </ChartContainer3D>
+    )
+    expect(seen).toEqual([])
+    expect(tip(view.host)).toBe("")
+    await view.unmount()
+  })
+
   test("a tooltip of null shows none", async () => {
     const view = await hovered(
       <ChartContainer3D config={config}>
@@ -416,5 +434,40 @@ describe("SurfaceChart3D focus", () => {
 
     await act(async () => root.unmount())
     host.remove()
+  })
+})
+
+describe("SurfaceChart3D without a config", () => {
+  test("an empty config has no keys for the color ramp: the surface draws all the same, colorless", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <SurfaceChart3D
+          data={[
+            [1, 2],
+            [3, 4],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<path [^>]*var\(--color-undefined\)/g)).toHaveLength(1)
+  })
+})
+
+describe("SurfaceChart3D heights that are no numbers", () => {
+  test("a cell of NaN or Infinity stands at the floor of the others, and the surface still draws", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [1, NaN, 3],
+            [4, Infinity, 6],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    // Two rows of three corners make two cells.
+    expect(html.match(/<path [^>]*var\(--color-(low|high)\)/g)).toHaveLength(2)
   })
 })

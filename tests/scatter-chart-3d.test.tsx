@@ -401,3 +401,74 @@ describe("ScatterChart3D focus", () => {
     host.remove()
   })
 })
+
+describe("ScatterChart3D missing values", () => {
+  test("null, an empty string and a boolean are no numbers: such an entry has no point, a numeric string has one", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={[
+            { x: 1, y: null, z: 1 },
+            { x: "", y: 2, z: 2 },
+            { x: " ", y: 2, z: 2 },
+            { x: 3, y: 3, z: true },
+            { x: "5", y: 5, z: 5 },
+          ]}
+          x="x"
+          y="y"
+          z="z"
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(1)
+  })
+})
+
+describe("ScatterChart3D values that read as numbers", () => {
+  test("a date is the time it stands for, so an entry on a time axis has its point", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={[
+            { x: new Date(2024, 0, 1), y: 1, z: 1 },
+            { x: new Date(2024, 5, 1), y: 2, z: 2 },
+          ]}
+          x="x"
+          y="y"
+          z="z"
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(2)
+  })
+})
+
+describe("ScatterChart3D series from the data", () => {
+  test("a series value with a space colors its point", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{ "Iris setosa": { color: "red" } }}>
+        <ScatterChart3D
+          data={[{ x: 1, y: 1, z: 1, s: "Iris setosa" }]}
+          x="x"
+          y="y"
+          z="z"
+          series="s"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).toContain("--color-Iris\\20 setosa: red;")
+    expect(html).toContain('fill="var(--color-Iris\\20 setosa)"')
+  })
+})
+
+describe("ScatterChart3D without a config", () => {
+  test("an empty config has no first key to color the points with: they draw all the same, colorless", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <ScatterChart3D data={[{ x: 1, y: 1, z: 1 }]} x="x" y="y" z="z" />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle /g)).toHaveLength(1)
+    expect(html).toContain('fill="var(--color-undefined)"')
+  })
+})

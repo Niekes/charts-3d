@@ -23,6 +23,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -31,7 +32,7 @@ import {
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per point along x, with a value per series. */
   data: T[]
-  /** The field that names each entry, such as "year"; a point follows its name through updates, so the names should be unique. */
+  /** The field that names each entry, such as "year"; a point follows its name through updates, and an entry of a name that repeats is, in the order of the data, a point of its own. */
   index: keyof T & string
   /**
    * The fields that hold the series, one ribbon each.
@@ -72,7 +73,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   // The rows glide to their new places, and an entry that comes or goes
   // unfolds from its neighbour as far as its presence.
-  const { series, target, entries, values, rows, presence, labels } = useSeries({
+  const { series, target, entries, values, rows, presence, labels, nameOf } = useSeries({
     data,
     index,
     keys,
@@ -100,7 +101,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
     .sort((a, b) => sort(a.faces[4], b.faces[4]))
     .flatMap(({ key, line, faces }) =>
       ribbonMarks(key, painted(faces, toward), line, (names) =>
-        ribbonTooltip(key, names, { config, entries, target }, { format, tooltip })
+        ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
       )
     )
 
@@ -232,7 +233,7 @@ function ribbonMarks(
   line: LinePoint[],
   tooltip: (names: string[]) => Mark3D["tooltip"]
 ): Mark3D[] {
-  const color = `var(--color-${key})`
+  const color = colorOf(key)
   const spans = (f: RibbonFace) =>
     f.face === "top" ? [line[f.segment].name, line[f.segment + 1].name] : []
   return faces.map((f) => {
@@ -261,7 +262,13 @@ function ribbonTooltip<T extends Record<string, unknown>>(
     config,
     entries,
     target,
-  }: { config: ChartConfig; entries: Map<string, T>; target: Record<string, number> },
+    nameOf,
+  }: {
+    config: ChartConfig
+    entries: Map<string, T>
+    target: Record<string, number>
+    nameOf: (id: string) => string
+  },
   { format = {}, tooltip = (tip) => tip }: Pick<AreaChart3DProps<T>, "format" | "tooltip">
 ): Mark3D["tooltip"] {
   const spanned = names.flatMap((name) => {
@@ -269,14 +276,18 @@ function ribbonTooltip<T extends Record<string, unknown>>(
     return entry ? [entry] : []
   })
   if (spanned.length < names.length) return undefined
-  const color = `var(--color-${key})`
+  const color = colorOf(key)
   return () =>
     tooltip(
       {
         title: config[key]?.label ?? key,
         items: names.map((name) => {
           const value = target[`${name}-${key}`]
-          return { label: (format.x ?? String)(name), value: format.y?.(value) ?? value, color }
+          return {
+            label: (format.x ?? String)(nameOf(name)),
+            value: format.y?.(value) ?? value,
+            color,
+          }
         }),
       },
       { key, entries: spanned }

@@ -630,9 +630,10 @@ describe("BarChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(500))
     expect(top()).toBeLessThan(top2)
 
-    vi.restoreAllMocks()
+    // Unmounted while the canvas is still stubbed: the marks leaving repaint it.
     await act(async () => root.unmount())
     host.remove()
+    vi.restoreAllMocks()
   })
 
   test("rows and series swapped together: a cell only one tween knows stays unseen, no number breaks", async () => {
@@ -776,45 +777,7 @@ describe("BarChart3D focus", () => {
 })
 
 describe("BarChart3D renderer switch", () => {
-  test("svg to canvas to webgl and back repaints each time, without error", async () => {
-    const gl = {
-      viewport: vi.fn(),
-      disable: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      useProgram: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4f: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      getAttribLocation: vi.fn(() => 0),
-      enableVertexAttribArray: vi.fn(),
-      bindBuffer: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      bufferData: vi.fn(),
-      drawArrays: vi.fn(),
-      lineWidth: vi.fn(),
-      // A lost context answers getParameter with null; the painter must not throw.
-      getParameter: vi.fn(() => null),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      getExtension: vi.fn(() => null),
-      isContextLost: vi.fn(() => false),
-      DEPTH_TEST: 1,
-      BLEND: 2,
-      SRC_ALPHA: 3,
-      ONE_MINUS_SRC_ALPHA: 4,
-      ARRAY_BUFFER: 5,
-      DYNAMIC_DRAW: 6,
-      FLOAT: 7,
-      TRIANGLES: 8,
-      VERTEX_SHADER: 9,
-      FRAGMENT_SHADER: 10,
-    }
+  test("svg to canvas to webgl, which draws on the canvas, and back repaints each time, without error", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -835,7 +798,7 @@ describe("BarChart3D renderer switch", () => {
     ) {
       if (this.ctxType && this.ctxType !== type) return null
       this.ctxType = type
-      return (type === "webgl" ? gl : ctx) as never
+      return (type === "2d" ? ctx : null) as never
     })
     vi.stubGlobal(
       "ResizeObserver",
@@ -865,9 +828,11 @@ describe("BarChart3D renderer switch", () => {
     expect(host.querySelector('svg path[fill^="color-mix"]')).toBeNull()
     expect(ctx.fill).toHaveBeenCalled()
 
+    const fills = ctx.fill.mock.calls.length
     await render("webgl")
     expect(host.querySelector("canvas")).not.toBeNull()
-    expect(gl.drawArrays).toHaveBeenCalled()
+    // "webgl" draws on the same canvas as "canvas".
+    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
 
     await render("svg")
     expect(host.querySelector("canvas")).toBeNull()
@@ -877,5 +842,108 @@ describe("BarChart3D renderer switch", () => {
     host.remove()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+})
+
+describe("BarChart3D names that are no CSS identifiers", () => {
+  const chart = (
+    <ChartContainer3D id="q1.sales" config={{ "Net sales": { color: "red" } }} legend>
+      <BarChart3D data={[{ month: "Jan", "Net sales": 1 }]} index="month" />
+    </ChartContainer3D>
+  )
+
+  test("a chart id with a dot still scopes its colors: the rule that declares them selects the chart", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () => root.render(chart))
+    const style = host.querySelector("style")!.textContent!
+    const selector = style.match(/ (\[data-chart=[^\n]*\]) \{\n {2}--color/)![1]
+    expect(host.querySelector(selector)).toBe(host.querySelector("[data-slot=chart-3d]"))
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a series with a space keeps its color: the variable is declared, and read by the bars and the legend, under the escaped name", () => {
+    const html = renderToString(chart)
+    // A space in a CSS identifier is written `\20 `.
+    expect(html).toContain("--color-Net\\20 sales: red;")
+    expect(html).toContain('fill="color-mix(in oklch, var(--color-Net\\20 sales)')
+    expect(html).toContain("background:var(--color-Net\\20 sales)")
+    expect(html).not.toContain("--color-Net sales")
+  })
+})
+
+describe("BarChart3D values that are no numbers", () => {
+  test("an infinite value stands as no bar, as one that is not a number, and the chart keeps its box", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D
+          data={[
+            { month: "Jan", a: Infinity, b: -Infinity },
+            { month: "Feb", a: 2, b: 1 },
+          ]}
+          index="month"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    expect(html).toContain(">2<")
+  })
+
+  test("no data and no series draws an empty box, with no number left undefined", () => {
+    const html = renderToString(
+      <ChartContainer3D config={{}}>
+        <BarChart3D data={[]} index="month" />
+      </ChartContainer3D>
+    )
+    expect(html).toContain('data-slot="chart-3d-axes"')
+    expect(html).not.toContain("NaN")
+  })
+})
+
+describe("BarChart3D entries of the same name", () => {
+  const twice = [
+    { month: "Jan", a: 1 },
+    { month: "Jan", a: 5 },
+    { month: "Feb", a: 2 },
+  ]
+
+  test("each is a bar of its own: as many faces as with three names", () => {
+    const render = (data: typeof twice) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarChart3D data={data} index="month" keys={["a"]} />
+        </ChartContainer3D>
+      )
+    const three = render(twice.map((d, i) => ({ ...d, month: `${d.month}${i}` })))
+    expect(faces(render(twice))).toHaveLength(faces(three).length)
+  })
+
+  test("a bar of a repeated name says that name, and the entry behind it", async () => {
+    const seen: (typeof twice)[number][] = []
+    const view = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D
+          data={twice}
+          index="month"
+          keys={["a"]}
+          tooltip={(t, bar) => (seen.push(bar.entry), t)}
+        />
+      </ChartContainer3D>
+    )
+    // Every face under the pointer in turn: each bar answers, the second "Jan" too.
+    const said = new Set<string>()
+    for (const face of view.host.querySelectorAll('path[fill^="color-mix"]')) {
+      const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      await view.send("pointermove", { clientX, clientY })
+      said.add(tip(view.host))
+    }
+    expect([...said].sort()).toEqual(["FebA2", "JanA1", "JanA5"])
+    expect(new Set(seen)).toEqual(new Set(twice))
+    await view.unmount()
   })
 })

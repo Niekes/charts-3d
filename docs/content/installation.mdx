@@ -15,7 +15,7 @@ Every chart is an item of the registry in the GitHub repository. Install one wit
 npx shadcn@latest add niekes/charts-3d/bar-chart-3d
 ```
 
-The CLI copies `chart-3d.tsx`, the shared core, and `bar-chart-3d.tsx` into your `components/ui` folder, and installs `d3-3d`, `d3-array` and `lucide-react`.
+The CLI copies `chart-3d.tsx`, the shared core, and `bar-chart-3d.tsx` into your `components/ui` folder, and installs `d3-3d` and `d3-array`. The globe, the places and the choropleth also install `d3-geo`.
 
 Pin a release with a tag:
 
@@ -68,7 +68,7 @@ import { BarChart3D, ChartContainer3D, type ChartConfig } from "@niekes/charts-3
 
 The charts read the tokens of a shadcn/ui theme: `--chart-1` to `--chart-5`, `--muted`, `--muted-foreground`, `--border`, `--background` and `--foreground`. A project without shadcn/ui defines them itself, see [Theming](/docs/theming).
 
-**Registry or npm?** The registry copies the code into your project: you can change it, and you update it by hand. The package keeps the code in `node_modules`: you update it with npm, and you use it as it is.
+**Registry or npm?** The registry copies the code into your project: you can change it, and you update it by hand. The package keeps the code in `node_modules`: you update it with npm, and you use it as it is. Which parts of it semver covers, see [Stability](/docs/components/chart-3d#stability).
 
 ## Your first chart
 
