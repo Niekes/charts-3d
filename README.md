@@ -33,16 +33,12 @@
 
 <table>
     <tr style="background-color: #f6f8fa">
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/bar-chart-3d"><img src="assets/examples/bar-chart-3d.png" alt="Bar Chart 3D"></a></td>
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/scatter-chart-3d"><img src="assets/examples/scatter-chart-3d.png" alt="Scatter Chart 3D"></a></td>
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/area-chart-3d"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/examples/area-chart-3d-dark.gif"><img src="assets/examples/area-chart-3d-light.gif" alt="Area Chart 3D"></picture></a></td>
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/globe-chart-3d"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/examples/globe-chart-3d-dark.gif"><img src="assets/examples/globe-chart-3d-light.gif" alt="Globe Chart 3D"></picture></a></td>
     </tr>
     <tr style="background-color: #f6f8fa">
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/surface-chart-3d"><img src="assets/examples/surface-chart-3d.png" alt="Surface Chart 3D"></a></td>
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/area-chart-3d"><img src="assets/examples/area-chart-3d.png" alt="Area Chart 3D"></a></td>
-    </tr>
-    <tr style="background-color: #f6f8fa">
-        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/globe-chart-3d"><img src="assets/examples/globe-chart-3d.png" alt="Globe Chart 3D"></a></td>
-        <td></td>
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/surface-chart-3d"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/examples/surface-chart-3d-dark.gif"><img src="assets/examples/surface-chart-3d-light.gif" alt="Surface Chart 3D"></picture></a></td>
+        <td><a target="_blank" href="https://niekes.github.io/charts-3d/docs/components/scatter-chart-3d"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/examples/scatter-chart-3d-dark.gif"><img src="assets/examples/scatter-chart-3d-light.gif" alt="Scatter Chart 3D"></picture></a></td>
     </tr>
 </table>
 
