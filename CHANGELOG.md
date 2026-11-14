@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A drag that turns nothing - the mouse without ⌘ or Ctrl, one finger
+  sideways - shows a hint below the chart for a moment: the gesture that
+  would have turned it, as the shortcut panel names it. It follows `keymap`
+  and is the slot `chart-3d-hint` (ADR-0001).
 - On a touch screen two fingers turn the chart and pinch it to the point
   between them, while one finger scrolls the page and a tap inspects:
   `touchOrbit` and `pinchZoom` in the shortcut panel and in `keymap`

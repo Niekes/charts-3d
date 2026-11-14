@@ -214,3 +214,10 @@ What the pointer does to move the camera - a drag with a modifier, the wheel
 with one, two fingers - as the shortcut panel names it beside the keys of the
 same action.
 _Avoid_: hint, mouse shortcut
+
+**Hint**:
+The line that names the gesture a drag missed: a drag without the platform
+modifier, or one finger dragged sideways, moves nothing, and the chart says
+for a moment what would have turned it. It says nothing where that gesture
+is off.
+_Avoid_: toast, tutorial, onboarding, the gesture text of the shortcut panel
