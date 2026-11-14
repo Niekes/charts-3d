@@ -33,6 +33,13 @@ import {
   type ChartContainer3DProps,
   type Mark3D,
 } from "@/registry/new-york/ui/chart-3d"
+import { AreaChart3D } from "@/registry/new-york/ui/area-chart-3d"
+import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
+import { ChoroplethChart3D } from "@/registry/new-york/ui/choropleth-chart-3d"
+import { GlobeChart3D } from "@/registry/new-york/ui/globe-chart-3d"
+import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
+import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
+import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
 
 // React reports state updates outside act() unless the environment says it supports it.
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -2650,4 +2657,54 @@ describe("colorOf", () => {
     expect(colorOf("😀")).toBe("var(--color-\\1f600 )")
     expect(colorOf("日本")).not.toBe(colorOf("中国"))
   })
+})
+
+describe("the charts while the camera turns", () => {
+  // Twenty entries: a record of them has more keys than the twelve ends of the axes.
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    name: `n${i}`,
+    a: i,
+    lon: i * 10 - 95,
+    lat: 0,
+    x: i,
+    y: i % 3,
+    z: i % 5,
+  }))
+  const land: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
+  const grid = Array.from({ length: 5 }, (_, r) => Array.from({ length: 5 }, (_, c) => r + c))
+  const charts: [string, ReactElement][] = [
+    ["bar", <BarChart3D data={many} index="name" />],
+    ["area", <AreaChart3D data={many} index="name" />],
+    ["scatter", <ScatterChart3D data={many} x="x" y="y" z="z" id="name" />],
+    ["surface", <SurfaceChart3D data={grid} />],
+    ["places", <PlacesChart3D data={many} land={land} lon="lon" lat="lat" id="name" />],
+    ["globe", <GlobeChart3D data={many} land={land} lon="lon" lat="lat" value="a" />],
+    ["choropleth", <ChoroplethChart3D data={many} land={land} id="name" value="a" />],
+  ]
+
+  test.each(charts)(
+    "the %s chart compares no record of its data again: the data has not changed",
+    async (_, chart) => {
+      const host = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(host)
+      await act(async () =>
+        root.render(<ChartContainer3D config={{ a: { color: "red" } }}>{chart}</ChartContainer3D>)
+      )
+      const svg = host.querySelector("svg")!
+      const before = host.innerHTML
+      const stringify = vi.spyOn(JSON, "stringify")
+      await act(() =>
+        svg.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }))
+      )
+      const records = stringify.mock.calls.filter(
+        ([v]) => typeof v === "object" && v !== null && Object.keys(v).length > 12
+      )
+      stringify.mockRestore()
+      // The turn drew the chart anew, from the same data.
+      expect(host.innerHTML).not.toBe(before)
+      expect(records).toEqual([])
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  )
 })

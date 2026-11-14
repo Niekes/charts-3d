@@ -76,15 +76,14 @@ export function SurfaceChart3D({
 }: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
-  const { data, floor, peak } = cleanGrid(raw)
-  const target = gridValues(data)
+  const { data, floor, peak, target, present } = useGrid(raw)
   // The heights glide cell by cell, so the surface, its color ramp and the y
   // axis follow. Coming and going is a fade in place - a new border cell
   // fades in where it belongs, a gone one fades out where it stands and
   // leaves when the glide is done - so the surface never moves where data
   // merely appears or disappears.
   const heights = gridHeights(useTween(target), floor)
-  const fade = useTween(Object.fromEntries(Object.keys(target).map((k) => [k, 1])), 0)
+  const fade = useTween(present, 0)
   const rows = data.length
   const columns = data[0]?.length ?? 0
   const [x0, x1] = domain.x ?? [0, columns - 1]
@@ -194,6 +193,19 @@ function quadMark(
     groups: [quad.plane],
     tooltip,
   }
+}
+
+/**
+ * The grid with every height a number, its lowest and highest height, the
+ * height of every cell and its presence - built once per change of the data,
+ * not at every frame the camera turns.
+ */
+function useGrid(raw: number[][]) {
+  return React.useMemo(() => {
+    const grid = cleanGrid(raw)
+    const target = gridValues(grid.data)
+    return { ...grid, target, present: Object.fromEntries(Object.keys(target).map((k) => [k, 1])) }
+  }, [raw])
 }
 
 /**

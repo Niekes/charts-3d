@@ -85,13 +85,12 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const largerFirst = useLargerFirst(land)
   const reading = { config, value, format, tooltip }
-  const regions = regionValues(data, { id, value, series, label }, Object.keys(config)[0])
-  // Keyed by the region and its series, so a region that changes color
-  // leaves as one and enters as the other, each fading.
-  const presence = useTween(
-    Object.fromEntries([...regions.values()].map((r) => [JSON.stringify([r.rid, r.key]), 1])),
-    0
+  const { regions, present } = useRegions(
+    data,
+    { id, value, series, label },
+    Object.keys(config)[0]
   )
+  const presence = useTween(present, 0)
 
   // A region under an opaque color is drawn once: its land ring is left out.
   const opaque = new Set(
@@ -167,6 +166,30 @@ function regionTooltip<T extends Record<string, unknown>>(
       },
       { entry }
     )
+}
+
+/**
+ * The region of every entry and its presence - built once per change of the
+ * data, not at every frame the camera turns. The presence is keyed by the
+ * region and its series, so a region that changes color leaves as one and
+ * enters as the other, each fading.
+ */
+function useRegions<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Fields<T>,
+  fallback: string
+) {
+  // The fields one by one: the record of them is new at every render.
+  const { id, value, series, label } = fields
+  return React.useMemo(() => {
+    const regions = regionValues(data, { id, value, series, label }, fallback)
+    return {
+      regions,
+      present: Object.fromEntries(
+        [...regions.values()].map((r) => [JSON.stringify([r.rid, r.key]), 1])
+      ),
+    }
+  }, [data, id, value, series, label, fallback])
 }
 
 /** The region of every entry - the last entry on a region wins - by the id it names. */

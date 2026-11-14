@@ -94,6 +94,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Turning the camera no longer compares the data mark by mark: the charts
+  build the numbers they glide once per change of the data, and `useTween`
+  compares a record only when it is a new one. With 5,000 points the scatter
+  chart spent about 4 ms of every frame on it. A chart now notices new data
+  by a new `data` array: one changed in place does not redraw it.
 - An entry whose coordinate is `null`, an empty string or a boolean has no
   mark: the scatter chart, the places and the globe read it as 0 and drew a
   point on the floor, a dot or a tile at 0°, 0°. `finite` in the core tells a

@@ -110,17 +110,9 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 }: PlacesChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, id }
-  // An entry without a place on the globe has no dot.
-  const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
-  const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
-  // The area of a dot is its value, from 0, so a new one grows as it fades
-  // in and a gone one shrinks as it fades out; the peak glides along, so no
-  // dot jumps when the largest leaves.
-  const target = Object.fromEntries(
-    entries.map((d, i) => [names[i], value ? nonNegative(d[value]) : 1])
-  )
+  const { entries, names, target, present } = useDots(data, fields)
   const sizes = useTween(target, 0)
-  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
+  const opacity = useTween(present, 0)
   const { peak } = useTween({ peak: Math.max(0, ...Object.values(target)) })
   const place = usePlaces(names, entries, fields, Object.keys(config)[0], sizes)
 
@@ -153,6 +145,31 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...dots]} />
+}
+
+/**
+ * The entries with a place on the globe, the name of each, their values and
+ * their presence - built once per change of the data, not at every frame the
+ * camera turns.
+ */
+function useDots<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
+  const { lon, lat, value, id } = fields
+  return React.useMemo(() => {
+    // An entry without a place on the globe has no dot.
+    const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
+    const names = entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
+    return {
+      entries,
+      names,
+      // The area of a dot is its value, from 0, so a new one grows as it fades
+      // in and a gone one shrinks as it fades out; the peak glides along, so no
+      // dot jumps when the largest leaves.
+      target: Object.fromEntries(
+        entries.map((d, i) => [names[i], value ? nonNegative(d[value]) : 1])
+      ),
+      present: Object.fromEntries(names.map((name) => [name, 1])),
+    }
+  }, [data, lon, lat, value, id])
 }
 
 /**

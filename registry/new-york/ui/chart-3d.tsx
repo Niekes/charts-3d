@@ -650,8 +650,14 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
   const { animationDuration: duration = 600 } = useChart3D()
-  // The content, not the record: a chart builds `values` at every render, also while it turns.
-  const key = JSON.stringify(values)
+  // The content, not the record, keys the glide: a chart may build `values`
+  // anew at any render. The same record as before is the same content, so a
+  // chart that keeps its records while the camera turns compares nothing.
+  const last = React.useRef<{ values: Record<string, number>; key: string }>(null)
+  if (last.current?.values !== values) {
+    last.current = { values, key: JSON.stringify(values) }
+  }
+  const key = last.current.key
   const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
   const shown = tweenNumbers(tween, enter)
 
@@ -2383,14 +2389,23 @@ function useSeries<T extends Record<string, unknown>>({
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
 }) {
   const { config } = useChart3D()
-  const series = keys ?? Object.keys(config)
-  const names = data.map((d) => String(d[index] ?? ""))
-  const ids = uniqueIds(names)
-  const target = Object.fromEntries(
-    data.flatMap((d, i) =>
-      series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
-    )
-  )
+  const series = React.useMemo(() => keys ?? Object.keys(config), [keys, config])
+  // Built once per change of the data, not at every frame the camera turns.
+  const { names, ids, target, order, present } = React.useMemo(() => {
+    const names = data.map((d) => String(d[index] ?? ""))
+    const ids = uniqueIds(names)
+    return {
+      names,
+      ids,
+      target: Object.fromEntries(
+        data.flatMap((d, i) =>
+          series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+        )
+      ),
+      order: Object.fromEntries(ids.map((id, i) => [id, i])),
+      present: Object.fromEntries(ids.map((id) => [id, 1])),
+    }
+  }, [data, index, series])
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
     y: format.y,
@@ -2401,8 +2416,8 @@ function useSeries<T extends Record<string, unknown>>({
     target,
     entries: new Map(data.map((d, i) => [ids[i], d])),
     values: useTween(target, 0),
-    rows: useTween(Object.fromEntries(ids.map((id, i) => [id, i]))),
-    presence: useTween(Object.fromEntries(ids.map((id) => [id, 1])), 0),
+    rows: useTween(order),
+    presence: useTween(present, 0),
     labels,
     nameOf,
   }

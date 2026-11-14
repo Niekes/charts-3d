@@ -122,14 +122,11 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   // A step of 0 or below, NaN, Infinity or one wider than half the globe makes no tiles at all.
   const step = requested > 0 && requested <= 180 ? requested : STEP
   const fields = { lon, lat, value, series, label }
-  // The value of every tile with an entry, keyed by the tile and its series,
-  // so a tile that changes color leaves as one and enters as the other.
-  const tiles = tileValues(data, fields, step, Object.keys(config)[0])
-  const target = Object.fromEntries([...tiles.values()].map((t) => [t.id, t.value]))
+  const { tiles, target, present } = useTiles(data, fields, step, Object.keys(config)[0])
   // A tile grows from the globe as it fades in and shrinks back as it fades
   // out; the ceiling glides with the data, so the tallest tile never jumps.
   const heights = useTween(target, 0)
-  const presence = useTween(Object.fromEntries(Object.keys(target).map((k) => [k, 1])), 0)
+  const presence = useTween(present, 0)
   const peak = Object.values(target).reduce((max, v) => Math.max(max, v), 0)
   const { ceiling } = useTween({ ceiling: axis(0, peak).domain[1] })
 
@@ -154,6 +151,30 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...prisms]} />
+}
+
+/**
+ * The tile of every entry, the value of each and its presence - built once
+ * per change of the data, not at every frame the camera turns. A tile is
+ * keyed by its place and its series, so a tile that changes color leaves as
+ * one and enters as the other.
+ */
+function useTiles<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Fields<T>,
+  step: number,
+  fallback: string
+) {
+  // The fields one by one: the record of them is new at every render.
+  const { lon, lat, value, series, label } = fields
+  return React.useMemo(() => {
+    const tiles = tileValues(data, { lon, lat, value, series, label }, step, fallback)
+    return {
+      tiles,
+      target: Object.fromEntries([...tiles.values()].map((t) => [t.id, t.value])),
+      present: Object.fromEntries([...tiles.keys()].map((k) => [k, 1])),
+    }
+  }, [data, lon, lat, value, series, label, step, fallback])
 }
 
 /**
