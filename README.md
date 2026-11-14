@@ -65,7 +65,7 @@ Where the money goes:
 - **Issue triage and bug fixes.** Sponsorship buys a reply within a couple of days instead of whenever I get to it.
 - **Components that keep up.** Keeping the registry in step with shadcn/ui, React, Tailwind CSS and d3-3d.
 - **The documentation site.** Hosting, builds and the live examples.
-- **Time for new work.** More charts, transitions, and eventually a WebGL renderer for large data.
+- **Time for new work.** More charts, transitions, and faster projection for large data.
 
 Prefer a one-off? The [sponsor page](https://github.com/sponsors/niekes) also takes one-time contributions.
 

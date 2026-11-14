@@ -9,15 +9,16 @@ import {
   Marks3D,
   axis,
   faded,
+  finite,
   useChart3D,
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
   type World,
-  numeric,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -76,15 +77,11 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const fields = { x, y, z }
-  // An entry without a place in the box has no point.
-  const entries = pointEntries(all, fields, id)
-  const names = [...entries.keys()]
-  const data = [...entries.values()]
-  const { radii, opacity, read, key } = usePointTweens(names, data, fields, series, config, radius)
+  const { fields, data, names, entries, values, axes } = usePoints(all, x, y, z, id)
+  const { radii, opacity, read, key } = usePointTweens(names, data, values, series, config, radius)
 
   // The axes of the data the chart glides into; their ends glide along.
-  const spec = useTweenAxes(pointAxes(data, fields))
+  const spec = useTweenAxes(axes)
   const world = worldBox(spec)
   const placed = usePointPlaces(names, radii, read, world)
 
@@ -101,7 +98,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       key: p.name,
       points: [p.projected],
       r: radii[p.name],
-      fill: faded(`var(--color-${key(p.name)})`, opacity[p.name]),
+      fill: faded(colorOf(key(p.name)), opacity[p.name]),
       // Its group is the point alone, so hovering highlights that point only.
       groups: [p.name],
       // Ringed by the background, so that points in front stand out.
@@ -153,19 +150,36 @@ function pointTooltip<T extends Record<string, unknown>>(
 }
 
 /**
- * The entries with a place in the box, by name: their `id`, or else their
- * position in all the data, so a point keeps its name when an entry before
- * it comes or goes.
+ * The entries with a place in the box, their names, the entry behind each
+ * name, their positions and the axes that hold them - built once per change
+ * of the data, not at every frame the camera turns.
  */
-function pointEntries<T extends Record<string, unknown>>(
+function usePoints<T extends Record<string, unknown>>(
   all: T[],
-  fields: Record<keyof AxesSpec, keyof T & string>,
-  id?: keyof T & string
+  x: keyof T & string,
+  y: keyof T & string,
+  z: keyof T & string,
+  id: (keyof T & string) | undefined
 ) {
-  const placed = (d: T) => Object.values(fields).every((f) => Number.isFinite(numeric(d[f])))
-  return new Map(
-    all.flatMap((d, i) => (placed(d) ? [[id ? String(d[id]) : String(i), d] as const] : []))
-  )
+  return React.useMemo(() => {
+    const fields = { x, y, z }
+    // An entry without a place in the box has no point.
+    // Named by its position in all the data, so a point keeps its name when an
+    // entry before it gains or loses its place.
+    const placed = all.flatMap((d, i) =>
+      [x, y, z].every((f) => finite(d[f])) ? [{ d, name: id ? String(d[id]) : String(i) }] : []
+    )
+    const data = placed.map((p) => p.d)
+    const names = placed.map((p) => p.name)
+    return {
+      fields,
+      data,
+      names,
+      entries: new Map(names.map((name, i) => [name, data[i]])),
+      values: pointValues(names, data, fields),
+      axes: pointAxes(data, fields),
+    }
+  }, [all, x, y, z, id])
 }
 
 /** The axes that hold every entry of `data`, a nice one per field. */
@@ -190,14 +204,19 @@ function pointAxes<T extends Record<string, unknown>>(
 function usePointTweens<T extends Record<string, unknown>>(
   names: string[],
   data: T[],
-  fields: Record<keyof AxesSpec, keyof T & string>,
+  target: Record<string, number>,
   series: (keyof T & string) | undefined,
   config: ChartConfig,
   radius: number
 ) {
-  const values = useTween(pointValues(names, data, fields))
-  const radii = useTween(Object.fromEntries(names.map((name) => [name, radius])), 0)
-  const opacity = useTween(Object.fromEntries(names.map((name) => [name, 1])), 0)
+  const values = useTween(target)
+  const sizes = React.useMemo(
+    () => Object.fromEntries(names.map((name) => [name, radius])),
+    [names, radius]
+  )
+  const radii = useTween(sizes, 0)
+  const present = React.useMemo(() => Object.fromEntries(names.map((name) => [name, 1])), [names])
+  const opacity = useTween(present, 0)
   const fallback = Object.keys(config)[0]
   return {
     radii,

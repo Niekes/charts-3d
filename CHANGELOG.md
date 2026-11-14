@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Mark3D.tooltip` may be a function, which the core calls when the pointer
   lands on the mark, so a chart with thousands of marks pays for one tooltip
   per hover, not one per mark per frame.
-- `useSeries` hands back `entries`, the entry behind every name in the data.
+- `useSeries` hands back `entries`, the entry behind every name in the data,
+  and `nameOf`, the name behind the id of an entry, where a name repeats.
 - `choropleth-chart-3d`: the regions of the land on a globe, each in the
   color of its class, joined to the data by the `id` of the feature; a
   region fades in and out, and its name and value show on hover.
@@ -50,9 +51,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   land of the globe, falling back to `--muted` and `--border`. The globe demos
   set them for a globe at night and show the populated places of the world,
   from Natural Earth, summed per tile, in nine classes of YlOrRd.
+- `finite`, `nonNegative` and `colorOf` in the core, for a chart of your own:
+  whether a value is a number the chart can place, an amount to size a mark
+  by, and the CSS variable of a config key.
 
 ### Changed
 
+- The docs say which exports semver covers from 1.0.0: the charts,
+  `ChartContainer3D`, `ChartLegend3D`, their props and the types they take.
+  What a chart is built from - `Axes3D`, `Marks3D`, the hooks, `Mark3D` and
+  the helpers such as `earth` and `colorOf` - may change in a minor version.
+- The install page no longer says the CLI installs `lucide-react`, and the
+  home page no longer says the charts have no canvas.
 - The tooltip of a mark is built from the data behind it: its values read
   as the ticks name them through `format`, and the entry of a bar as the
   ticks of x name it. The core sets the tooltip when the pointer lands on a
@@ -72,8 +82,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the zoom the chart stands still. `+` and `-` zoom to the middle of the
   chart, as before (ADR-0001).
 
+### Deprecated
+
+- `renderer="webgl"`: it draws on the canvas, as `"canvas"` does, and the
+  name goes in 1.0.0. Use `"canvas"`.
+
 ### Removed
 
+- The webgl renderer. Measured, it drew no faster than the canvas, because
+  projecting the marks on the CPU takes the time, not filling them: the
+  globe's 2,500 tiles ran at about 25 fps on both. The chart no longer opens
+  a WebGL context at all, so the limit of about 16 per page and the fallback
+  on a lost context are gone.
 - `chart-3d` no longer depends on `lucide-react`: the keyboard icon of the
   shortcut button is drawn in the core. A project that installed it for the
   charts alone may remove it.
@@ -84,26 +104,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps it until a tap elsewhere; before, a phone showed no tooltip at all.
 - A tooltip tells the new value of its mark at the next move of the
   pointer once new data arrives, instead of the one it showed before.
-- Scatter, places and globe drop an entry whose place is `null` or `""`,
-  where they drew it at 0 - a place at 0°/0°.
-- Bar, area, places and globe read an infinite value as 0, where it drew
-  `NaN`; the surface leaves out the cells around a missing height.
 - The cells of a surface keep their names as the grid grows, so the lit
   cell and its tooltip stay the same cell.
 - Without `id`, a scatter point keeps its name when an entry before it
   gains or loses its place.
-- An empty bar chart with every series off draws no `NaN`.
-- A chart `id` with a dot, a space or a quote keeps its colors.
-- Marks taken out of a chart leave the canvas and the hover with them.
 - The published types start with no `"use client"`, which broke projects
   with `skipLibCheck: false`, and load the GeoJSON types `land` names.
 - The globe gathers the entries of a tile in one list, where it copied it
-  per entry, and a chart at rest no longer rebuilds its numbers per frame.
-- `renderer="webgl"`: a chart holds one WebGL context, not two - the probe
-  for support hands its context back at once - and a chart that loses its
-  context, on a page with more WebGL charts than the browser allows or when
-  the GPU resets, falls back to `"canvas"` and keeps drawing, where it
-  stayed blank (#22).
+  per entry.
+- Turning the camera no longer compares the data mark by mark: the charts
+  build the numbers they glide once per change of the data, and `useTween`
+  compares a record only when it is a new one. With 5,000 points the scatter
+  chart spent about 4 ms of every frame on it. A chart now notices new data
+  by a new `data` array: one changed in place does not redraw it.
+- An entry whose coordinate is `null`, an empty string or a boolean has no
+  mark: the scatter chart, the places and the globe read it as 0 and drew a
+  point on the floor, a dot or a tile at 0°, 0°. `finite` in the core tells a
+  number a chart can place.
+- A config key or a chart `id` with a character a CSS identifier cannot hold -
+  the space of `"Net sales"`, the dot of `"q1.sales"` - keeps its colors: the
+  container escapes it, where the browser dropped the rule and the marks drew
+  black. `colorOf` in the core names the variable of a key; a plain key reads
+  `var(--color-desktop)` as before.
+- A value of `Infinity` in the bar and the area chart stands as 0, as one
+  that is not a number, and a height of `NaN` or `Infinity` in the surface
+  stands at the lowest of the others, and a cell it touches says nothing on
+  hover: one such value wrote `NaN` into the whole chart. So did a bar chart
+  without data and without series.
+- A value of `Infinity` on the globe and the places chart stands as 0, as one
+  that is not a number: the dot of that place drew at a radius of `NaN` and
+  shrank every other dot to nothing, and on the globe the other tiles fell
+  flat.
+- A `step` on the globe that made no tiles - 0, below 0, `NaN`, `Infinity`
+  or wider than 180 degrees - draws the tiles of the default, 5 degrees.
+- More than one `Marks3D` in a container - a chart and marks of your own
+  beside it - all draw and answer the hover, in their order in the tree on
+  every renderer: the last one replaced the marks of the others in the
+  scene, so on the canvas they were not drawn and on SVG they showed no
+  tooltip.
+- Entries of the same name are a bar, or a point of the area chart, of their
+  own: two entries named "Jan" drew one bar, the last, where the axis named
+  both. Their ticks and tooltips read the name as the data gives it, and
+  the order of the data tells them apart through an update.
+- A chart taken out of a container that stays takes its marks along: the
+  hover showed the tooltips of its marks over the empty chart, and the canvas
+  kept painting them.
+- The canvas renderer clears its canvas between frames instead of sizing it
+  again, which threw its buffer away and made a new one every frame.
+- `renderer="webgl"` no longer leaves a chart blank on a page with more
+  WebGL charts than the browser allows, or when the GPU resets (#22): it
+  draws on the canvas and opens no WebGL context.
 - An `animationDuration` that turns 0 while a chart glides makes it jump to
   the new data: the marks vanished, their numbers `NaN`, until the data
   changed again.
@@ -118,11 +168,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tooltip on the choropleth: the larger region is painted first, and
   the hole of the region around it is no longer drawn as a second polygon
   over it (#19).
-- The webgl renderer fills a polygon with a dent through the stencil buffer
-  instead of cutting it into triangles on every frame, which took longer
-  with the square of its corners: detailed land, such as the countries at
-  1:50m, took 50 ms and more a frame for the cutting alone (#23). A polygon
-  that crosses itself now fills even-odd on webgl, as the hover finds it.
+- `renderer="webgl"` no longer takes 50 ms and more a frame to cut detailed
+  land, such as the countries at 1:50m, into triangles (#23): it draws on
+  the canvas.
 - A `<` in the `id`, a key or a color of a chart is escaped where the
   container writes them into its style element, so a config built from the
   input of users cannot close that element on a server-rendered page.

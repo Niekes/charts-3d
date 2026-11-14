@@ -15,6 +15,7 @@ import {
   useTween,
   useTweenAxes,
   worldBox,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -24,7 +25,7 @@ import {
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per row of bars, with a value per series. */
   data: T[]
-  /** The field that names each entry, such as "month"; a bar follows its name through updates, so the names should be unique. */
+  /** The field that names each entry, such as "month"; a bar follows its name through updates, and an entry of a name that repeats is, in the order of the data, a bar of its own. */
   index: keyof T & string
   /**
    * The fields that hold the series, one row of bars each.
@@ -68,7 +69,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
   // grows from the floor, and a gone one shrinks back into it. The rows glide
   // to their new cells when the data reorders; a gone row stands in its cell
   // while its bars shrink and fade away, so a flat bar never pops.
-  const { series, target, entries, values, rows, presence, labels } = useSeries({
+  const { series, target, entries, values, rows, presence, labels, nameOf } = useSeries({
     data,
     index,
     keys,
@@ -93,8 +94,13 @@ export function BarChart3D<T extends Record<string, unknown>>({
           barMarks({
             id: `${bar.name}-${bar.key}`,
             faces: bar.faces,
-            color: `var(--color-${bar.key})`,
-            tooltip: barTooltip(bar, entries.get(bar.name), target, { config, format, tooltip }),
+            color: colorOf(bar.key),
+            tooltip: barTooltip(
+              { id: bar.name, name: nameOf(bar.name), key: bar.key },
+              entries.get(bar.name),
+              target,
+              { config, format, tooltip }
+            ),
             opacity: presence[bar.name],
           })
         )}
@@ -147,7 +153,8 @@ function barBox(entries: number, series: number, values: number[]) {
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
   // A shallow box for few series, so the bars stay square.
-  const depth = Math.min(1, Math.max(0.25, series / Math.max(1, entries)))
+  // An empty chart has no entries to divide by.
+  const depth = Math.min(1, Math.max(0.25, series / (entries || 1)))
   return { spec, depth }
 }
 
@@ -191,7 +198,7 @@ function barCorners(
  * says nothing.
  */
 function barTooltip<T extends Record<string, unknown>>(
-  { name, key }: { name: string; key: string },
+  { id, name, key }: { id: string; name: string; key: string },
   entry: T | undefined,
   target: Record<string, number>,
   {
@@ -201,7 +208,7 @@ function barTooltip<T extends Record<string, unknown>>(
   }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = target[`${name}-${key}`]
+  const value = target[`${id}-${key}`]
   return () =>
     tooltip(
       {
@@ -210,7 +217,7 @@ function barTooltip<T extends Record<string, unknown>>(
           {
             label: config[key]?.label ?? key,
             value: format.y?.(value) ?? value,
-            color: `var(--color-${key})`,
+            color: colorOf(key),
           },
         ],
       },

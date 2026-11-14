@@ -105,7 +105,7 @@ so a country may change its color as others join.
 
 ## Renderers
 
-The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"`, `"canvas"` and `"webgl"` draw them all - where the browser has the requested renderer, `"webgl"` falling back to `"canvas"`, and where it has none, to SVG.
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -119,7 +119,7 @@ The same chart on every renderer, side by side. The marks are data the chart han
 ## Many marks
 
 Every country colored, on `"canvas"`, the renderer for many marks, with the
-select for the same scene on SVG and WebGL. The size of a choropleth is its
+select for the same scene on SVG. The size of a choropleth is its
 land's, not its data's: the 177 regions of world-atlas at 110m are 10,600
 points, which d3-geo cuts at the horizon on every turn of the camera, and a
 colored region is drawn once, in its color alone. At 50m the regions are

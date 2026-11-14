@@ -5,7 +5,7 @@ description: The container, camera, axes and tooltip that every 3D chart builds 
 
 import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
-`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box, `Marks3D` draws your shapes with every renderer and `shade` lights a face.
+`chart-3d` is the core the other charts install with it. Use it directly to draw your own d3-3d shapes in the chart box: `useChart3D` hands you the camera, `Axes3D` draws the box, `Marks3D` draws your shapes with every renderer and `shade` lights a face. A container takes more than one `Marks3D` - a chart and marks of your own beside it - and paints each set over the ones before it in the tree, on every renderer.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -50,13 +50,13 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
 ## Renderers
 
-The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks; `"webgl"` fills them on the GPU, for charts with the most.
+The marks of a chart - its bars, points and faces - are drawn by the renderer of the container. `"svg"`, the default, draws them as SVG elements; `"canvas"` paints them on a canvas, for charts with many marks.
 
 ```tsx
-<ChartContainer3D config={chartConfig} renderer="webgl">
+<ChartContainer3D config={chartConfig} renderer="canvas">
 ```
 
-The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has the requested renderer, `"webgl"` falling back to `"canvas"`, and stays SVG where it has none. A browser gives a page only so many WebGL contexts, about 16; a chart that loses its own, on a page with more charts than that or when the GPU resets, falls back to `"canvas"` and keeps drawing.
+The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML with every renderer. A chart draws as SVG on the server and until the browser shows it has a canvas, and stays SVG where it has none. `"webgl"` draws as `"canvas"`: measured, it drew no faster, as projecting the marks on the CPU takes the time, not filling them. It is deprecated and goes in 1.0.0.
 
 ## Shortcuts
 
@@ -172,6 +172,12 @@ A chart glides into new data over the `animationDuration` of its container; 0 ma
 A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that every renderer draws: tween an opacity per key with `useTween` - 1, with 0 as the enter value - and fade the color after `shade`.
 
 The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it - while the line of the axis grows to a new outermost tick and shrinks from a dropped one. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
+
+## Stability
+
+From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D`. A change to any of them that breaks a project waits for a major version.
+
+What a chart is built from stays free to change in a minor version, with an entry in the changelog: `Axes3D`, `Marks3D`, `Labels3D`, `useChart3D`, `useTween`, `useTweenAxes`, `useSeries`, `Mark3D`, `Label3D`, `World`, `GeoProjectionLike` and the helpers `axis`, `pad`, `linear`, `worldBox`, `intoWorld`, `shade`, `faded`, `colorOf`, `finite`, `nonNegative`, `cubeMarks`, `globe`, `GLOBE_RADIUS`, `orthographic` and `earth`. They are exported so a chart of your own can draw the way the charts here do; pin the version of the package, or own a copy through the registry, if you build on them.
 
 ## API Reference
 

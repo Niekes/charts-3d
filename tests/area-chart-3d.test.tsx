@@ -262,6 +262,17 @@ describe("AreaChart3D tooltip", () => {
     await view.unmount()
   })
 
+  test("a segment between entries of the same name names both by that name", async () => {
+    const twice = data.map((d) => ({ ...d, name: "x" }))
+    const given: { items: { label: unknown }[] }[] = []
+    const view = await mount(
+      chart(twice, { tooltip: (t: { items: { label: unknown }[] }) => (given.push(t), t) })
+    )
+    await view.point(middle(tops(view.host)[1].corners))
+    expect(given[0].items.map((item) => item.label)).toEqual(["x", "x"])
+    await view.unmount()
+  })
+
   test("a tooltip of null shows none", async () => {
     const view = await mount(chart(data, { tooltip: () => null }))
     await view.point(middle(tops(view.host)[1].corners))
@@ -519,7 +530,7 @@ describe("AreaChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same ribbons, the front of each filled through the stencil", async () => {
+  test("canvas and webgl paint the same ribbons on the canvas, every face of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -533,37 +544,6 @@ describe("AreaChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    const gl = {
-      viewport: vi.fn(),
-      disable: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      useProgram: vi.fn(),
-      uniform2f: vi.fn(),
-      uniform4f: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      getAttribLocation: vi.fn(() => 0),
-      enableVertexAttribArray: vi.fn(),
-      bindBuffer: vi.fn(),
-      vertexAttribPointer: vi.fn(),
-      bufferData: vi.fn(),
-      drawArrays: vi.fn(),
-      lineWidth: vi.fn(),
-      colorMask: vi.fn(),
-      stencilFunc: vi.fn(),
-      stencilOp: vi.fn(),
-      getParameter: vi.fn(() => [1, 1]),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      createBuffer: vi.fn(() => ({})),
-      getExtension: vi.fn(() => null),
-      isContextLost: vi.fn(() => false),
-      TRIANGLE_FAN: 6,
-    }
     // A canvas gives out one context only: another type on the same element is null.
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
       this: HTMLCanvasElement & { ctxType?: string },
@@ -571,7 +551,7 @@ describe("AreaChart3D renderers", () => {
     ) {
       if (this.ctxType && this.ctxType !== type) return null
       this.ctxType = type
-      return (type === "webgl" ? gl : ctx) as never
+      return (type === "2d" ? ctx : null) as never
     })
     vi.stubGlobal(
       "ResizeObserver",
@@ -594,14 +574,47 @@ describe("AreaChart3D renderers", () => {
     expect(marks(view.host)).toHaveLength(0)
     expect(ctx.fill).toHaveBeenCalledTimes(svg)
 
+    ctx.fill.mockClear()
     await view.render(scene("webgl"))
-    const counts = gl.drawArrays.mock.calls.map(([, , count]) => count)
-    // A quad is one fan of 4; the front of three entries and two floor corners
-    // is a fan of 5 drawn twice: into the stencil, then as its cover.
-    expect(counts.filter((c) => c === 5)).toHaveLength(4)
-    expect(counts.filter((c) => c === 4)).toHaveLength(6)
-    expect(counts).toHaveLength(10)
-    expect(gl.stencilOp).toHaveBeenCalledTimes(4)
+    expect(marks(view.host)).toHaveLength(0)
+    expect(ctx.fill).toHaveBeenCalledTimes(svg)
     await view.unmount()
+  })
+})
+
+describe("AreaChart3D values that are no numbers", () => {
+  test("an infinite value stands as 0, as one that is not a number", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <AreaChart3D
+          data={[
+            { name: "x", a: Infinity, b: 2 },
+            { name: "y", a: 3, b: -Infinity },
+          ]}
+          index="name"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("NaN")
+    expect(html).not.toContain("Infinity")
+    expect(html).toContain(">3<")
+  })
+})
+
+describe("AreaChart3D entries of the same name", () => {
+  test("each is a point of its own: as many faces as with three names", () => {
+    const twice = [
+      { name: "x", a: 1, b: 2 },
+      { name: "x", a: 3, b: 1 },
+      { name: "y", a: 2, b: 4 },
+    ]
+    const render = (rows: typeof twice) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <AreaChart3D data={rows} index="name" />
+        </ChartContainer3D>
+      ).match(/<path [^>]*color-mix/g) ?? []
+    const three = render(twice.map((d, i) => ({ ...d, name: `${d.name}${i}` })))
+    expect(render(twice)).toHaveLength(three.length)
   })
 })

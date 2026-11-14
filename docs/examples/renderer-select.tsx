@@ -5,7 +5,6 @@ import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 const renderers: { id: Renderer3D; label: string }[] = [
   { id: "svg", label: "SVG" },
   { id: "canvas", label: "Canvas" },
-  { id: "webgl", label: "WebGL" },
 ]
 
 /** The same scene on every renderer, side by side, for the renderers demos. */
@@ -14,7 +13,7 @@ export function RendererGrid({
   ...container
 }: Omit<ComponentProps<typeof ChartContainer3D>, "renderer">) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2">
       {renderers.map(({ id, label }) => (
         <figure key={id} className="flex flex-col gap-1">
           <ChartContainer3D {...container} renderer={id}>

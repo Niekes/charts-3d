@@ -48,7 +48,11 @@ export type View3D = {
   perspective?: number
 }
 
-/** How the marks of a chart are drawn. The box, its labels, the tooltip and the legend are always SVG and HTML. */
+/**
+ * How the marks of a chart are drawn. The box, its labels, the tooltip and the
+ * legend are always SVG and HTML. "webgl" draws as "canvas", as it drew no
+ * faster, and goes in 1.0.0.
+ */
 export type Renderer3D = "svg" | "canvas" | "webgl"
 
 /** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
@@ -99,6 +103,8 @@ type ChartContext3D = {
   renderer: Renderer3D
   /** The marks of the chart, which the hover and the canvas read. */
   scene: React.RefObject<Mark3D[]>
+  /** Puts the marks of the `Marks3D` of `id`, drawn at `node` in the tree, into the scene, or takes them out. */
+  place: (id: string, set?: { marks: Mark3D[]; node: Element }) => void
   repaint: () => void
   focus: Focus3D
   /** The time in ms a chart takes to glide into new data, 600 unless the container says. */
@@ -222,15 +228,6 @@ const never = () => () => {}
 
 /** Whether the platform modifier - ⌘ on a Mac, Ctrl elsewhere - is held in `e`. */
 const platformMod = (e: { metaKey: boolean; ctrlKey: boolean }) => (mac() ? e.metaKey : e.ctrlKey)
-
-/** `value` as a number, NaN where it is missing: `null` and `""` are no 0, as `Number` would have them. */
-const numeric = (value: unknown) => (value == null || value === "" ? NaN : Number(value))
-
-/** `value` as a finite number, 0 where it is none: missing, not a number, or infinite. */
-const finite = (value: unknown) => {
-  const n = Number(value)
-  return Number.isFinite(n) ? n : 0
-}
 
 /** Whether `value` lies between the ends `lo` and `hi`. */
 const within = (lo: number, hi: number, value: number) => value >= lo && value <= hi
@@ -373,10 +370,10 @@ export type ChartContainer3DProps = {
    */
   legend?: boolean
   /**
-   * How the marks of the chart are drawn: "canvas" suits many marks, "webgl" more.
-   * The chart draws as SVG until the browser shows it has the requested renderer,
-   * "webgl" falling back to "canvas", and where it has none, as SVG. A chart
-   * that loses its webgl context later falls back to "canvas" too, and stays there.
+   * How the marks of the chart are drawn: "canvas" suits many marks. The chart
+   * draws as SVG until the browser shows it has a canvas, and where it has
+   * none, as SVG. "webgl" draws as "canvas", as it drew no faster; it is
+   * deprecated and goes in 1.0.0.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D
@@ -423,7 +420,7 @@ function ChartContainer3D({
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
+  const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = useScene(
     requested,
     width,
     height,
@@ -433,8 +430,8 @@ function ChartContainer3D({
   const { view, handlers } = useOrbit(defaultView, width, keys, hide, hover)
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, repaint, focus, animationDuration }),
-    [config, camera, renderer, repaint, focus, animationDuration]
+    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration }),
+    [config, camera, renderer, place, repaint, focus, animationDuration]
   )
 
   return (
@@ -513,18 +510,33 @@ function keymapProps(keys: Keymap, mod: string, label?: string): React.SVGProps<
   }
 }
 
+// The bit of `a.compareDocumentPosition(b)` that says `b` comes before `a` in the document.
+const PRECEDING = 2
+
 /**
  * The marks of the chart and what reads them: the renderer that draws them,
- * the canvas it paints them on and the hover that shows their tooltips.
+ * the canvas it paints them on and the hover that shows their tooltips. The
+ * scene holds the marks of every `Marks3D` in the container, each set placed
+ * by `place`, in the order of the sets in the document - the order SVG paints
+ * them in - so a set that mounts later but sits earlier lies under the others
+ * on every renderer.
  */
 function useScene(requested: Renderer3D, width: number, height: number, placement: Placement3D) {
   const scene = React.useRef<Mark3D[]>([])
+  const sets = React.useRef(new Map<string, { marks: Mark3D[]; node: Element }>())
+  const place = React.useCallback((id: string, set?: { marks: Mark3D[]; node: Element }) => {
+    if (set) sets.current.set(id, set)
+    else sets.current.delete(id)
+    scene.current = [...sets.current.values()]
+      .sort((a, b) => (a.node.compareDocumentPosition(b.node) & PRECEDING ? 1 : -1))
+      .flatMap((s) => s.marks)
+  }, [])
   const tip = useTip(placement)
   const focus = useFocus()
-  const [renderer, fall] = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width, height, renderer, fall)
+  const renderer = useRenderer(requested)
+  const { canvas, repaint } = useCanvas(scene, width)
   const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
-  return { scene, renderer, canvas, repaint, hover, hide, leave, tip, focus }
+  return { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus }
 }
 
 type Tip3D = ReturnType<typeof useTip>
@@ -646,8 +658,14 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
   const { animationDuration: duration = 600 } = useChart3D()
-  // The content, not the record: a chart builds `values` at every render, also while it turns.
-  const key = JSON.stringify(values)
+  // The content, not the record, keys the glide: a chart may build `values`
+  // anew at any render. The same record as before is the same content, so a
+  // chart that keeps its records while the camera turns compares nothing.
+  const last = React.useRef<{ values: Record<string, number>; key: string }>(null)
+  if (last.current?.values !== values) {
+    last.current = { values, key: JSON.stringify(values) }
+  }
+  const key = last.current.key
   const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
   const shown = tweenNumbers(tween, enter)
 
@@ -1204,63 +1222,32 @@ function inside(polygon: Point2D[], at: Point2D) {
 
 /**
  * The renderer the chart draws with: SVG on the server and in the first
- * render on the client, then the requested one if the browser has it, with
- * "webgl" falling back to "canvas" and "canvas" to SVG. And `fall`, which
- * takes a chart that lost its webgl context to "canvas", where it stays: a
- * browser gives a page only some 16 contexts and drops the oldest, so one
- * that climbed back would take the context of the next chart.
+ * render on the client, then a canvas if the browser has one, for "canvas"
+ * and "webgl" alike.
  */
 function useRenderer(requested: Renderer3D) {
-  const [renderer, setRenderer] = React.useState<Renderer3D>("svg")
+  const [renderer, setRenderer] = React.useState<"svg" | "canvas">("svg")
   React.useEffect(() => {
-    // A canvas of its own per probe, as one that gave out a context cannot give another.
-    const gl = requested === "webgl" && document.createElement("canvas").getContext("webgl")
-    if (gl) {
-      // The probe hands its context back at once, or it counts against the page until it is collected.
-      gl.getExtension("WEBGL_lose_context")?.loseContext()
-      return setRenderer("webgl")
-    }
     const canvas = requested !== "svg" && document.createElement("canvas").getContext("2d")
     setRenderer(canvas ? "canvas" : "svg")
   }, [requested])
-  const fall = React.useCallback(() => setRenderer("canvas"), [])
-  return [renderer, fall] as const
+  return renderer
 }
-
-/** A resolved CSS color as bytes, which the webgl renderer draws with. */
-type RGBA = [number, number, number, number]
 
 /**
  * A ref for the canvas of the marks, and the repaint that paints them: on new
  * marks, when the canvas changes its size and when the theme changes. A color
- * resolves on the canvas itself, inside the chart, so the `--color-*` apply;
- * webgl takes the resolved color as bytes from a 1×1 canvas.
+ * resolves on the canvas itself, inside the chart, so the `--color-*` apply.
  */
-function useCanvas(
-  scene: React.RefObject<Mark3D[]>,
-  width: number,
-  height: number,
-  renderer: Renderer3D,
-  fall: () => void
-) {
+function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
-  const bytes = React.useRef(new Map<string, RGBA>())
-  const pixel = React.useRef<CanvasRenderingContext2D | null>(null)
 
   const repaint = React.useCallback(() => {
     const canvas = element.current
     if (!canvas) return
-    const resolve = (css: string) => resolved(canvas, css, colors.current)
-    if (renderer === "webgl") {
-      pixel.current ??= onePixel()
-      paintGL(canvas, scene.current, width, height, (css) =>
-        colorBytes(resolve(css), pixel.current!, bytes.current)
-      )
-    } else {
-      paint(canvas, scene.current, width, resolve)
-    }
-  }, [scene, width, height, renderer])
+    paint(canvas, scene.current, width, (css) => resolved(canvas, css, colors.current))
+  }, [scene, width])
 
   const canvas = React.useCallback(
     // A ref that returns its cleanup is never called with null.
@@ -1269,23 +1256,19 @@ function useCanvas(
       repaint()
       const resize = new ResizeObserver(repaint)
       resize.observe(node)
-      // Only a webgl canvas loses its context: to too many on the page, or to a reset of the GPU.
-      node.addEventListener("webglcontextlost", fall)
       // ponytail: watches the theme on <html> only, as the class `.dark` of THEMES does.
       const theme = new MutationObserver(() => {
         colors.current.clear()
-        bytes.current.clear()
         repaint()
       })
       theme.observe(document.documentElement, { attributeFilter: ["class", "style"] })
       return () => {
         element.current = null
-        node.removeEventListener("webglcontextlost", fall)
         resize.disconnect()
         theme.disconnect()
       }
     },
-    [repaint, fall]
+    [repaint]
   )
 
   return { canvas, repaint }
@@ -1302,6 +1285,22 @@ function resolved(canvas: HTMLCanvasElement, css: string, cache: Map<string, str
   return color
 }
 
+/**
+ * Sizes `canvas` to its pixels on screen, or, where it has that size, clears
+ * it: setting the size throws its buffer away and makes a new one, every frame.
+ */
+function fitCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  const width = Math.round(canvas.clientWidth * devicePixelRatio)
+  const height = Math.round(canvas.clientHeight * devicePixelRatio)
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width
+    canvas.height = height
+    return
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+}
+
 /** Paints `marks` on `canvas`, from the view box of `width` to the pixels of the canvas. */
 function paint(
   canvas: HTMLCanvasElement,
@@ -1309,10 +1308,9 @@ function paint(
   width: number,
   color: (css: string) => string
 ) {
-  canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
-  canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
   // useRenderer draws on a canvas only where the browser gives one a 2D context.
   const ctx = canvas.getContext("2d")!
+  fitCanvas(canvas, ctx)
   const scale = canvas.width / width
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"
@@ -1336,116 +1334,6 @@ function paint(
   }
 }
 
-/** A 1×1 canvas whose 2D context resolves a color to bytes, for the webgl renderer. */
-function onePixel() {
-  const canvas = document.createElement("canvas")
-  canvas.width = 1
-  canvas.height = 1
-  // useRenderer draws with webgl only where the browser gives a canvas a context; a 2D one comes with it.
-  return canvas.getContext("2d", { willReadFrequently: true })!
-}
-
-/** The resolved `color` as bytes, drawn on the 1×1 `pixel` and read back, cached per color. */
-function colorBytes(
-  color: string,
-  pixel: CanvasRenderingContext2D,
-  cache: Map<string, RGBA>
-): RGBA {
-  let rgba = cache.get(color)
-  if (rgba === undefined) {
-    pixel.clearRect(0, 0, 1, 1)
-    pixel.fillStyle = color
-    pixel.fillRect(0, 0, 1, 1)
-    rgba = [...pixel.getImageData(0, 0, 1, 1).data] as RGBA
-    cache.set(color, rgba)
-  }
-  return rgba
-}
-
-/**
- * Paints `marks` on a webgl `canvas`, from the view box of `width`×`height` to
- * the pixels of the canvas: each as a fan over its outline - through the
- * stencil where it may have a dent - in paint order and without a depth test,
- * the color of each as bytes.
- */
-function paintGL(
-  canvas: HTMLCanvasElement,
-  marks: Mark3D[],
-  width: number,
-  height: number,
-  color: (css: string) => RGBA
-) {
-  canvas.width = Math.round(canvas.clientWidth * devicePixelRatio)
-  canvas.height = Math.round(canvas.clientHeight * devicePixelRatio)
-  // useRenderer draws with webgl only where the browser gives one a context;
-  // one asked for a stencil buffer has it.
-  const gl = canvas.getContext("webgl", { stencil: true })!
-  // A lost context may make no program, which attachShader throws on; the chart falls back to canvas.
-  if (gl.isContextLost()) return
-  gl.viewport(0, 0, canvas.width, canvas.height)
-  gl.disable(gl.DEPTH_TEST)
-  gl.enable(gl.BLEND)
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-  const program = programOf(gl)
-  gl.useProgram(program)
-  gl.uniform2f(gl.getUniformLocation(program, "u_res"), 2 / width, 2 / height)
-  const where = gl.getAttribLocation(program, "a_pos")
-  gl.enableVertexAttribArray(where)
-  gl.bindBuffer(gl.ARRAY_BUFFER, bufferOf(gl))
-  gl.vertexAttribPointer(where, 2, gl.FLOAT, false, 0, 0)
-  const tint = (css: string) => {
-    const [r, g, b, a] = color(css)
-    gl.uniform4f(gl.getUniformLocation(program, "u_color"), r / 255, g / 255, b / 255, a / 255)
-  }
-  // A stroke - a ring, a seam - draws as a line loop over the outline,
-  // as wide as the platform gives a line.
-  const [, widest] = (gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) as Float32Array | null) ?? [1, 1]
-  gl.lineWidth(Math.min(1.5 * devicePixelRatio, widest))
-  for (const mark of marks) {
-    const outline = outlineOf(mark)
-    const xy = new Float32Array(2 * outline.length)
-    outline.forEach((p, i) => {
-      xy[2 * i] = p.x
-      xy[2 * i + 1] = p.y
-    })
-    gl.bufferData(gl.ARRAY_BUFFER, xy, gl.DYNAMIC_DRAW)
-    tint(mark.fill)
-    if (mark.r !== undefined || fans(outline)) gl.drawArrays(gl.TRIANGLE_FAN, 0, outline.length)
-    else fillGL(gl, outline.length)
-    if (!mark.stroke) continue
-    tint(mark.stroke)
-    gl.drawArrays(gl.LINE_LOOP, 0, outline.length)
-  }
-}
-
-/**
- * Fills the polygon in the buffer of `gl`, of `count` corners, whatever its
- * shape - a dent, as the front of a ribbon or a coast, or a crossing - with no
- * triangle cut on the CPU. Its fan flips the stencil under each triangle with
- * the color off, which leaves set what lies under an odd number of them: the
- * inside, even-odd, as `inside` finds it for the hover. The same fan then
- * paints where the stencil is set and clears it, so no pixel blends twice.
- */
-function fillGL(gl: WebGLRenderingContext, count: number) {
-  gl.enable(gl.STENCIL_TEST)
-  gl.colorMask(false, false, false, false)
-  gl.stencilFunc(gl.ALWAYS, 0, 0xff)
-  gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT)
-  gl.drawArrays(gl.TRIANGLE_FAN, 0, count)
-  gl.colorMask(true, true, true, true)
-  gl.stencilFunc(gl.NOTEQUAL, 0, 0xff)
-  gl.stencilOp(gl.KEEP, gl.KEEP, gl.ZERO)
-  gl.drawArrays(gl.TRIANGLE_FAN, 0, count)
-  gl.disable(gl.STENCIL_TEST)
-}
-
-/** The 12 points of the circle around `c` of radius `r`. */
-const ringOf = (c: Point2D, r: number) =>
-  Array.from({ length: 12 }, (_, i) => ({
-    x: c.x + r * Math.cos((i / 12) * 2 * Math.PI),
-    y: c.y + r * Math.sin((i / 12) * 2 * Math.PI),
-  }))
-
 /** Twice the signed area of the triangle `a`, `b`, `c`: its sign tells which way it turns, 0 on a line. */
 const turn = (a: Point2D, b: Point2D, c: Point2D) =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
@@ -1454,68 +1342,6 @@ const turn = (a: Point2D, b: Point2D, c: Point2D) =>
 const areaOf = (ring: Point2D[]) =>
   ring.reduce((sum, p, i) => sum + turn(ring[0], p, ring[i + 1] ?? p), 0)
 
-/**
- * Whether one fan fills `ring` as it is: the face of a bar, a tile. Up to four
- * corners that never turn opposite ways are convex. With more, a ring may turn
- * one way and still cross itself, as a star, so it takes the stencil.
- */
-function fans(ring: Point2D[]) {
-  if (ring.length > 4) return false
-  const turns = ring.map((p, i) => turn(ring.at(i - 1)!, p, ring[(i + 1) % ring.length]))
-  return !(turns.some((t) => t < 0) && turns.some((t) => t > 0))
-}
-
-/** The outline of `mark` as view-box points: its polygon, or the ring of its circle. */
-const outlineOf = (mark: Mark3D) =>
-  mark.r === undefined ? mark.points : ringOf(mark.points[0], mark.r)
-
-// The paint program and the vertex buffer of a context, each made once.
-const programs = new WeakMap<WebGLRenderingContext, WebGLProgram>()
-const buffers = new WeakMap<WebGLRenderingContext, WebGLBuffer>()
-
-/** The paint program of `gl`, compiled once: view-box points in, clip space out, one color per draw. */
-function programOf(gl: WebGLRenderingContext) {
-  let program = programs.get(gl)
-  if (!program) {
-    program = gl.createProgram()!
-    gl.attachShader(
-      program,
-      shaderOf(
-        gl,
-        gl.VERTEX_SHADER,
-        "attribute vec2 a_pos; uniform vec2 u_res; void main() { gl_Position = vec4(a_pos.x * u_res.x - 1.0, 1.0 - a_pos.y * u_res.y, 0.0, 1.0); }"
-      )
-    )
-    gl.attachShader(
-      program,
-      shaderOf(
-        gl,
-        gl.FRAGMENT_SHADER,
-        "precision mediump float; uniform vec4 u_color; void main() { gl_FragColor = u_color; }"
-      )
-    )
-    gl.linkProgram(program)
-    programs.set(gl, program)
-  }
-  return program
-}
-
-function shaderOf(gl: WebGLRenderingContext, type: number, source: string) {
-  const shader = gl.createShader(type)!
-  gl.shaderSource(shader, source)
-  gl.compileShader(shader)
-  return shader
-}
-
-function bufferOf(gl: WebGLRenderingContext) {
-  let buffer = buffers.get(gl)
-  if (!buffer) {
-    buffer = gl.createBuffer()!
-    buffers.set(gl, buffer)
-  }
-  return buffer
-}
-
 /** The canvas over the chart box that the marks are painted on, if the chart draws on one. */
 function ChartCanvas3D({
   renderer,
@@ -1523,7 +1349,7 @@ function ChartCanvas3D({
   width,
   height,
 }: {
-  renderer: Renderer3D
+  renderer: "svg" | "canvas"
   canvas: React.Ref<HTMLCanvasElement>
   width: number
   height: number
@@ -1532,8 +1358,6 @@ function ChartCanvas3D({
 
   return (
     <canvas
-      // A canvas that gave out one context cannot give another, so each renderer gets its own.
-      key={renderer}
       data-slot="chart-3d-canvas"
       ref={canvas}
       className="pointer-events-none absolute top-0 left-0 w-full mask-x-from-96% mask-y-from-96%"
@@ -1612,71 +1436,83 @@ function ChartGizmo3D({
 }
 
 /**
+ * `text` as part of a CSS identifier: every character but an ASCII letter, a
+ * digit, `-` and `_` written as its escape, such as the space of "Net sales"
+ * or the dot of "q1.sales". Unescaped, it would end the name, and the browser
+ * would drop the rule that declares the color.
+ */
+const cssName = (text: string) =>
+  text.replace(/[^\w-]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `)
+
+/**
+ * The color of the config key `key`: the CSS variable the container declares
+ * for it. A chart without a config has no first key to fall back on, and
+ * draws in a variable nobody declares: colorless, as before.
+ */
+const colorOf = (key: string | undefined) => `var(--color-${cssName(String(key))})`
+
+/**
  * The focus color of a fill, which a lit mark takes: `--chart-3d-focus`, or the
  * fill itself lightened, so the highlight carries the color of what it highlights.
  */
 const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
 
 /**
- * Writes `marks` into the scene of the container, which the canvas paints and
- * the hover hit-tests, after every render. Taken out of the chart, they leave
- * it again: no canvas paints them, no hover finds them.
- */
-function useSceneMarks(marks: Mark3D[]) {
-  const { scene, repaint } = useChart3D()
-  React.useLayoutEffect(() => {
-    scene.current = marks
-    repaint()
-  })
-  React.useLayoutEffect(
-    () => () => {
-      scene.current = []
-      repaint()
-    },
-    [scene, repaint]
-  )
-}
-
-/**
  * The marks of a chart, drawn by the renderer of the container: as SVG
  * elements, or on the canvas over the chart box. The hover reads them too.
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
-  const { renderer } = useChart3D()
+  const { renderer, place, repaint } = useChart3D()
+  const id = React.useId()
+  // Drawn on every renderer, empty off SVG, so the scene orders the sets as SVG does.
+  const node = React.useRef<SVGGElement>(null)
   const lit = useLit(marks)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
   // inner faces their seams. The order, and with it the depth, stays as painted.
   const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
-  useSceneMarks(drawn)
+  React.useLayoutEffect(() => {
+    // The group is in the tree once the layout effects run.
+    place(id, { marks: drawn, node: node.current! })
+    repaint()
+  })
+  // A chart taken out of its container takes its marks along: the hover finds
+  // none, and the canvas paints none.
+  React.useLayoutEffect(
+    () => () => {
+      place(id)
+      repaint()
+    },
+    [id, place, repaint]
+  )
 
-  if (renderer !== "svg") return null
   return (
-    <g data-slot="chart-3d-marks">
-      {drawn.map(({ key, points, r, fill, stroke }) =>
-        r === undefined ? (
-          <path
-            key={key}
-            d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
-            fill={fill}
-            stroke={stroke ?? fill}
-            strokeWidth={0.5}
-            strokeLinejoin="round"
-          />
-        ) : (
-          // Rounded like a path, so the server and the browser, whose last
-          // bits of a sine differ, write the same HTML.
-          <circle
-            key={key}
-            cx={+points[0].x.toFixed(2)}
-            cy={+points[0].y.toFixed(2)}
-            r={+r.toFixed(2)}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={stroke ? 1 : undefined}
-          />
-        )
-      )}
+    <g ref={node} data-slot="chart-3d-marks">
+      {renderer === "svg" &&
+        drawn.map(({ key, points, r, fill, stroke }) =>
+          r === undefined ? (
+            <path
+              key={key}
+              d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+              fill={fill}
+              stroke={stroke ?? fill}
+              strokeWidth={0.5}
+              strokeLinejoin="round"
+            />
+          ) : (
+            // Rounded like a path, so the server and the browser, whose last
+            // bits of a sine differ, write the same HTML.
+            <circle
+              key={key}
+              cx={+points[0].x.toFixed(2)}
+              cy={+points[0].y.toFixed(2)}
+              r={+r.toFixed(2)}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={stroke ? 1 : undefined}
+            />
+          )
+        )}
     </g>
   )
 }
@@ -1727,13 +1563,9 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
   )
 }
 
-/**
- * The rules of the chart `id`: the fade of the axes, the cursors and a color
- * variable per config key and theme. The id is quoted in the selector, so
- * one with a dot or a space is still one selector.
- */
 function ChartStyle({ id, config }: { id: string; config: ChartConfig }) {
-  const scope = `[data-chart="${id.replace(/["\\]/g, "\\$&")}"]`
+  // The id escaped whole, as a CSS identifier, so a dot or a space keeps it one selector.
+  const scope = `[data-chart=${cssName(id)}]`
   const colorConfig = Object.entries(config).filter(([, c]) => c.theme || c.color)
   // Every part of the axes that enters fades in: a label, a tick mark, a gridline, a wall.
   // The cursor names the gesture of the held modifier: the platform modifier
@@ -1765,7 +1597,7 @@ ${prefix} ${scope} {
 ${colorConfig
   .map(([key, item]) => {
     const color = item.theme?.[theme as keyof typeof item.theme] || item.color
-    return color ? `  --color-${key}: ${color};` : null
+    return color ? `  --color-${cssName(key)}: ${color};` : null
   })
   .join("\n")}
 }
@@ -1773,9 +1605,9 @@ ${colorConfig
           ),
         ]
           .join("\n")
-          // The id, the keys and the colors are the caller's text: escaped, a `<` in
-          // them cannot close the style element of a server-rendered page. Whether
-          // they are CSS stays with the caller.
+          // `cssName` has escaped the id and the keys; a color is the caller's text
+          // still, and with its `<` escaped it cannot close the style element of a
+          // server-rendered page. Whether it is CSS stays with the caller.
           .replaceAll("<", "\\3c "),
       }}
     />
@@ -1946,7 +1778,7 @@ function ChartLegend3D({ config }: { config: ChartConfig }) {
           {item.icon ? (
             <item.icon />
           ) : (
-            <span className="size-2 rounded-[2px]" style={{ background: `var(--color-${key})` }} />
+            <span className="size-2 rounded-[2px]" style={{ background: colorOf(key) }} />
           )}
           {item.label ?? key}
         </div>
@@ -2647,17 +2479,40 @@ function faded(color: string, opacity: number) {
 }
 
 /**
+ * Whether `value` is a number a chart can place: whatever `Number` reads as a
+ * finite number - a number, a string of one, a date, a bigint - but not what
+ * it reads as 0 for want of a value: null, a blank string and a boolean would
+ * draw an entry without a place at the origin.
+ */
+function finite(value: unknown) {
+  const isBlank = typeof value === "string" && value.trim() === ""
+  const isValue = value != null && typeof value !== "boolean" && !isBlank
+  return isValue && Number.isFinite(Number(value))
+}
+
+/**
+ * `value` as an amount a mark is sized by, such as the area of a dot or the
+ * height of a tile: one below 0, or one that is not a finite number, stands
+ * as 0.
+ */
+function nonNegative(value: unknown) {
+  return finite(value) ? Math.max(0, Number(value)) : 0
+}
+
+/**
  * The entries of `data` and their series, for a chart that lays the entries
  * out along x and the series along z, as the bar and the area chart do. The
  * name of every entry comes from its `index` field, the series are `keys` or
  * the keys of the config, and the `target` of every cell is keyed by the name
  * of its entry and its series, so it follows its entry when the data
- * reorders; a value that is not a number stands as 0. Each glides by name:
+ * reorders; a value that is not a finite number stands as 0. Each glides by name:
  * `values` from 0, `rows` - the place of every entry - to where it stands, and
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
  * still among them. `labels` name the ticks: the entry at a tick of x, through
  * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
- * tick of z. `entries` holds the entry behind every name still in the data.
+ * tick of z. Every entry is keyed by its id - its name, made unique where a
+ * name repeats - and `nameOf` reads the name back; `entries` holds the entry
+ * behind every id still in the data.
  */
 function useSeries<T extends Record<string, unknown>>({
   data,
@@ -2671,11 +2526,23 @@ function useSeries<T extends Record<string, unknown>>({
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
 }) {
   const { config } = useChart3D()
-  const series = keys ?? Object.keys(config)
-  const names = data.map((d) => String(d[index] ?? ""))
-  const target = Object.fromEntries(
-    data.flatMap((d, i) => series.map((key) => [`${names[i]}-${key}`, finite(d[key])]))
-  )
+  const series = React.useMemo(() => keys ?? Object.keys(config), [keys, config])
+  // Built once per change of the data, not at every frame the camera turns.
+  const { names, ids, target, order, present } = React.useMemo(() => {
+    const names = data.map((d) => String(d[index] ?? ""))
+    const ids = uniqueIds(names)
+    return {
+      names,
+      ids,
+      target: Object.fromEntries(
+        data.flatMap((d, i) =>
+          series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+        )
+      ),
+      order: Object.fromEntries(ids.map((id, i) => [id, i])),
+      present: Object.fromEntries(ids.map((id) => [id, 1])),
+    }
+  }, [data, index, series])
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
     y: format.y,
@@ -2684,13 +2551,36 @@ function useSeries<T extends Record<string, unknown>>({
   return {
     series,
     target,
-    entries: new Map(data.map((d, i) => [names[i], d])),
+    entries: new Map(data.map((d, i) => [ids[i], d])),
     values: useTween(target, 0),
-    rows: useTween(Object.fromEntries(names.map((name, i) => [name, i]))),
-    presence: useTween(Object.fromEntries(names.map((name) => [name, 1])), 0),
+    rows: useTween(order),
+    presence: useTween(present, 0),
     labels,
+    nameOf,
   }
 }
+
+// Between a name and the count of its repeat, in the id of an entry: a
+// character no name of the data is expected to hold.
+const REPEAT = "\u0000"
+
+/**
+ * An id per name, unique: a name the first time, the name and its count when
+ * it comes again, so entries of the same name are entries of their own.
+ * Nothing else tells them apart, so the order of the data does: the first
+ * "Jan" stays the first through an update, whichever entry that is.
+ */
+function uniqueIds(names: string[]) {
+  const seen = new Map<string, number>()
+  return names.map((name) => {
+    const count = (seen.get(name) ?? 0) + 1
+    seen.set(name, count)
+    return count === 1 ? name : `${name}${REPEAT}${count}`
+  })
+}
+
+/** The name of the entry of `id`, as its data names it. */
+const nameOf = (id: string) => id.split(REPEAT)[0]
 
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(
@@ -2719,8 +2609,6 @@ export {
   axis,
   pad,
   linear,
-  numeric,
-  finite,
   worldBox,
   globe,
   GLOBE_RADIUS,
@@ -2728,7 +2616,10 @@ export {
   earth,
   intoWorld,
   shade,
+  colorOf,
   faded,
+  finite,
+  nonNegative,
   useSeries,
   cubeMarks,
   useTween,

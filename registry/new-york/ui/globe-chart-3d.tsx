@@ -17,16 +17,17 @@ import {
   axis,
   earth,
   faded,
+  finite,
+  nonNegative,
   globe,
   orthographic,
   shade,
   useChart3D,
   useTween,
+  colorOf,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
-  numeric,
-  finite,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -43,7 +44,7 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
   lon: keyof T & string
   /** The field of the latitude of an entry, in degrees north. */
   lat: keyof T & string
-  /** The field of the value of an entry, the height of its tile; a value below 0, or none, stands as 0. */
+  /** The field of the value of an entry, the height of its tile; a value below 0, or one that is not a finite number, stands as 0. */
   value: keyof T & string
   /**
    * The field whose value is the config key of the color of a tile.
@@ -57,7 +58,8 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   label?: keyof T & string
   /**
-   * The width of a tile in degrees, a divisor of 180.
+   * The width of a tile in degrees, a divisor of 180; one that is not
+   * above 0 and up to 180 draws the default.
    * @defaultValue 5
    */
   step?: number
@@ -71,6 +73,9 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   tooltip?: (tooltip: Tooltip3D, data: { entries: T[] }) => Tooltip3D | null
 }
+
+/** The width of a tile in degrees, unless the chart says. */
+const STEP = 5
 
 /** The height of a tile at the ceiling, in the world box. */
 const HEIGHT = 0.4
@@ -109,20 +114,19 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   value,
   series,
   label,
-  step = 5,
+  step: requested = STEP,
   format,
   tooltip,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
+  // A step of 0 or below, NaN, Infinity or one wider than half the globe makes no tiles at all.
+  const step = requested > 0 && requested <= 180 ? requested : STEP
   const fields = { lon, lat, value, series, label }
-  // The value of every tile with an entry, keyed by the tile and its series,
-  // so a tile that changes color leaves as one and enters as the other.
-  const tiles = tileValues(data, fields, step, Object.keys(config)[0])
-  const target = Object.fromEntries([...tiles.values()].map((t) => [t.id, t.value]))
+  const { tiles, target, present } = useTiles(data, fields, step, Object.keys(config)[0])
   // A tile grows from the globe as it fades in and shrinks back as it fades
   // out; the ceiling glides with the data, so the tallest tile never jumps.
   const heights = useTween(target, 0)
-  const presence = useTween(Object.fromEntries(Object.keys(target).map((k) => [k, 1])), 0)
+  const presence = useTween(present, 0)
   const peak = Object.values(target).reduce((max, v) => Math.max(max, v), 0)
   const { ceiling } = useTween({ ceiling: axis(0, peak).domain[1] })
 
@@ -147,6 +151,30 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...prisms]} />
+}
+
+/**
+ * The tile of every entry, the value of each and its presence - built once
+ * per change of the data, not at every frame the camera turns. A tile is
+ * keyed by its place and its series, so a tile that changes color leaves as
+ * one and enters as the other.
+ */
+function useTiles<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Fields<T>,
+  step: number,
+  fallback: string
+) {
+  // The fields one by one: the record of them is new at every render.
+  const { lon, lat, value, series, label } = fields
+  return React.useMemo(() => {
+    const tiles = tileValues(data, { lon, lat, value, series, label }, step, fallback)
+    return {
+      tiles,
+      target: Object.fromEntries([...tiles.values()].map((t) => [t.id, t.value])),
+      present: Object.fromEntries([...tiles.keys()].map((k) => [k, 1])),
+    }
+  }, [data, lon, lat, value, series, label, step, fallback])
 }
 
 /**
@@ -184,16 +212,16 @@ function tileValues<T extends Record<string, unknown>>(
 ) {
   const tiles = new Map<string, Tile<T>>()
   for (const d of data) {
-    const [lon, lat] = [numeric(d[fields.lon]), numeric(d[fields.lat])]
     // An entry without a place on the globe has no tile.
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue
+    if (!finite(d[fields.lon]) || !finite(d[fields.lat])) continue
+    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
     const entries = tiles.get(center)?.entries ?? []
     entries.push(d)
     tiles.set(center, {
       id: `${center},${key}`,
-      value: Math.max(0, finite(d[fields.value])),
+      value: nonNegative(d[fields.value]),
       entries,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
@@ -271,7 +299,7 @@ function tileTooltip<T extends Record<string, unknown>>(
       {
         title: name ?? config[key]?.label ?? key,
         items: [
-          { label: fields.value, value: format?.(value) ?? value, color: `var(--color-${key})` },
+          { label: fields.value, value: format?.(value) ?? value, color: colorOf(key) },
           { label: fields.lat, value: lat },
           { label: fields.lon, value: lon },
         ],
@@ -289,7 +317,7 @@ function prismMark(face: Polygon<Point3D, Face>, presence: number, tooltip: Mark
   return {
     key: `${face.id}-${face.part}`,
     points: face.map((p) => p.projected),
-    fill: faded(shade(face, `var(--color-${tile(face.id).key})`), presence),
+    fill: faded(shade(face, colorOf(tile(face.id).key)), presence),
     groups: [face.id],
     tooltip,
   }

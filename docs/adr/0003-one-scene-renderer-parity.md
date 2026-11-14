@@ -1,5 +1,8 @@
 # One scene is the renderer contract - charts project with d3-3d, the core draws
 
+Status: amended 2026-11-13 - the webgl renderer is gone; `"webgl"` draws
+as `"canvas"` until 1.0.0. Read "three renderers" below as SVG and canvas.
+
 Context: the registry draws with three renderers - SVG, canvas and webgl - and
 a chart must behave the same on all of them, gap-free. A chart that draws for
 one renderer, or projects with mathematics of its own, breaks that silently:
@@ -38,3 +41,9 @@ the dependencies of `chart-3d` in `registry.json` and lands in every installing
 project, so it has to earn its place - or, where one chart alone needs it, to
 the dependencies of that chart's item, which land only where the chart
 installs, as the globe's `d3-geo` does (ADR-0007).
+
+Amended 2026-11-13: the webgl renderer is gone. Measured, it drew no faster
+than the canvas - projecting the marks on the CPU takes the time, not filling
+them - so `"webgl"` draws as `"canvas"` until 1.0.0 drops the name. The contract stands for the two renderers left, and the parity test
+drives them both; `paintGL` is no longer among the places a new mark shape
+must reach.

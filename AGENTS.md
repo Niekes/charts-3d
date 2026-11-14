@@ -177,7 +177,7 @@ The rules that `scripts/check-template.mjs` enforces:
 - every demo carries the `RendererSelect` of
   `docs/examples/renderer-select.tsx` below the chart, so every scene can be
   checked visually on every renderer; the `-renderers-demo` instead lays the
-  same scene out on all three renderers at once, with `RendererGrid` from the
+  same scene out on every renderer at once, with `RendererGrid` from the
   same file;
 - `index.ts` re-exports every registry file with `export *`, and nothing else.
 
@@ -281,7 +281,9 @@ every renderer, so text stays sharp and the theme stays in CSS.
 - **SVG first.** The server, the prerender and the first render on the client
   draw SVG. An effect then switches to the requested renderer if the browser
   has it, and stays on SVG where it has none, as in jsdom.
-- **One scene.** `Marks3D` writes its marks into the scene of the container;
+- **One scene.** Every `Marks3D` places its marks into the scene of the
+  container, a set per `Marks3D`, in their order in the tree, as SVG paints
+  them;
   the canvas paints the scene and the hover hit-tests it, whatever the
   renderer.
 - **Parity is behavioural and gated**
@@ -289,25 +291,16 @@ every renderer, so text stays sharp and the theme stays in CSS.
   scene draws on every renderer, and hover, tooltip and focus act the same;
   pixels may differ, such as the width of a ring (ADR-0002). The parity test in
   `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
-  and a circle - over all three renderers. A third mark shape turns `Mark3D`
+  and a circle - over every renderer. A third mark shape turns `Mark3D`
   into a discriminated union with an exhaustive switch everywhere the core
-  draws - `Marks3D`, `paint`, `paintGL` - so a shape one renderer misses fails
-  to compile.
-- **WebGL joins the same chain.** `"webgl"` probes
-  `getContext("webgl")` and falls back to `"canvas"`. The probe hands its
-  context back at once with `WEBGL_lose_context`, so a chart holds one
-  context, not two: a browser gives a page about 16 and drops the oldest. A
-  chart that loses its context - to that limit, or to a reset of the GPU -
-  falls back to `"canvas"` on `webglcontextlost` and stays there (see
-  Fallback in GLOSSARY.md); it never restores, as a restored context would
-  take the one of the next chart. Its paint function
-  fills the same marks - a polygon of up to four corners that is convex, or a
-  circle of 12 segments, as one fan, any other through the stencil buffer,
-  even-odd, so a concave one such as the front of a ribbon or a coast fills as
-  on the canvas with no triangle cut on the CPU - draws them in paint order
-  without a depth test, a stroke as a line
-  loop over the outline, and takes its colors as bytes from a 1×1 canvas. Project on the GPU with `camera.matrix()`
-  only once the projection on the CPU is what is slow.
+  draws - `Marks3D`, `paint` - so a shape one renderer misses fails to
+  compile.
+- **No WebGL.** `"webgl"` draws as `"canvas"`, deprecated until 1.0.0
+  removes it: measured, it drew no faster, because projecting the marks on
+  the CPU takes the time, not filling them (the globe's 2,500 tiles ran at
+  about 25 fps on both). A GPU renderer earns its place again only with the
+  projection on the GPU, through `camera.matrix()`, and a measurement that
+  shows it faster.
 
 ### Interaction
 
@@ -420,7 +413,12 @@ the client. The npm dependencies stay external.
   package depend on the API: a change to a prop or an export of `index.ts`
   is a breaking change and needs a major version. Before 1.0.0 the minor
   version is the major one: a breaking change goes from 0.4 to 0.5, which
-  `^0.4.0` does not pick up.
+  `^0.4.0` does not pick up. Semver covers what a chart is used with - the
+  charts, `ChartContainer3D`, `ChartLegend3D`, their props and the types they
+  take; what a chart is built from - `Axes3D`, `Marks3D`, the hooks, `Mark3D`
+  and the helpers - may change in a minor version, with a changelog entry.
+  The list is on the Stability section of the `chart-3d` docs page: a new
+  export goes on one side of it.
 
 ### Adding a chart
 

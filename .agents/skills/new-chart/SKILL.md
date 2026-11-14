@@ -22,9 +22,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 - **Data-driven, one scene.** Project the data with d3-3d on every render
   and hand the shapes to the core as `Mark3D`s (`Marks3D`) and `Label3D`s
   (`Labels3D`). The scene is the single data store - the d3 "bind data to
-  virtual elements" idea for canvas/webgl is the scene here: the canvas and
-  the webgl renderer paint it and the hover hit-tests it, whatever the
-  renderer. Never draw on a canvas yourself and never keep a copy of the
+  virtual elements" idea for the canvas is the scene here: the canvas
+  renderer paints it and the hover hit-tests it, whatever the renderer. Never draw on a canvas yourself and never keep a copy of the
   data in the chart.
 - **Hover comes from the core.** Give every mark a `tooltip` - a function
   the core calls when the pointer lands on it, built from the data behind the
@@ -64,7 +63,7 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
   hand CSS colors to the core; build the world with `worldBox`; tween numbers
   with `useTween`/`useTweenAxes`, never the projected marks. A new mark shape
   (beyond polygon and circle) extends everywhere the core draws (`Marks3D`,
-  `paint`, `paintGL`) and the parity test in `tests/chart-3d.test.tsx`, and
+  `paint`) and the parity test in `tests/chart-3d.test.tsx`, and
   turns `Mark3D` into a discriminated union with an exhaustive switch
   (ADR-0003).
 - Style: shadcn/ui - two spaces, double quotes, no semicolons. Every function
@@ -80,10 +79,10 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 ## 3. Tests: `tests/<name>-chart-3d.test.tsx`
 
 Drive the chart the way a user does: render it, send pointer and keyboard
-events, read what it draws. Copy `mount`, `stubCanvas` and `stubGL` from
+events, read what it draws. Copy `mount` and `stubCanvas` from
 `tests/chart-3d.test.tsx` (jsdom has no layout and no canvas). Cover at
-least: the marks draw as SVG, on the canvas (`renderer="canvas"`) and on
-webgl (`renderer="webgl"`, mock GL); hovering a mark shows its tooltip and
+least: the marks draw as SVG and on the canvas (`renderer="canvas"`, and
+`"webgl"`, which draws on the canvas too); hovering a mark shows its tooltip and
 fades the groups it does not share, and moving off the mark or leaving the
 chart clears both; new data glides in (`useTween`); the axes follow, where the
 chart has axes - the globe has none (ADR-0007). New code
@@ -101,8 +100,8 @@ comes with its tests - the coverage gate is 98% in each metric.
   surface does - a gone one leaves as the mirror, and the axes make room (see
   Enter in GLOSSARY.md). Fixed values, so the only change is which entries
   are there; see `docs/examples/bar-chart-3d-enter-demo.tsx`.
-- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on all
-  three renderers side by side (`RendererGrid` from
+- `docs/examples/<name>-chart-3d-renderers-demo.tsx` - the same scene on every
+  renderer side by side (`RendererGrid` from
   `docs/examples/renderer-select.tsx`). See
   `docs/examples/bar-chart-3d-renderers-demo.tsx`.
 - `docs/examples/<name>-chart-3d-many-demo.tsx` - the many demo: a fixed,
@@ -116,7 +115,7 @@ comes with its tests - the coverage gate is 98% in each metric.
 
 Every demo but the renderers one carries the `RendererSelect` below the
 chart, so every scene can be checked visually on every renderer; the
-renderers demo shows all three at once through `RendererGrid` (AGENTS.md).
+renderers demo shows them all at once through `RendererGrid` (AGENTS.md).
 
 ## 5. Gates
 
