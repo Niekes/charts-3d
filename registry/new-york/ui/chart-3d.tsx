@@ -4,6 +4,7 @@ import * as React from "react"
 import { nice, ticks } from "d3-array"
 import {
   axes3D,
+  box,
   camera3D,
   normal,
   points3D,
@@ -2601,6 +2602,96 @@ function cubeMarks(
     }))
 }
 
+/**
+ * The corners of a bar on the floor of `world`, at `x` and `z` in the values
+ * of the data, from 0 to `value`, `size` wide and deep in the world box.
+ * box() rises towards -y, so a negative bar starts at its value.
+ */
+function barCorners(
+  world: World,
+  x: number,
+  z: number,
+  value: number,
+  size: { width: number; depth: number }
+) {
+  const floor = world.y(0)
+  const top = world.y(value)
+  return box({
+    x: world.x(x),
+    y: Math.max(floor, top),
+    z: world.z(z),
+    ...size,
+    height: Math.abs(floor - top),
+  })
+}
+
+/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar. */
+function barMarks({
+  id,
+  faces,
+  color,
+  tooltip,
+  opacity,
+}: {
+  id: string
+  faces: CubeFace[]
+  color: string
+  tooltip: Mark3D["tooltip"]
+  opacity: number
+}) {
+  return cubeMarks(id, faces, color, tooltip).map((mark) => ({
+    ...mark,
+    fill: faded(mark.fill, opacity),
+    groups: [id],
+  }))
+}
+
+/**
+ * The color at `value` on a ramp from the config color `low` at `lo` to
+ * `high` at `hi` - a value beyond them takes the color of the nearer end: a
+ * CSS color-mix, so it follows the theme.
+ */
+function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, string]) {
+  const t = Math.min(100, Math.max(0, Math.round(((value - lo) / (hi - lo || 1)) * 100)))
+  return `color-mix(in oklch, ${colorOf(high)} ${t}%, ${colorOf(low)})`
+}
+
+/**
+ * The box of a chart over a grid of `rows` by `columns`: x and z span the
+ * columns and the rows at the values `domain` names - with half a cell of
+ * room beyond the grid unless it names them exactly - and y is `y`. With the
+ * cell along x and z and `at`, the place of every column and row in the
+ * values of the data.
+ */
+function gridBox(
+  { rows, columns }: { rows: number; columns: number },
+  domain: { x?: [number, number]; z?: [number, number] },
+  y: AxisSpec
+) {
+  const [x0, x1] = domain.x ?? [0, columns - 1]
+  const [z0, z1] = domain.z ?? [0, rows - 1]
+  // Without a domain a cell is one index wide. A domain over one column or
+  // row has no neighbour to measure: its cell is one value wide.
+  const cell = {
+    x: domain.x ? (x1 - x0) / Math.max(1, columns - 1) || 1 : 1,
+    z: domain.z ? (z1 - z0) / Math.max(1, rows - 1) || 1 : 1,
+  }
+  const spec: AxesSpec = {
+    x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), cell.x),
+    y,
+    z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), cell.z),
+  }
+  const at = { x: linear([0, columns - 1], [x0, x1]), z: linear([0, rows - 1], [z0, z1]) }
+  return { spec, cell, at }
+}
+
+/** `cubes`, each with its bottom face as `floor`, found once: bars on one floor paint back to front by it. */
+function floored<C extends { faces: CubeFace[] }>(cubes: C[]) {
+  return cubes.map((cube) =>
+    Object.assign(cube, { floor: cube.faces.find((f) => f.face === "bottom")! })
+  )
+}
+
 export {
   ChartContainer3D,
   ChartLegend3D,
@@ -2623,6 +2714,11 @@ export {
   nonNegative,
   useSeries,
   cubeMarks,
+  barCorners,
+  barMarks,
+  floored,
+  gridBox,
+  ramp,
   useTween,
   useTweenAxes,
 }

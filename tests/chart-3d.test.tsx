@@ -13,17 +13,22 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  barCorners,
+  barMarks,
   colorOf,
   cubeMarks,
   earth,
   faded,
   finite,
+  floored,
   globe,
+  gridBox,
   nonNegative,
   intoWorld,
   linear,
   orthographic,
   pad,
+  ramp,
   shade,
   useChart3D,
   useSeries,
@@ -1884,6 +1889,74 @@ describe("helpers", () => {
       expect(mark.points).toHaveLength(4)
       expect(mark.tooltip).toBe(tooltip)
     }
+  })
+
+  test("barCorners stands a bar on 0 of the world, up to its value or down to a negative one", () => {
+    const world = worldBox({ x: axis(0, 1), y: axis(-10, 10), z: axis(0, 1) })
+    const size = { width: 0.2, depth: 0.2 }
+    const ys = (value: number) => [...new Set(barCorners(world, 0, 0, value, size).map((p) => p.y))]
+    // y points down in the world box: 0 is the middle, 10 the top at -1.
+    expect(ys(10).sort()).toEqual([-1, 0])
+    expect(ys(-10).sort()).toEqual([0, 1])
+    expect(ys(0)).toEqual([0])
+  })
+
+  test("barMarks fades the faces of a bar to its opacity and groups them as the bar", () => {
+    const [cube] = cubes3D()
+      .rotateY(Math.PI / 6)
+      .rotateX(-Math.PI / 6)
+      .data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
+    const marks = barMarks({
+      id: "b",
+      faces: cube.faces,
+      color: "red",
+      tooltip: undefined,
+      opacity: 0.5,
+    })
+    expect(marks).toHaveLength(3)
+    for (const mark of marks) {
+      expect(mark.groups).toEqual(["b"])
+      expect(mark.fill).toMatch(/^color-mix\(in oklab, .* 50%, transparent\)$/)
+    }
+  })
+
+  test("floored hands every cube its bottom face as floor", () => {
+    const cubes = cubes3D().data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
+    const [cube] = floored(cubes)
+    expect(cube.floor.face).toBe("bottom")
+    expect(cube.faces).toContain(cube.floor)
+  })
+
+  test("ramp mixes the high color by the share of the span, clamped at its ends", () => {
+    const at = (value: number, span: [number, number]) =>
+      ramp(value, span, ["lo", "hi"]).match(/var\(--color-hi\) (\d+)%, var\(--color-lo\)/)![1]
+    expect(at(15, [10, 20])).toBe("50")
+    expect(at(0, [10, 20])).toBe("0")
+    expect(at(30, [10, 20])).toBe("100")
+    // A flat span has no share to take: the low end, no NaN.
+    expect(at(5, [5, 5])).toBe("0")
+  })
+
+  test("gridBox spans the grid with half a cell of room, or the domain exactly", () => {
+    const y = axis(0, 1)
+    const grid = gridBox({ rows: 2, columns: 3 }, {}, y)
+    expect(grid.cell).toEqual({ x: 1, z: 1 })
+    expect(grid.spec.x.domain).toEqual([-0.5, 2.5])
+    expect(grid.spec.z.domain).toEqual([-0.5, 1.5])
+    expect(grid.spec.y).toBe(y)
+
+    const named = gridBox({ rows: 2, columns: 3 }, { x: [0, 10], z: [0, 4] }, y)
+    expect(named.cell).toEqual({ x: 5, z: 4 })
+    expect(named.spec.x.domain).toEqual([0, 10])
+    expect([named.at.x(1), named.at.z(1)]).toEqual([5, 4])
+
+    // Without a domain a cell is one index, whatever the size - also while a
+    // size glides; a domain over one row and column has no neighbour: one value.
+    expect(gridBox({ rows: 1.5, columns: 0 }, {}, y).cell).toEqual({ x: 1, z: 1 })
+    expect(gridBox({ rows: 1, columns: 1 }, { x: [3, 3], z: [2, 2] }, y).cell).toEqual({
+      x: 1,
+      z: 1,
+    })
   })
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {

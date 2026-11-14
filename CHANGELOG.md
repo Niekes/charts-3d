@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `BarFieldChart3D`, a field of bars over a grid of values, `data[row][column]`,
+  colored on a ramp by height - the bar chart of a height map. Everything
+  about a bar comes from the data: its place, its footprint, its height and
+  its color.
+- The core helpers the bar, surface and bar field charts now share:
+  `barCorners`, `barMarks`, `floored`, `gridBox` and `ramp`. A surface of a
+  single row or column without a `domain` now keeps half a cell of room
+  along it, as every other grid does.
 - On a touch screen two fingers turn the chart and pinch it to the point
   between them, while one finger scrolls the page and a tap inspects:
   `touchOrbit` and `pinchZoom` in the shortcut panel and in `keymap`

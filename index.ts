@@ -3,6 +3,7 @@
 export * from "./registry/new-york/ui/chart-3d"
 export * from "./registry/new-york/ui/area-chart-3d"
 export * from "./registry/new-york/ui/bar-chart-3d"
+export * from "./registry/new-york/ui/bar-field-chart-3d"
 export * from "./registry/new-york/ui/choropleth-chart-3d"
 export * from "./registry/new-york/ui/globe-chart-3d"
 export * from "./registry/new-york/ui/places-chart-3d"

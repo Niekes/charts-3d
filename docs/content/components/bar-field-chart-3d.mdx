@@ -1,0 +1,126 @@
+---
+title: Bar Field Chart 3D
+description: A field of bars over a grid of values, colored by height.
+---
+
+import BarFieldChart3DUpdateDemo from "@/docs/examples/bar-field-chart-3d-update-demo"
+import BarFieldChart3DEnterDemo from "@/docs/examples/bar-field-chart-3d-enter-demo"
+import BarFieldChart3DRenderersDemo from "@/docs/examples/bar-field-chart-3d-renderers-demo"
+import BarFieldChart3DManyDemo from "@/docs/examples/bar-field-chart-3d-many-demo"
+import BarFieldChart3DDemo from "@/docs/examples/bar-field-chart-3d-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Data
+
+The chart draws what the data says and decides nothing of its own:
+`data[row][column]` is the value of one bar. Its row and column place it -
+the columns along x, the rows along z, at the values `domain` names - the
+cell of the grid gives its footprint, its value its height from 0, and the
+ramp between the two `colors` at the lowest and the highest value its color.
+A value that is not a finite number draws no bar. The gap between two bars
+is fixed, a fifth of the cell, so neighbours stay apart.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/bar-field-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `BarFieldChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/bar-field-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/bar-field-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the hills move, and every bar glides to its new height over
+the `animationDuration` of the container, its color following.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+The grid may grow and shrink, while every bar keeps its value. A new bar
+grows from the floor as it fades in, while the axes make room; a gone one
+shrinks back into it as it fades out, the mirror of its entering (see Enter
+in the [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+A 40 by 40 field, sixteen hundred bars - and the chart stays interactive.
+The scene is one list of marks, so the demo starts on `"canvas"`, the renderer
+for many marks, and the select shows the same scene on SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/bar-field-chart-3d.tsx"
+  name="BarFieldChart3DProps"
+/>

@@ -4,6 +4,7 @@
     "chart-3d",
     "area-chart-3d",
     "bar-chart-3d",
+    "bar-field-chart-3d",
     "choropleth-chart-3d",
     "globe-chart-3d",
     "places-chart-3d",

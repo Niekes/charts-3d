@@ -15,16 +15,15 @@ import {
   Axes3D,
   Marks3D,
   axis,
+  gridBox,
   intoWorld,
-  linear,
-  pad,
   shade,
   useChart3D,
   useTween,
   useTweenAxes,
   worldBox,
-  colorOf,
   finite,
+  ramp,
   type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
@@ -84,28 +83,17 @@ export function SurfaceChart3D({
   // merely appears or disappears.
   const heights = gridHeights(useTween(target), floor)
   const fade = useTween(present, 0)
-  const rows = data.length
-  const columns = data[0]?.length ?? 0
-  const [x0, x1] = domain.x ?? [0, columns - 1]
-  const [z0, z1] = domain.z ?? [0, rows - 1]
-  // A cell of the grid, along x and along z, in the values the data stands for.
-  const cell = {
-    x: (x1 - x0) / Math.max(1, columns - 1),
-    z: (z1 - z0) / Math.max(1, rows - 1),
-  }
-  // The color ramp follows the heights on screen, the axes glide to those of the data.
-  const [lo = 0, hi = 0] = extent(heights.flat())
-
   // The box keeps half a cell beyond the grid; a domain the reader hands the
   // chart names the box exactly.
-  const spec = useTweenAxes({
-    x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), cell.x),
-    y: axis(floor, peak),
-    z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), cell.z),
-  })
+  const box = gridBox(
+    { rows: data.length, columns: data[0]?.length ?? 0 },
+    domain,
+    axis(floor, peak)
+  )
+  // The color ramp follows the heights on screen, the axes glide to those of the data.
+  const [lo = 0, hi = 0] = extent(heights.flat())
+  const spec = useTweenAxes(box.spec)
   const world = worldBox(spec)
-  const toX = linear([0, columns - 1], [x0, x1])
-  const toZ = linear([0, rows - 1], [z0, z1])
 
   const grid = intoWorld<GridPoint, GridPlanes3DInstance<GridPoint>>(
     gridPlanes3D<GridPoint>().camera(camera),
@@ -113,7 +101,9 @@ export function SurfaceChart3D({
   )
     // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
     .rows(Math.max(1, heights[0]?.length ?? 0))
-  const points = heights.flatMap((row, r) => row.map((y, c) => ({ x: toX(c), y, z: toZ(r), r, c })))
+  const points = heights.flatMap((row, r) =>
+    row.map((y, c) => ({ x: box.at.x(c), y, z: box.at.z(r), r, c }))
+  )
 
   const marks = grid
     .data(points)
@@ -122,7 +112,7 @@ export function SurfaceChart3D({
       quadMark(
         quad,
         fade,
-        { lo, hi, low, high },
+        { span: [lo, hi], keys: [low, high] },
         cellTooltip(quad, raw, { format, titles, tooltip })
       )
     )
@@ -175,15 +165,11 @@ function cellTooltip(
 function quadMark(
   quad: GridPlane<GridPoint>,
   fade: Record<string, number>,
-  ramp: { lo: number; hi: number; low: string; high: string },
+  colors: { span: [number, number]; keys: [string, string] },
   tooltip: Mark3D["tooltip"]
 ) {
   const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
-  const t = Math.round(((height - ramp.lo) / (ramp.hi - ramp.lo || 1)) * 100)
-  const shaded = shade(
-    quad,
-    `color-mix(in oklch, ${colorOf(ramp.high)} ${t}%, ${colorOf(ramp.low)})`
-  )
+  const shaded = shade(quad, ramp(height, colors.span, colors.keys))
   // A corner only one of the tweens still knows is on its way out and stays unseen.
   const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))
   const cell = `${Math.min(...quad.map((p) => p.r))}-${Math.min(...quad.map((p) => p.c))}`
