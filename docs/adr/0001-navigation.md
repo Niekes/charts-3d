@@ -87,9 +87,10 @@ from one finger to the other. Both are actions of
 Amended 2026-11-14: a missed drag shows a hint. Because a plain drag only
 inspects, a reader who drags and sees nothing move takes the chart for
 broken. A drag of 8 px or more that turns nothing - the mouse without the
-platform modifier, one finger sideways - shows below the chart, until a
-moment after the lift, the gesture that would have turned it, as the panel
-names it from the keymap, and nothing where that action is off. It shows on
+platform modifier, one finger sideways - shows in the top left corner of
+the chart, the one no other part takes, until a moment after the lift, the
+gesture that would have turned it, as the panel names it from the keymap,
+and nothing where that action is off. It shows on
 every miss, remembering nothing, and is no prop: the keymap turns it off and
 CSS hides its slot. The plain wheel shows none: that is a reader scrolling
 past. Considered and rejected: the hint over the middle of the chart, as a
