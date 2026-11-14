@@ -47,6 +47,13 @@ describe("BarChart3D", () => {
     )
     expect(faces(html)).toHaveLength(0)
     expect(html).not.toContain("NaN")
+    // Every series turned off as well: no entries and no series.
+    const none = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={[]} index="name" keys={[]} />
+      </ChartContainer3D>
+    )
+    expect(none).not.toContain("NaN")
   })
 
   test("the box keeps half a cell of room between the bars and its walls", async () => {
@@ -151,13 +158,15 @@ describe("BarChart3D", () => {
     await view.unmount()
   })
 
-  test("a value that is not a number stands as no bar, and the labels fall back to the keys", () => {
+  test("a value that is not a finite number stands as no bar, and the labels fall back to the keys", () => {
     const html = renderToString(
       <ChartContainer3D config={{ a: { color: "red" } }}>
         <BarChart3D
           data={[
             { name: "x", a: "n/a", b: 2 },
             { a: 1, b: 3 },
+            // A ratio divided by 0.
+            { name: "y", a: Infinity, b: 1 },
           ]}
           index="name"
           keys={["a", "b"]}
@@ -632,6 +641,7 @@ describe("BarChart3D transitions", () => {
 
     // Unmounted while the canvas is still stubbed: the marks leaving repaint it.
     await act(async () => root.unmount())
+    vi.restoreAllMocks()
     host.remove()
     vi.restoreAllMocks()
   })

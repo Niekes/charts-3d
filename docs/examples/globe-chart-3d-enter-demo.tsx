@@ -3,13 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
 import { land } from "@/docs/examples/land"
-import {
-  PlaceSelect,
-  compact,
-  night,
-  placeTiles,
-  populationConfig,
-} from "@/docs/examples/population"
+import { PlaceSelect, compact, placeTiles, populationConfig } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 const step = 2
@@ -23,7 +17,7 @@ export default function GlobeChart3DEnterDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={populationConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={populationConfig} renderer={renderer} legend>
         <GlobeChart3D
           data={placeTiles(step, min)}
           land={land}

@@ -192,8 +192,9 @@ _Avoid_: selection, active state, fade, edge
 
 **Orbit**:
 Turning the camera around the chart, with the platform modifier and a drag -
-⌘ on a Mac, Ctrl elsewhere - or an arrow key; a plain drag only inspects.
-_Avoid_: rotate the view, spin, plain drag
+⌘ on a Mac, Ctrl elsewhere - with two fingers on a touch screen, or with an
+arrow key; a plain drag and a single finger only inspect.
+_Avoid_: rotate the view, spin, plain drag, one-finger drag
 
 **Pan**:
 Moving the chart within the view, with Alt - ⌥ on a Mac - and a drag, or
@@ -204,6 +205,12 @@ _Avoid_: Space and a drag (gone), Cmd and drag (the browser and the OS take it),
 Moving the camera closer to the point under the cursor, which stays where it
 is, with the platform modifier and the wheel - ⌘ on a Mac, Ctrl elsewhere,
 and a trackpad pinch arrives as Ctrl and the wheel on every platform - or,
-with `+` and `-`, to the middle of the chart. The wheel alone scrolls the
-page.
-_Avoid_: pinch without Ctrl, dolly, scale, zoom to the centre (the wheel)
+with `+` and `-`, to the middle of the chart. On a touch screen two fingers
+pinch, and the point between them stays. The wheel alone scrolls the page.
+_Avoid_: dolly, scale, zoom to the centre (the wheel)
+
+**Gesture**:
+What the pointer does to move the camera - a drag with a modifier, the wheel
+with one, two fingers - as the shortcut panel names it beside the keys of the
+same action.
+_Avoid_: hint, mouse shortcut

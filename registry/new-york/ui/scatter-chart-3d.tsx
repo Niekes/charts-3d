@@ -164,8 +164,13 @@ function usePoints<T extends Record<string, unknown>>(
   return React.useMemo(() => {
     const fields = { x, y, z }
     // An entry without a place in the box has no point.
-    const data = all.filter((d) => [x, y, z].every((f) => finite(d[f])))
-    const names = data.map((d, i) => (id ? String(d[id]) : String(i)))
+    // Named by its position in all the data, so a point keeps its name when an
+    // entry before it gains or loses its place.
+    const placed = all.flatMap((d, i) =>
+      [x, y, z].every((f) => finite(d[f])) ? [{ d, name: id ? String(d[id]) : String(i) }] : []
+    )
+    const data = placed.map((p) => p.d)
+    const names = placed.map((p) => p.name)
     return {
       fields,
       data,

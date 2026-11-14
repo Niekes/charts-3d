@@ -202,7 +202,7 @@ function nearTiles(ids: string[], step: number, eye: Camera3DInstance) {
  * The tile of every entry - the last entry on a tile wins - keyed by the
  * center of the tile and the config key of its color, with its value and, if
  * the chart names entries, the name of that last entry, and every entry on
- * the tile.
+ * the tile, gathered in one list: a copy per entry costs the square of them.
  */
 function tileValues<T extends Record<string, unknown>>(
   data: T[],
@@ -217,10 +217,12 @@ function tileValues<T extends Record<string, unknown>>(
     const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
+    const entries = tiles.get(center)?.entries ?? []
+    entries.push(d)
     tiles.set(center, {
       id: `${center},${key}`,
       value: nonNegative(d[fields.value]),
-      entries: [...(tiles.get(center)?.entries ?? []), d],
+      entries,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
   }
