@@ -4,12 +4,6 @@ import type { ChartConfig } from "@/components/ui/chart-3d"
 import { places } from "@/docs/examples/places"
 import { Select } from "@/docs/examples/renderer-select"
 
-/** The globe at night: a near-black ocean and a dark slate land, so the yellow of the smallest class reads. */
-export const night = {
-  "--chart-3d-ocean": "oklch(0.22 0.02 260)",
-  "--chart-3d-land": "oklch(0.36 0.02 260)",
-} as CSSProperties
-
 // The nine classes of the people on a tile: the steps of the square root up
 // to 10 million, as the world population of globe.gl colors its hexagons,
 // rounded so the legend reads, in YlOrRd of d3-scale-chromatic.

@@ -4,7 +4,7 @@ import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { ChoroplethChart3D } from "@/components/ui/choropleth-chart-3d"
 import { chartData } from "@/docs/examples/choropleth-chart-3d-demo"
 import { land } from "@/docs/examples/land"
-import { compact, night } from "@/docs/examples/population"
+import { compact } from "@/docs/examples/population"
 import { regionConfig } from "@/docs/examples/regions"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
@@ -17,7 +17,7 @@ export default function ChoroplethChart3DManyDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={regionConfig} renderer={renderer} style={night}>
+      <ChartContainer3D config={regionConfig} renderer={renderer}>
         <ChoroplethChart3D
           data={chartData}
           land={land}

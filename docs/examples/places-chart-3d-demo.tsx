@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { PlacesChart3D } from "@/components/ui/places-chart-3d"
 import { land } from "@/docs/examples/land"
-import { compact, night, placeConfig, placeRows } from "@/docs/examples/population"
+import { compact, placeConfig, placeRows } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The places of a million people and more: a dot per place, its area the
@@ -15,7 +15,7 @@ export default function PlacesChart3DDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={placeConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={placeConfig} renderer={renderer} legend>
         <PlacesChart3D
           data={chartData}
           land={land}

@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
 import { land } from "@/docs/examples/land"
-import { compact, night, placeTiles, populationConfig } from "@/docs/examples/population"
+import { compact, placeTiles, populationConfig } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
 // The populated places of the world on tiles of 2°: a tile rises to the
@@ -17,7 +17,7 @@ export default function GlobeChart3DDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={populationConfig} renderer={renderer} style={night} legend>
+      <ChartContainer3D config={populationConfig} renderer={renderer} legend>
         <GlobeChart3D
           data={chartData}
           land={land}
