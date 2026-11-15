@@ -15,9 +15,8 @@ import {
   Axes3D,
   Marks3D,
   axis,
+  gridAxis,
   intoWorld,
-  linear,
-  pad,
   shade,
   useChart3D,
   useTween,
@@ -33,12 +32,28 @@ export type SurfaceChart3DProps = {
   /** The heights on the grid, `data[row][column]`; one that is not a finite number stands at the lowest of the others. */
   data: number[][]
   /**
-   * The data values the first and the last column (x) and row (z) stand for.
-   * The chart keeps half a cell between the grid and the walls of its box; a
-   * domain given here names the box exactly, without that room.
+   * The data values the first and the last column (x) and row (z) stand for,
+   * the others evenly between. The chart keeps half a cell between the grid
+   * and the walls of its box; a domain given here names the box exactly,
+   * without that room.
    * @defaultValue the indices of the columns and rows
    */
   domain?: { x?: [number, number]; z?: [number, number] }
+  /**
+   * The value every column stands at along x, `x[column]`, at any spacing,
+   * in place of `domain.x`; the box spans them exactly. The surface joins
+   * the columns in the order of the data: give them ascending, or it folds
+   * back over itself. A column without a finite value drops out, its
+   * neighbours joined.
+   * @defaultValue evenly over `domain.x`
+   */
+  x?: number[]
+  /**
+   * The value every row stands at along z, `z[row]`, as `x` does for the
+   * columns.
+   * @defaultValue evenly over `domain.z`
+   */
+  z?: number[]
   /**
    * The config keys of the colors at the lowest and at the highest height.
    * @defaultValue the first two keys of the chart config
@@ -69,6 +84,8 @@ export type SurfaceChart3DProps = {
 export function SurfaceChart3D({
   data: raw,
   domain = {},
+  x,
+  z,
   colors,
   format,
   titles,
@@ -76,20 +93,19 @@ export function SurfaceChart3D({
 }: SurfaceChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
-  const { data, floor, peak, target, present } = useGrid(raw)
+  const { floor, peak, target, present, ...sides } = useGrid(raw, { domain, x, z })
   // The heights glide cell by cell, so the surface, its color ramp and the y
   // axis follow. Coming and going is a fade in place - a new border cell
   // fades in where it belongs, a gone one fades out where it stands and
   // leaves when the glide is done - so the surface never moves where data
   // merely appears or disappears.
-  const heights = gridHeights(useTween(target), floor)
+  const lattice = gridHeights(useTween(target), floor)
   const fade = useTween(present, 0)
-  // The box keeps half a cell beyond the grid; a domain the reader hands the
-  // chart names the box exactly.
-  const box = gridBox({ rows: data.length, columns: data[0]?.length ?? 0 }, domain)
+  // Every column and row glides to its place.
+  const places = { x: useTween(sides.x.places), z: useTween(sides.z.places) }
   // The color ramp follows the heights on screen, the axes glide to those of the data.
-  const [lo = 0, hi = 0] = extent(heights.flat())
-  const spec = useTweenAxes({ ...box.spec, y: axis(floor, peak) })
+  const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
+  const spec = useTweenAxes({ x: sides.x.spec, y: axis(floor, peak), z: sides.z.spec })
   const world = worldBox(spec)
 
   const grid = intoWorld<GridPoint, GridPlanes3DInstance<GridPoint>>(
@@ -97,9 +113,9 @@ export function SurfaceChart3D({
     world
   )
     // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
-    .rows(Math.max(1, heights[0]?.length ?? 0))
-  const points = heights.flatMap((row, r) =>
-    row.map((y, c) => ({ x: box.at.x(c), y, z: box.at.z(r), r, c }))
+    .rows(Math.max(1, lattice[0]?.length ?? 0))
+  const points = lattice.flatMap((row) =>
+    row.map(({ r, c, y }) => ({ x: places.x[c], y, z: places.z[r], r, c }))
   )
 
   const marks = grid
@@ -110,7 +126,7 @@ export function SurfaceChart3D({
         quad,
         fade,
         { span: [lo, hi], keys: [low, high] },
-        cellTooltip(quad, raw, { format, titles, tooltip })
+        cellTooltip(quad, raw, present, { format, titles, tooltip })
       )
     )
 
@@ -122,47 +138,27 @@ export function SurfaceChart3D({
   )
 }
 
-/**
- * The floor of the box over a grid of `rows` by `columns`: x and z span the
- * columns and the rows at the values `domain` names, or at their indices
- * with half a cell of room. With `at`, the place of every column and row in
- * the values of the data.
- */
-function gridBox(
-  { rows, columns }: { rows: number; columns: number },
-  domain: SurfaceChart3DProps["domain"] & {}
-) {
-  const [x0, x1] = domain.x ?? [0, columns - 1]
-  const [z0, z1] = domain.z ?? [0, rows - 1]
-  return {
-    spec: {
-      x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), 1),
-      z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), 1),
-    },
-    at: { x: linear([0, columns - 1], [x0, x1]), z: linear([0, rows - 1], [z0, z1]) },
-  }
-}
-
 /** A point of the lattice, carrying the row and column it stands for. */
 type GridPoint = Point3D & { r: number; c: number }
 
 /**
  * What a cell says on hover, made when the pointer lands on it: its height,
  * the mean of its four corners in the data, as the ticks of y name it - or
- * what `tooltip` makes of that. A cell on its way out of the data says
- * nothing, and so does one with a height that is no number, where the
+ * what `tooltip` makes of that. A cell on its way out of the data - its
+ * height or its place - says nothing, and so does one with a height that is no number, where the
  * stand-in at the floor would make a value up.
  */
 function cellTooltip(
   quad: GridPlane<GridPoint>,
   data: number[][],
+  present: Record<string, number>,
   {
     format = {},
     titles = {},
     tooltip = (tip) => tip,
   }: Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  if (quad.some((p) => !finite(data[p.r]?.[p.c]))) return undefined
+  if (quad.some((p) => !(`${p.r}-${p.c}` in present) || !finite(data[p.r][p.c]))) return undefined
   return () => {
     const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
@@ -204,15 +200,38 @@ function quadMark(
 
 /**
  * The grid with every height a number, its lowest and highest height, the
- * height of every cell and its presence - built once per change of the data,
- * not at every frame the camera turns.
+ * height of every cell and its presence, and the places of its columns and
+ * rows - built once per change of the data, not at every frame the camera
+ * turns. A column or row without a place drops out of all of them.
  */
-function useGrid(raw: number[][]) {
+function useGrid(
+  raw: number[][],
+  {
+    domain,
+    x,
+    z,
+  }: Pick<SurfaceChart3DProps, "x" | "z"> & {
+    domain: NonNullable<SurfaceChart3DProps["domain"]>
+  }
+) {
   return React.useMemo(() => {
-    const grid = cleanGrid(raw)
-    const target = gridValues(grid.data)
-    return { ...grid, target, present: Object.fromEntries(Object.keys(target).map((k) => [k, 1])) }
-  }, [raw])
+    // Named places span the box exactly; the indices keep half a cell of room.
+    const sides = {
+      x: gridAxis(raw[0]?.length ?? 0, { at: x, ends: domain.x, room: !(x || domain.x) }),
+      z: gridAxis(raw.length, { at: z, ends: domain.z, room: !(z || domain.z) }),
+    }
+    const placed = raw.map((row, r) =>
+      r in sides.z.places ? row.map((y, c) => (c in sides.x.places ? y : NaN)) : []
+    )
+    const grid = cleanGrid(placed)
+    const target = gridValues(grid.data, sides)
+    return {
+      ...grid,
+      ...sides,
+      target,
+      present: Object.fromEntries(Object.keys(target).map((k) => [k, 1])),
+    }
+  }, [raw, x, z, domain.x, domain.z])
 }
 
 /**
@@ -226,25 +245,32 @@ function cleanGrid(raw: number[][]) {
   return { data, floor, peak }
 }
 
-/** The height of every cell, keyed by its row and column, gliding into new data. */
-function gridValues(data: number[][]) {
-  return Object.fromEntries(data.flatMap((row, r) => row.map((y, c) => [`${r}-${c}`, y])))
+/** The height of every cell with a place, keyed by its row and column, gliding into new data. */
+function gridValues(
+  data: number[][],
+  sides: Record<"x" | "z", { places: Record<number, number> }>
+) {
+  return Object.fromEntries(
+    data.flatMap((row, r) =>
+      row.flatMap((y, c) => (c in sides.x.places && r in sides.z.places ? [[`${r}-${c}`, y]] : []))
+    )
+  )
 }
 
 /**
- * The gliding heights as a lattice. It spans the cells still leaving too, so
- * a shrunken grid sinks away instead of popping; a corner only one dimension
- * kept stands at the floor until it goes.
+ * The gliding heights as a lattice over the rows and columns they name. It
+ * spans the cells still leaving too, so a shrunken grid sinks away instead
+ * of popping; a corner only one dimension kept stands at the floor until it
+ * goes, and a column or row without a place is no line of it.
  */
 function gridHeights(tweened: Record<string, number>, floor: number) {
-  let rows = 0
-  let columns = 0
+  const rows = new Set<number>()
+  const columns = new Set<number>()
   for (const key of Object.keys(tweened)) {
     const [r, c] = key.split("-").map(Number)
-    rows = Math.max(rows, r + 1)
-    columns = Math.max(columns, c + 1)
+    rows.add(r)
+    columns.add(c)
   }
-  return Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: columns }, (_, c) => tweened[`${r}-${c}`] ?? floor)
-  )
+  const [rs, cs] = [rows, columns].map((set) => [...set].sort((a, b) => a - b))
+  return rs.map((r) => cs.map((c) => ({ r, c, y: tweened[`${r}-${c}`] ?? floor })))
 }

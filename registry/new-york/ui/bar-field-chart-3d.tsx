@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { extent, ticks } from "d3-array"
-import { cubes3D, sort, type AxesSpec, type AxisSpec, type Point3D } from "d3-3d"
+import { extent } from "d3-array"
+import { cubes3D, sort, type AxesSpec, type Point3D } from "d3-3d"
 
 import {
   Axes3D,
@@ -12,7 +12,7 @@ import {
   barMarks,
   finite,
   floored,
-  linear,
+  gridAxis,
   ramp,
   useChart3D,
   useTween,
@@ -150,11 +150,18 @@ type Place = Record<"x" | "z", Record<string, number>>
  */
 function useField(
   data: number[][],
-  { domain, x, z }: Pick<BarFieldChart3DProps, "x" | "z"> & { domain: { x?: Ends; z?: Ends } }
+  {
+    domain,
+    x,
+    z,
+  }: Pick<BarFieldChart3DProps, "x" | "z"> & { domain: NonNullable<BarFieldChart3DProps["domain"]> }
 ) {
   return React.useMemo(() => {
     const columns = Math.max(0, ...data.map((row) => row.length))
-    const sides = { x: side(columns, x, domain.x), z: side(data.length, z, domain.z) }
+    const sides = {
+      x: gridAxis(columns, { at: x, ends: domain.x }),
+      z: gridAxis(data.length, { at: z, ends: domain.z }),
+    }
     const target: Record<string, number> = Object.fromEntries(
       data.flatMap((row, r) =>
         row.flatMap((v, c) =>
@@ -171,28 +178,6 @@ function useField(
       hi,
     }
   }, [data, x, z, domain.x, domain.z])
-}
-
-type Ends = [number, number]
-
-/**
- * Where the `count` columns or rows stand: at their value of `at`, or evenly
- * over `ends`, by default their indices. With the cell, the smallest gap
- * between two places - one where there is none - and the axis from the
- * lowest to the highest place with half a cell of room, its ticks within.
- */
-function side(count: number, at?: number[], ends: Ends = [0, count - 1]) {
-  const even = linear([0, count - 1], ends)
-  const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
-  const places = Object.fromEntries(values.flatMap((v, i) => (finite(v) ? [[i, v]] : [])))
-  const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
-  const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
-  const cell = gaps.length ? Math.min(...gaps) : 1
-  const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
-  // The walls stand half a cell beyond the outer places, never at a rounder
-  // tick: a nice axis over 0 to 15 would run on to 20, empty beyond the bars.
-  const spec: AxisSpec = { domain: [lo - cell / 2, hi + cell / 2], ticks: ticks(lo, hi, 5) }
-  return { places, cell, spec }
 }
 
 /**

@@ -47,7 +47,8 @@ _Avoid_: axis label, caption, title (bare: the tooltip has one too)
 
 **Cell**:
 The span between two neighbouring data positions along an axis of
-arrangement, such as one row of bars.
+arrangement, such as one row of bars; where they stand unevenly, the
+smallest such span.
 _Avoid_: step, slot
 
 **Padding**:

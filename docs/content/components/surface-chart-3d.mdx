@@ -8,6 +8,7 @@ import SurfaceChart3DEnterDemo from "@/docs/examples/surface-chart-3d-enter-demo
 import SurfaceChart3DRenderersDemo from "@/docs/examples/surface-chart-3d-renderers-demo"
 import SurfaceChart3DManyDemo from "@/docs/examples/surface-chart-3d-many-demo"
 import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
+import SurfaceChart3DSpacingDemo from "@/docs/examples/surface-chart-3d-spacing-demo"
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -15,6 +16,23 @@ import SurfaceChart3DDemo from "@/docs/examples/surface-chart-3d-demo"
   </Tab>
   <Tab value="Code">
     <include>../../examples/surface-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Uneven spacing
+
+Where the columns or rows were not measured at even steps, `x` and `z` name
+the value of each: here a lake sampled on the days the boat went out, at the
+depths of its sensors. The surface joins the columns and the rows in the
+order of the data, so give them ascending; a column or row without a finite
+value drops out, and its neighbours join.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <SurfaceChart3DSpacingDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/surface-chart-3d-spacing-demo.tsx</include>
   </Tab>
 </Tabs>
 

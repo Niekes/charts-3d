@@ -21,6 +21,7 @@ import {
   faded,
   finite,
   floored,
+  gridAxis,
   globe,
   nonNegative,
   intoWorld,
@@ -2054,6 +2055,24 @@ describe("helpers", () => {
     expect(at(30, [10, 20])).toBe("100")
     // A flat span has no share to take: the low end, no NaN.
     expect(at(5, [5, 5])).toBe("0")
+  })
+
+  test("gridAxis stands a grid's columns at their values, a cell of the smallest gap, half of it to the walls", () => {
+    // By default at their indices, with half a cell of room and the ticks within.
+    expect(gridAxis(16)).toMatchObject({ cell: 1, spec: { domain: [-0.5, 15.5] } })
+    expect(gridAxis(16).spec.ticks.at(-1)).toBe(14)
+    // Evenly over ends; at any values, in any order - one without a finite value has no place.
+    expect(gridAxis(3, { ends: [0, 10] }).places).toEqual({ 0: 0, 1: 5, 2: 10 })
+    const uneven = gridAxis(4, { at: [10, 0, NaN, 1] })
+    expect(uneven).toMatchObject({ places: { 0: 10, 1: 0, 3: 1 }, cell: 1 })
+    expect(uneven.spec.domain).toEqual([-0.5, 10.5])
+    // Without room the ends are the walls; a single place keeps half a cell, or it has no span.
+    expect(gridAxis(3, { ends: [0.3, 9.7], room: false }).spec.domain).toEqual([0.3, 9.7])
+    expect(gridAxis(1, { ends: [3, 3], room: false })).toMatchObject({
+      cell: 1,
+      spec: { domain: [2.5, 3.5], ticks: [3] },
+    })
+    expect(gridAxis(0).spec.domain).toEqual([-0.5, 0.5])
   })
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {

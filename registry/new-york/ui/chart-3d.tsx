@@ -2763,6 +2763,38 @@ function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, s
   return `color-mix(in oklch, ${colorOf(high)} ${t}%, ${colorOf(low)})`
 }
 
+/**
+ * Where the `count` columns or rows of a grid stand along one axis of
+ * arrangement: at their value of `at`, in any order, or evenly over `ends`,
+ * by default their indices; one without a finite value has no place. With
+ * the cell, the smallest gap between two places - 1 where there is none -
+ * and the axis over the places, its ticks within: its walls half a cell
+ * beyond them, or at them without `room`, never at a rounder tick, which
+ * would leave the box empty beyond the data.
+ */
+function gridAxis(
+  count: number,
+  {
+    at,
+    ends = [0, count - 1],
+    room = true,
+  }: { at?: number[]; ends?: [number, number]; room?: boolean } = {}
+) {
+  const even = linear([0, count - 1], ends)
+  const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
+  const places: Record<number, number> = Object.fromEntries(
+    values.flatMap((v, i) => (finite(v) ? [[i, v]] : []))
+  )
+  const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
+  const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
+  const cell = gaps.length ? Math.min(...gaps) : 1
+  const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
+  // A single place has no span of its own: it keeps half a cell either way.
+  const half = room || lo === hi ? cell / 2 : 0
+  const spec: AxisSpec = { domain: [lo - half, hi + half], ticks: ticks(lo, hi, 5) }
+  return { places, cell, spec }
+}
+
 /** `cubes`, each with its bottom face as `floor`, found once: bars on one floor paint back to front by it. */
 function floored<C extends { faces: CubeFace[] }>(cubes: C[]) {
   return cubes.map((cube) =>
@@ -2795,6 +2827,7 @@ export {
   barCorners,
   barMarks,
   floored,
+  gridAxis,
   ramp,
   useTween,
   useTweenAxes,
