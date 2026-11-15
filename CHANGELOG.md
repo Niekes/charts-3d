@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-15
+
 ### Added
 
 - `BarFieldChart3D`, a field of bars over a grid of values, `data[row][column]`,
@@ -74,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** a chart notices new data by a new `data` array: one changed
+  in place no longer redraws it. Hand it a new array, as React state does.
 - The canvas turns a surface of thousands of cells faster - the 80 by 80
   demo from about 30 to about 50 frames a second: it resolves every color
   once into the sRGB it paints, whose `rgb()` it parses about four times
@@ -81,8 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the fill and again for the outline; `SurfaceChart3D` builds its lattice
   and the color, name and tooltip of every cell once per change of the
   data, not at every frame the camera turns.
-- `useTween` hands back the record of its target, no copy, while nothing
-  glides: read it, never write to it.
+- **Breaking:** `useTween` hands back the record of its target, no copy,
+  while nothing glides: read it, never write to it.
 
 - The docs say which exports semver covers from 1.0.0: the charts,
   `ChartContainer3D`, `ChartLegend3D`, their props and the types they take.
