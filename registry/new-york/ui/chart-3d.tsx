@@ -2769,16 +2769,16 @@ function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, s
  * by default their indices; one without a finite value has no place. With
  * the cell, the smallest gap between two places - 1 where there is none -
  * and the axis over the places, its ticks within: its walls half a cell
- * beyond them, or at them without `room`, never at a rounder tick, which
- * would leave the box empty beyond the data.
+ * beyond them - the padding - or at them where not `padded`, never at a
+ * rounder tick, which would leave the box empty beyond the data.
  */
 function gridAxis(
   count: number,
   {
     at,
     ends = [0, count - 1],
-    room = true,
-  }: { at?: number[]; ends?: [number, number]; room?: boolean } = {}
+    padded = true,
+  }: { at?: number[]; ends?: [number, number]; padded?: boolean } = {}
 ) {
   const even = linear([0, count - 1], ends)
   const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
@@ -2789,9 +2789,8 @@ function gridAxis(
   const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
   const cell = gaps.length ? Math.min(...gaps) : 1
   const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
-  // A single place has no span of its own: it keeps half a cell either way.
-  const half = room || lo === hi ? cell / 2 : 0
-  const spec: AxisSpec = { domain: [lo - half, hi + half], ticks: ticks(lo, hi, 5) }
+  // A single place has no span of its own: it keeps its padding either way.
+  const spec = pad({ domain: [lo, hi], ticks: ticks(lo, hi, 5) }, padded || lo === hi ? cell : 0)
   return { places, cell, spec }
 }
 

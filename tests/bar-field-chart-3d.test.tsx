@@ -387,6 +387,19 @@ describe("BarFieldChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("new data while a column leaves: it never draws without a place or at full opacity", async () => {
+    const view = await mount(chart([[1, 2, 3]]))
+    await view.render(chart([[1, 2]]))
+    await act(() => vi.advanceTimersByTime(300))
+    // New values restart the glide of the values, not of the places or the presence.
+    await view.render(chart([[2, 1]]))
+    await act(() => vi.advanceTimersByTime(400))
+    const paths = view.bars().map((p) => `${p.getAttribute("d")} ${p.getAttribute("fill")}`)
+    expect(paths.join()).not.toContain("NaN")
+    expect(view.bars()).toHaveLength(6)
+    await view.unmount()
+  })
+
   test("a bar keeps its color while others enter and leave from 0", async () => {
     // The share of the high color in each bar's ramp, of the bars at full opacity.
     const ramps = (view: Awaited<ReturnType<typeof mount>>) =>

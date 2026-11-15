@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to 20, empty beyond the surface, and a `domain` of 0.3 to 9.7 a box from
   0 to 10. The walls now stand half a cell beyond the outer columns and
   rows, or at the ends a `domain` names, with the ticks within.
+- `SurfaceChart3D` counts its columns by its longest row, as the bar field
+  does: a first row shorter than the others no longer leaves the columns
+  beyond it outside the box.
 - The globe turns faster with thousands of tiles: it reads every tile from
   its id once, places its corners on the globe once and lifts them by its
   height, and makes its tooltip once, not at every frame. The many demo,

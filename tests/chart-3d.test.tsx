@@ -2066,9 +2066,9 @@ describe("helpers", () => {
     const uneven = gridAxis(4, { at: [10, 0, NaN, 1] })
     expect(uneven).toMatchObject({ places: { 0: 10, 1: 0, 3: 1 }, cell: 1 })
     expect(uneven.spec.domain).toEqual([-0.5, 10.5])
-    // Without room the ends are the walls; a single place keeps half a cell, or it has no span.
-    expect(gridAxis(3, { ends: [0.3, 9.7], room: false }).spec.domain).toEqual([0.3, 9.7])
-    expect(gridAxis(1, { ends: [3, 3], room: false })).toMatchObject({
+    // Unpadded the ends are the walls; a single place keeps half a cell, or it has no span.
+    expect(gridAxis(3, { ends: [0.3, 9.7], padded: false }).spec.domain).toEqual([0.3, 9.7])
+    expect(gridAxis(1, { ends: [3, 3], padded: false })).toMatchObject({
       cell: 1,
       spec: { domain: [2.5, 3.5], ticks: [3] },
     })

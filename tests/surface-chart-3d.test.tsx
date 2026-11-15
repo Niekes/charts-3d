@@ -200,6 +200,21 @@ describe("SurfaceChart3D places", () => {
     host.remove()
   })
 
+  test("the longest row counts the columns: a short row's missing corners stand at the floor", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [1, 2],
+            [1, 2, 3],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(quads(html)).toHaveLength(2)
+    expect(html).not.toContain("NaN")
+  })
+
   test("a column or row without a finite place drops out, its neighbours join", () => {
     const html = (x?: number[], z?: number[]) =>
       renderToString(
@@ -407,6 +422,39 @@ describe("SurfaceChart3D transitions", () => {
     expect(mid).not.toBe(start)
     await act(() => vi.advanceTimersByTime(400))
     expect(outline()).not.toBe(mid)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("new data while a column leaves: it never draws without a place", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    await render([
+      [1, 2, 3],
+      [2, 3, 4],
+    ])
+    await render([
+      [1, 2],
+      [2, 3],
+    ])
+    await act(() => vi.advanceTimersByTime(300))
+    // New heights restart the glide of the heights, not of the places.
+    await render([
+      [3, 1],
+      [1, 3],
+    ])
+    await act(() => vi.advanceTimersByTime(400))
+    expect(host.innerHTML).not.toContain("NaN")
     await act(async () => root.unmount())
     host.remove()
   })

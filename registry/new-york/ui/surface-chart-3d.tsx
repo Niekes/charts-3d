@@ -99,10 +99,11 @@ export function SurfaceChart3D({
   // fades in where it belongs, a gone one fades out where it stands and
   // leaves when the glide is done - so the surface never moves where data
   // merely appears or disappears.
-  const lattice = gridHeights(useTween(target), floor)
+  const heights = useTween(target)
   const fade = useTween(present, 0)
   // Every column and row glides to its place.
   const places = { x: useTween(sides.x.places), z: useTween(sides.z.places) }
+  const lattice = gridLattice(heights, places, floor)
   // The color ramp follows the heights on screen, the axes glide to those of the data.
   const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
   const spec = useTweenAxes({ x: sides.x.spec, y: axis(floor, peak), z: sides.z.spec })
@@ -217,8 +218,12 @@ function useGrid(
   return React.useMemo(() => {
     // Named places span the box exactly; the indices keep half a cell of room.
     const sides = {
-      x: gridAxis(raw[0]?.length ?? 0, { at: x, ends: domain.x, room: !(x || domain.x) }),
-      z: gridAxis(raw.length, { at: z, ends: domain.z, room: !(z || domain.z) }),
+      x: gridAxis(Math.max(0, ...raw.map((row) => row.length)), {
+        at: x,
+        ends: domain.x,
+        padded: !(x || domain.x),
+      }),
+      z: gridAxis(raw.length, { at: z, ends: domain.z, padded: !(z || domain.z) }),
     }
     const placed = raw.map((row, r) =>
       r in sides.z.places ? row.map((y, c) => (c in sides.x.places ? y : NaN)) : []
@@ -261,16 +266,23 @@ function gridValues(
  * The gliding heights as a lattice over the rows and columns they name. It
  * spans the cells still leaving too, so a shrunken grid sinks away instead
  * of popping; a corner only one dimension kept stands at the floor until it
- * goes, and a column or row without a place is no line of it.
+ * goes. A column or row without a place is no line of it: new heights
+ * glide a leaving one on while its place, and its fade, are gone.
  */
-function gridHeights(tweened: Record<string, number>, floor: number) {
+function gridLattice(
+  tweened: Record<string, number>,
+  places: Record<"x" | "z", Record<string, number>>,
+  floor: number
+) {
   const rows = new Set<number>()
   const columns = new Set<number>()
   for (const key of Object.keys(tweened)) {
     const [r, c] = key.split("-").map(Number)
-    rows.add(r)
-    columns.add(c)
+    if (r in places.z) rows.add(r)
+    if (c in places.x) columns.add(c)
   }
-  const [rs, cs] = [rows, columns].map((set) => [...set].sort((a, b) => a - b))
-  return rs.map((r) => cs.map((c) => ({ r, c, y: tweened[`${r}-${c}`] ?? floor })))
+  const ascending = (set: Set<number>) => [...set].sort((a, b) => a - b)
+  return ascending(rows).map((r) =>
+    ascending(columns).map((c) => ({ r, c, y: tweened[`${r}-${c}`] ?? floor }))
+  )
 }
