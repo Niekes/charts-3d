@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `barCorners`, `barMarks`, `floored`, `gridBox` and `ramp`. A surface of a
   single row or column without a `domain` now keeps half a cell of room
   along it, as every other grid does.
+- A drag that turns nothing - the mouse without ⌘ or Ctrl, one finger
+  sideways - shows a hint in the middle of the chart, over a light veil, for a
+  moment: the gesture that would have turned it, as the shortcut panel names
+  it. It follows `keymap`; the veil is the slot `chart-3d-hint`, the box in
+  it `chart-3d-hint-box` (ADR-0001).
 - On a touch screen two fingers turn the chart and pinch it to the point
   between them, while one finger scrolls the page and a tap inspects:
   `touchOrbit` and `pinchZoom` in the shortcut panel and in `keymap`

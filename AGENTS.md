@@ -339,6 +339,11 @@ gesture is a new action, so the panel never misses one.
   `at`, and `moved` moves the pan by the zoom after its limits, so the point
   under the cursor stays and the chart stands still at them. A key has no
   cursor: `+` and `-` zoom to the middle of the chart.
+- **A missed drag shows a hint.** A drag of `MISS_DISTANCE` that turns
+  nothing - the mouse without the modifier, one finger sideways - names the
+  gesture of `dragRotate` or `touchOrbit` from `keymapOf` in
+  `chart-3d-hint`, a `role="status"` always in the DOM, until `HINT` after
+  the lift. It is no prop and no row of `SHORTCUTS`.
 - **The cursor names the gesture**: a hand while the platform modifier is
   held, `grabbing` while the drag turns, the four arrows (`move`) while Alt
   is held, `zoom-in`/`zoom-out` while the wheel zooms, falling back

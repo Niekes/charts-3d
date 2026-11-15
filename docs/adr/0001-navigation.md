@@ -83,3 +83,18 @@ alone, and a scroll the browser has begun stays the browser's. While two
 fingers hold the chart, its tooltip goes, as in a drag, rather than jumping
 from one finger to the other. Both are actions of
 `SHORTCUTS`, off through `keymap` like any other.
+
+Amended 2026-11-14: a missed drag shows a hint. Because a plain drag only
+inspects, a reader who drags and sees nothing move takes the chart for
+broken. A drag of 8 px or more that turns nothing - the mouse without the
+platform modifier, one finger sideways - shows in the middle of the chart,
+in a box over a light veil, as a map shows it, until a moment after the
+lift, the gesture that would have turned it, as the panel names it from the
+keymap, and nothing where that action is off. It lies over the tooltip of
+the inspecting drag: it shows only for a moment, to a reader who meant to
+turn, not to inspect. The veil has no blur, which would cost every frame of
+the drag. It shows on every miss, remembering nothing, and is no prop: the
+keymap turns it off and CSS hides its slot. The plain wheel shows none: that
+is a reader scrolling past. Considered and rejected: the hint in the top
+left corner, because a reader looking at the middle of the chart misses it
+there; once per visit, because a reader who keeps missing keeps needing it.
