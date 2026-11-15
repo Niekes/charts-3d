@@ -866,6 +866,7 @@ describe("pointer", () => {
     // A plain drag names the gesture and the label of the panel.
     await drag(140)
     expect(hint().textContent).toBe("CtrlDragRotate")
+    expect(hint().querySelector('[data-slot="chart-3d-hint-box"]')).not.toBeNull()
     await chart.send(pointer("pointerup", 140, 100))
     await act(() => vi.advanceTimersByTime(1400))
     expect(hint().getAttribute("data-state")).toBe("open")

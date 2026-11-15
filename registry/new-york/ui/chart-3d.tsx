@@ -1719,9 +1719,10 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
 }
 
 /**
- * The hint of a drag that missed, in the top left corner of the chart, which
- * no other part takes: always there, empty while it has nothing to say, so a
- * screen reader hears its first word.
+ * The hint of a drag that missed, a box in the middle of the chart over a
+ * light veil, above the tooltip: always there, empty while it has nothing to
+ * say, so a screen reader hears its first word. The veil has no blur, which
+ * would cost every frame of the drag it shows during.
  */
 function ChartHint3D({
   shown,
@@ -1735,13 +1736,16 @@ function ChartHint3D({
       role="status"
       data-slot="chart-3d-hint"
       data-state={open ? "open" : "closed"}
-      className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-2 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 shadow-xl motion-safe:transition-opacity data-[state=closed]:opacity-0"
+      className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-background/40 motion-safe:transition-opacity data-[state=closed]:opacity-0"
     >
       {shown && (
-        <>
+        <div
+          data-slot="chart-3d-hint-box"
+          className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 shadow-xl"
+        >
           <KbdGroup3D group={shown.gesture} />
           <span className="text-muted-foreground">{shown.label}</span>
-        </>
+        </div>
       )}
     </div>
   )
