@@ -8,6 +8,7 @@ import BarFieldChart3DEnterDemo from "@/docs/examples/bar-field-chart-3d-enter-d
 import BarFieldChart3DRenderersDemo from "@/docs/examples/bar-field-chart-3d-renderers-demo"
 import BarFieldChart3DManyDemo from "@/docs/examples/bar-field-chart-3d-many-demo"
 import BarFieldChart3DDemo from "@/docs/examples/bar-field-chart-3d-demo"
+import BarFieldChart3DSpacingDemo from "@/docs/examples/bar-field-chart-3d-spacing-demo"
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -22,11 +23,29 @@ import BarFieldChart3DDemo from "@/docs/examples/bar-field-chart-3d-demo"
 
 The chart draws what the data says and decides nothing of its own:
 `data[row][column]` is the value of one bar. Its row and column place it -
-the columns along x, the rows along z, at the values `domain` names - the
-cell of the grid gives its footprint, its value its height from 0, and the
-ramp between the two `colors` at the lowest and the highest value its color.
-A value that is not a finite number draws no bar. The gap between two bars
-is fixed, a fifth of the cell, so neighbours stay apart.
+the columns along x, the rows along z, evenly over the values `domain` names
+or at the values `x` and `z` give each of them - the smallest gap between two
+columns and two rows gives its footprint, its value its height from 0, and
+the ramp between the two `colors` at the lowest and the highest value its
+color. A value that is not a finite number draws no bar, and neither does a
+column or row without a finite place. The gap between two bars is fixed, a
+fifth of the cell, so neighbours stay apart.
+
+## Uneven spacing
+
+Where the columns or rows were not measured at even steps, `x` and `z` name
+the value of each: here wells sampled at the distances they stand at and the
+depths they were drilled to. Every bar keeps the footprint of the smallest
+gap, so a wide gap stays a gap and never makes a bigger bar.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarFieldChart3DSpacingDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-field-chart-3d-spacing-demo.tsx</include>
+  </Tab>
+</Tabs>
 
 ## Installation
 

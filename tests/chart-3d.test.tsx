@@ -22,7 +22,6 @@ import {
   finite,
   floored,
   globe,
-  gridBox,
   nonNegative,
   intoWorld,
   linear,
@@ -2055,28 +2054,6 @@ describe("helpers", () => {
     expect(at(30, [10, 20])).toBe("100")
     // A flat span has no share to take: the low end, no NaN.
     expect(at(5, [5, 5])).toBe("0")
-  })
-
-  test("gridBox spans the grid with half a cell of room, or the domain exactly", () => {
-    const y = axis(0, 1)
-    const grid = gridBox({ rows: 2, columns: 3 }, {}, y)
-    expect(grid.cell).toEqual({ x: 1, z: 1 })
-    expect(grid.spec.x.domain).toEqual([-0.5, 2.5])
-    expect(grid.spec.z.domain).toEqual([-0.5, 1.5])
-    expect(grid.spec.y).toBe(y)
-
-    const named = gridBox({ rows: 2, columns: 3 }, { x: [0, 10], z: [0, 4] }, y)
-    expect(named.cell).toEqual({ x: 5, z: 4 })
-    expect(named.spec.x.domain).toEqual([0, 10])
-    expect([named.at.x(1), named.at.z(1)]).toEqual([5, 4])
-
-    // Without a domain a cell is one index, whatever the size - also while a
-    // size glides; a domain over one row and column has no neighbour: one value.
-    expect(gridBox({ rows: 1.5, columns: 0 }, {}, y).cell).toEqual({ x: 1, z: 1 })
-    expect(gridBox({ rows: 1, columns: 1 }, { x: [3, 3], z: [2, 2] }, y).cell).toEqual({
-      x: 1,
-      z: 1,
-    })
   })
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {

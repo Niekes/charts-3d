@@ -15,8 +15,9 @@ import {
   Axes3D,
   Marks3D,
   axis,
-  gridBox,
   intoWorld,
+  linear,
+  pad,
   shade,
   useChart3D,
   useTween,
@@ -85,14 +86,10 @@ export function SurfaceChart3D({
   const fade = useTween(present, 0)
   // The box keeps half a cell beyond the grid; a domain the reader hands the
   // chart names the box exactly.
-  const box = gridBox(
-    { rows: data.length, columns: data[0]?.length ?? 0 },
-    domain,
-    axis(floor, peak)
-  )
+  const box = gridBox({ rows: data.length, columns: data[0]?.length ?? 0 }, domain)
   // The color ramp follows the heights on screen, the axes glide to those of the data.
   const [lo = 0, hi = 0] = extent(heights.flat())
-  const spec = useTweenAxes(box.spec)
+  const spec = useTweenAxes({ ...box.spec, y: axis(floor, peak) })
   const world = worldBox(spec)
 
   const grid = intoWorld<GridPoint, GridPlanes3DInstance<GridPoint>>(
@@ -123,6 +120,27 @@ export function SurfaceChart3D({
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/**
+ * The floor of the box over a grid of `rows` by `columns`: x and z span the
+ * columns and the rows at the values `domain` names, or at their indices
+ * with half a cell of room. With `at`, the place of every column and row in
+ * the values of the data.
+ */
+function gridBox(
+  { rows, columns }: { rows: number; columns: number },
+  domain: SurfaceChart3DProps["domain"] & {}
+) {
+  const [x0, x1] = domain.x ?? [0, columns - 1]
+  const [z0, z1] = domain.z ?? [0, rows - 1]
+  return {
+    spec: {
+      x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), 1),
+      z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), 1),
+    },
+    at: { x: linear([0, columns - 1], [x0, x1]), z: linear([0, rows - 1], [z0, z1]) },
+  }
 }
 
 /** A point of the lattice, carrying the row and column it stands for. */

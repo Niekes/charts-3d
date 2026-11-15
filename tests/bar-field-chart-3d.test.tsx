@@ -145,6 +145,63 @@ describe("BarFieldChart3D", () => {
   })
 })
 
+describe("BarFieldChart3D places", () => {
+  test("by default a column stands at its index, as x names it", () => {
+    const html = (x?: number[]) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarFieldChart3D data={[[1, 2, 3]]} x={x} />
+        </ChartContainer3D>
+      )
+    expect(html([0, 1, 2])).toBe(html())
+  })
+
+  test("x and z stand every column and row at its value, in any order, a footprint of the smallest gap", async () => {
+    // From the side, at tilt 0, a bar shows its front alone: a rectangle along x.
+    const view = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <BarFieldChart3D data={[[1, 1, 1]]} x={[10, 0, 1]} z={[5]} />
+      </ChartContainer3D>
+    )
+    const spans = view
+      .bars()
+      .map((p) => [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),/g)].map((m) => Number(m[1])))
+      .map((xs) => [Math.min(...xs), Math.max(...xs)])
+      .filter(([a, b]) => b - a > 1)
+      .sort((a, b) => a[0] - b[0])
+    expect(spans).toHaveLength(3)
+    // The bars at 0 and 1 stand a cell apart, 0.8 of it wide: the gap a quarter of a bar.
+    const [first, second, last] = spans
+    expect((second[0] - first[1]) / (first[1] - first[0])).toBeCloseTo(0.25, 1)
+    expect(last[0] - second[1]).toBeGreaterThan(5 * (second[1] - second[0]))
+
+    const tips = []
+    for (const bar of view.bars()) {
+      await view.hover(bar)
+      tips.push(view.tip())
+    }
+    expect(new Set(tips)).toEqual(new Set(["x0z5value1", "x1z5value1", "x10z5value1"]))
+    await view.unmount()
+  })
+
+  test("a column or row without a finite place draws no bar", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarFieldChart3D
+          data={[
+            [1, 2, 3],
+            [4, 5, 6],
+          ]}
+          x={[0, NaN, 2]}
+          z={[0]}
+        />
+      </ChartContainer3D>
+    )
+    expect(faces(html)).toHaveLength(6)
+    expect(html).not.toContain("NaN")
+  })
+})
+
 describe("BarFieldChart3D tooltip", () => {
   test("names the x, z and value of a bar as the ticks do, through format and titles", async () => {
     const view = await mount(
@@ -279,6 +336,31 @@ describe("BarFieldChart3D transitions", () => {
     expect(outlines()).toEqual(expect.arrayContaining(before))
     await act(() => vi.advanceTimersByTime(700))
     expect(outlines()).not.toEqual(expect.arrayContaining(before))
+    await view.unmount()
+  })
+
+  test("new places of x glide the bars there", async () => {
+    const placed = (x: number[]) => (
+      <ChartContainer3D config={config}>
+        <BarFieldChart3D data={[[1, 1, 1]]} x={x} />
+      </ChartContainer3D>
+    )
+    const view = await mount(placed([0, 1, 2]))
+    const outline = () =>
+      view
+        .bars()
+        .map((p) => p.getAttribute("d"))
+        .join()
+    const start = outline()
+
+    // The box scales with its places: only an uneven move shows.
+    await view.render(placed([0, 1, 5]))
+    expect(outline()).toBe(start)
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = outline()
+    expect(mid).not.toBe(start)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(outline()).not.toBe(mid)
     await view.unmount()
   })
 

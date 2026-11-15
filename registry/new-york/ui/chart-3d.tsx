@@ -2763,35 +2763,6 @@ function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, s
   return `color-mix(in oklch, ${colorOf(high)} ${t}%, ${colorOf(low)})`
 }
 
-/**
- * The box of a chart over a grid of `rows` by `columns`: x and z span the
- * columns and the rows at the values `domain` names - with half a cell of
- * room beyond the grid unless it names them exactly - and y is `y`. With the
- * cell along x and z and `at`, the place of every column and row in the
- * values of the data.
- */
-function gridBox(
-  { rows, columns }: { rows: number; columns: number },
-  domain: { x?: [number, number]; z?: [number, number] },
-  y: AxisSpec
-) {
-  const [x0, x1] = domain.x ?? [0, columns - 1]
-  const [z0, z1] = domain.z ?? [0, rows - 1]
-  // Without a domain a cell is one index wide. A domain over one column or
-  // row has no neighbour to measure: its cell is one value wide.
-  const cell = {
-    x: domain.x ? (x1 - x0) / Math.max(1, columns - 1) || 1 : 1,
-    z: domain.z ? (z1 - z0) / Math.max(1, rows - 1) || 1 : 1,
-  }
-  const spec: AxesSpec = {
-    x: domain.x ? axis(x0, x1) : pad(axis(x0, x1), cell.x),
-    y,
-    z: domain.z ? axis(z0, z1) : pad(axis(z0, z1), cell.z),
-  }
-  const at = { x: linear([0, columns - 1], [x0, x1]), z: linear([0, rows - 1], [z0, z1]) }
-  return { spec, cell, at }
-}
-
 /** `cubes`, each with its bottom face as `floor`, found once: bars on one floor paint back to front by it. */
 function floored<C extends { faces: CubeFace[] }>(cubes: C[]) {
   return cubes.map((cube) =>
@@ -2824,7 +2795,6 @@ export {
   barCorners,
   barMarks,
   floored,
-  gridBox,
   ramp,
   useTween,
   useTweenAxes,

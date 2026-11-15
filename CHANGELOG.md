@@ -12,11 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BarFieldChart3D`, a field of bars over a grid of values, `data[row][column]`,
   colored on a ramp by height - the bar chart of a height map. Everything
   about a bar comes from the data: its place, its footprint, its height and
-  its color.
+  its color. Its columns and rows stand evenly over `domain`, or at any
+  values through `x` and `z`, the footprint the smallest gap between them.
 - The core helpers the bar, surface and bar field charts now share:
-  `barCorners`, `barMarks`, `floored`, `gridBox` and `ramp`. A surface of a
-  single row or column without a `domain` now keeps half a cell of room
-  along it, as every other grid does.
+  `barCorners`, `barMarks`, `floored` and `ramp`. A surface of a single row
+  or column without a `domain` now keeps half a cell of room along it, as
+  every other grid does.
 - A drag that turns nothing - the mouse without ⌘ or Ctrl, one finger
   sideways - shows a hint in the middle of the chart, over a light veil, for a
   moment: the gesture that would have turned it, as the shortcut panel names

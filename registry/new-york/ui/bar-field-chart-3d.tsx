@@ -12,7 +12,7 @@ import {
   barMarks,
   finite,
   floored,
-  gridBox,
+  linear,
   pad,
   ramp,
   useChart3D,
@@ -35,11 +35,26 @@ export type BarFieldChart3DProps = {
    */
   data: number[][]
   /**
-   * The data values the first and the last column (x) and row (z) stand for.
-   * The chart keeps half a cell between the bars and the walls of its box.
+   * The data values the first and the last column (x) and row (z) stand for,
+   * the others evenly between. The chart keeps half a cell between the bars
+   * and the walls of its box.
    * @defaultValue the indices of the columns and rows
    */
   domain?: { x?: [number, number]; z?: [number, number] }
+  /**
+   * The value every column stands at along x, `x[column]`, in any order and
+   * at any spacing, in place of `domain.x`. A column without a finite value
+   * draws no bars.
+   * @defaultValue evenly over `domain.x`
+   */
+  x?: number[]
+  /**
+   * The value every row stands at along z, `z[row]`, in any order and at any
+   * spacing, in place of `domain.z`. A row without a finite value draws no
+   * bars.
+   * @defaultValue evenly over `domain.z`
+   */
+  z?: number[]
   /**
    * What a bar says on hover: `tooltip` is what it would say, its x, z and
    * value as the ticks name them, `data` the row and column of the bar, the
@@ -64,13 +79,16 @@ export type BarFieldChart3DProps = {
 /**
  * A field of bars over a grid: `data[row][column]` is the value of a bar, the
  * columns run along x and the rows along z. Everything about a bar comes from
- * the data - its place from its row and column, its footprint from the cell
- * of the grid, its height from its value, its color from the ramp between
- * the two `colors` at the lowest and the highest value.
+ * the data - its place from the value of its column and row, its footprint
+ * from the smallest gap between two of them, its height from its value, its
+ * color from the ramp between the two `colors` at the lowest and the highest
+ * value.
  */
 export function BarFieldChart3D({
   data,
   domain = {},
+  x,
+  z,
   tooltip,
   format,
   titles,
@@ -78,28 +96,21 @@ export function BarFieldChart3D({
 }: BarFieldChart3DProps) {
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
-  const field = useField(data)
+  const field = useField(data, { domain, x, z })
   // A bar glides to its new value; a new one grows from 0 as it fades in, a
   // gone one shrinks back to 0 as it fades out and leaves when the glide is done.
   const values = useTween(field.target, 0)
   const presence = useTween(field.present, 0)
-  // y runs from 0. A bar is wider than its point: the box keeps half a cell
-  // of room beyond the outer bars even where `domain` names the ends.
+  // y runs from 0; x and z span the places with half a cell of room.
   const y = axis(Math.min(0, field.lo), Math.max(0, field.hi))
-  const box = gridBox(field, domain, y)
-  const spec = useTweenAxes({
-    ...box.spec,
-    x: domain.x ? pad(box.spec.x, box.cell.x) : box.spec.x,
-    z: domain.z ? pad(box.spec.z, box.cell.z) : box.spec.z,
-  })
+  const spec = useTweenAxes({ x: field.x.spec, y, z: field.z.spec })
   const world = worldBox(spec)
-  // The bars stand on the gliding grid, so under a domain a grown grid slides
-  // its bars to their new places and their footprint eases, never jumps.
-  const shown = useTween({ rows: field.rows, columns: field.columns })
-  const grid = gridBox({ rows: shown.rows, columns: shown.columns }, domain, y)
+  // Every column and row glides to its place, and the footprint with the cell.
+  const places = { x: useTween(field.x.places), z: useTween(field.z.places) }
+  const cell = useTween({ x: field.x.cell, z: field.z.cell })
   const size = {
-    width: Math.abs(world.x(grid.cell.x) - world.x(0)) * BAR,
-    depth: Math.abs(world.z(grid.cell.z) - world.z(0)) * BAR,
+    width: Math.abs(world.x(cell.x) - world.x(0)) * BAR,
+    depth: Math.abs(world.z(cell.z) - world.z(0)) * BAR,
   }
   // The ramp glides with the data, not with the bars on screen: one growing
   // from 0 or shrinking to it must not recolor the others.
@@ -108,14 +119,14 @@ export function BarFieldChart3D({
   const bars = floored(
     cubes3D<Point3D>()
       .camera(camera)
-      .data(fieldCorners(values, world, grid.at, size))
+      .data(fieldCorners(values, world, places, size))
   ).sort((a, b) => sort(a.floor, b.floor))
   const marks = bars.flatMap((bar) =>
     barMarks({
       id: bar.key,
       faces: bar.faces,
       color: ramp(bar.value, [span.lo, span.hi], [low, high]),
-      tooltip: fieldTooltip(bar, data, box.at, { format, titles, tooltip }),
+      tooltip: fieldTooltip(bar, field, { format, titles, tooltip }),
       opacity: presence[bar.key],
     })
   )
@@ -128,30 +139,57 @@ export function BarFieldChart3D({
   )
 }
 
-/** Where a column and a row stand, in the values of the data. */
-type Place = ReturnType<typeof gridBox>["at"]
+/** The value every column (x) and row (z) stands at, keyed by its index. */
+type Place = Record<"x" | "z", Record<string, number>>
 
 /**
  * The value of every bar, keyed by its row and column so it follows its cell
- * through updates, with its presence, the size of the grid and the lowest
- * and highest value - built once per change of the data, not at every frame
- * the camera turns.
+ * through updates, with its presence, the lowest and highest value and the
+ * places of the columns and rows - built once per change of the data, not at
+ * every frame the camera turns. A bar draws where its value and both its
+ * places are finite numbers.
  */
-function useField(data: number[][]) {
+function useField(
+  data: number[][],
+  { domain, x, z }: Pick<BarFieldChart3DProps, "x" | "z"> & { domain: { x?: Ends; z?: Ends } }
+) {
   return React.useMemo(() => {
+    const columns = Math.max(0, ...data.map((row) => row.length))
+    const sides = { x: side(columns, x, domain.x), z: side(data.length, z, domain.z) }
     const target: Record<string, number> = Object.fromEntries(
-      data.flatMap((row, r) => row.flatMap((v, c) => (finite(v) ? [[`${r}-${c}`, v]] : [])))
+      data.flatMap((row, r) =>
+        row.flatMap((v, c) =>
+          finite(v) && c in sides.x.places && r in sides.z.places ? [[`${r}-${c}`, v]] : []
+        )
+      )
     )
     const [lo = 0, hi = 0] = extent(Object.values(target))
     return {
+      ...sides,
       target,
       present: Object.fromEntries(Object.keys(target).map((key) => [key, 1])),
-      rows: data.length,
-      columns: Math.max(0, ...data.map((row) => row.length)),
       lo,
       hi,
     }
-  }, [data])
+  }, [data, x, z, domain.x, domain.z])
+}
+
+type Ends = [number, number]
+
+/**
+ * Where the `count` columns or rows stand: at their value of `at`, or evenly
+ * over `ends`, by default their indices. With the cell, the smallest gap
+ * between two places - one where there is none - and the axis from the
+ * lowest to the highest place with half a cell of room.
+ */
+function side(count: number, at?: number[], ends: Ends = [0, count - 1]) {
+  const even = linear([0, count - 1], ends)
+  const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
+  const places = Object.fromEntries(values.flatMap((v, i) => (finite(v) ? [[i, v]] : [])))
+  const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
+  const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
+  const cell = gaps.length ? Math.min(...gaps) : 1
+  return { places, cell, spec: pad(axis(sorted[0] ?? 0, sorted.at(-1) ?? 0), cell) }
 }
 
 /**
@@ -166,7 +204,7 @@ function fieldCorners(
 ) {
   return Object.entries(values).map(([key, value]) => {
     const [row, column] = key.split("-").map(Number)
-    const corners = barCorners(world, at.x(column), at.z(row), value, size)
+    const corners = barCorners(world, at.x[column], at.z[row], value, size)
     return Object.assign(corners, { key, row, column, value })
   })
 }
@@ -174,25 +212,25 @@ function fieldCorners(
 /**
  * What a bar says on hover, made when the pointer lands on it: its x and z
  * as the ticks name them and its value as the ticks of y name it - or what
- * `tooltip` makes of that. A bar whose value has left the data says nothing.
+ * `tooltip` makes of that. A bar that has left the data, its value or its
+ * place, says nothing.
  */
 function fieldTooltip(
-  { row, column }: { row: number; column: number },
-  data: number[][],
-  at: Place,
+  { key, row, column }: { key: string; row: number; column: number },
+  { target, x: xs, z: zs }: ReturnType<typeof useField>,
   {
     format = {},
     titles = {},
     tooltip = (tip) => tip,
   }: Pick<BarFieldChart3DProps, "format" | "titles" | "tooltip">
 ): Mark3D["tooltip"] {
-  const value = data[row]?.[column]
-  if (!finite(value)) return undefined
-  const named = (key: keyof AxesSpec, v: number) => ({
-    label: titles[key] ?? (key === "y" ? "value" : key),
-    value: format[key]?.(v) ?? v,
+  if (!(key in target)) return undefined
+  const value = target[key]
+  const named = (name: keyof AxesSpec, v: number) => ({
+    label: titles[name] ?? (name === "y" ? "value" : name),
+    value: format[name]?.(v) ?? v,
   })
-  const [x, z] = [at.x(column), at.z(row)]
+  const [x, z] = [xs.places[column], zs.places[row]]
   return () =>
     tooltip(
       { items: [named("x", x), named("z", z), named("y", value)] },
