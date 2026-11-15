@@ -1,14 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { box, cubes3D, sort, type AxesSpec, type Camera3DInstance, type CubeFace } from "d3-3d"
+import { cubes3D, sort, type AxesSpec, type Camera3DInstance } from "d3-3d"
 
 import {
   Axes3D,
   Marks3D,
   axis,
-  cubeMarks,
-  faded,
+  barCorners,
+  barMarks,
+  floored,
   pad,
   useSeries,
   useChart3D,
@@ -116,15 +117,15 @@ function barShapes(
   world: World,
   size: { width: number; depth: number }
 ) {
-  return cubes3D()
-    .camera(camera)
-    .data(
-      cells.map(({ name, x, j, key, value }) =>
-        Object.assign(barCorners(world, x, j, value, size), { name, key, value })
+  return floored(
+    cubes3D()
+      .camera(camera)
+      .data(
+        cells.map(({ name, x, j, key, value }) =>
+          Object.assign(barCorners(world, x, j, value, size), { name, key, value })
+        )
       )
-    )
-    .map((bar) => Object.assign(bar, { bottom: bar.faces.find((f) => f.face === "bottom")! }))
-    .sort((a, b) => sort(a.bottom, b.bottom))
+  ).sort((a, b) => sort(a.floor, b.floor))
 }
 
 /**
@@ -170,28 +171,6 @@ function cellSize(spec: AxesSpec, depth: number, barSize: number) {
 }
 
 /**
- * The corners of one bar, from the floor to its value, at row `x` and series
- * `z`. box() rises towards -y, so a negative bar starts at its value.
- */
-function barCorners(
-  world: World,
-  x: number,
-  z: number,
-  value: number,
-  size: { width: number; depth: number }
-) {
-  const floor = world.y(0)
-  const top = world.y(value)
-  return box({
-    x: world.x(x),
-    y: Math.max(floor, top),
-    z: world.z(z),
-    ...size,
-    height: Math.abs(floor - top),
-  })
-}
-
-/**
  * What the bar of `entry` says on hover, made when the pointer lands on it:
  * the entry as the ticks of x name it and its value as the ticks of y name
  * it - or what `tooltip` makes of that. A bar whose entry has left the data
@@ -223,25 +202,4 @@ function barTooltip<T extends Record<string, unknown>>(
       },
       { entry, key }
     )
-}
-
-/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar, not its series. */
-function barMarks({
-  id,
-  faces,
-  color,
-  tooltip,
-  opacity,
-}: {
-  id: string
-  faces: CubeFace[]
-  color: string
-  tooltip: Mark3D["tooltip"]
-  opacity: number
-}) {
-  return cubeMarks(id, faces, color, tooltip).map((mark) => ({
-    ...mark,
-    fill: faded(mark.fill, opacity),
-    groups: [id],
-  }))
 }

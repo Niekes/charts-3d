@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
-import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
+import { SurfaceChart3D, type SurfaceChart3DProps } from "@/registry/new-york/ui/surface-chart-3d"
 
 const config = { low: { color: "blue" }, high: { color: "red" } }
 const quads = (html: string) => html.match(/d="M[^"]*" fill="color-mix/g) ?? []
@@ -72,14 +72,14 @@ describe("SurfaceChart3D", () => {
    * a view where the screen follows the x of the box, so the room between
    * the grid and the walls is there to read off.
    */
-  async function room(data: number[][], domain?: { x?: [number, number]; z?: [number, number] }) {
+  async function room(data: number[][], props: Partial<SurfaceChart3DProps> = {}) {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
       root.render(
         <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: Math.PI / 6 }}>
-          <SurfaceChart3D data={data} domain={domain} />
+          <SurfaceChart3D data={data} {...props} />
         </ChartContainer3D>
       )
     )
@@ -89,11 +89,23 @@ describe("SurfaceChart3D", () => {
           Number(m[1])
         )
       )
-    const grid = Math.min(...xs([...host.querySelectorAll('path[fill^="color-mix"]')]))
-    const walls = Math.min(...xs([...host.querySelectorAll('[data-slot="chart-3d-axes"] > path')]))
+    const grid = xs([...host.querySelectorAll('path[fill^="color-mix"]')])
+    const walls = xs([...host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const widths = [...host.querySelectorAll('path[fill^="color-mix"]')].map((quad) => {
+      const corners = xs([quad])
+      return Math.max(...corners) - Math.min(...corners)
+    })
+    const labels = [...host.querySelectorAll('[data-slot="chart-3d-axes"] text')].map(
+      (t) => t.textContent
+    )
     await act(async () => root.unmount())
     host.remove()
-    return grid - walls
+    return {
+      left: Math.min(...grid) - Math.min(...walls),
+      right: Math.max(...walls) - Math.max(...grid),
+      widths,
+      labels,
+    }
   }
 
   test("the box keeps half a cell of room between the grid and its walls", async () => {
@@ -103,8 +115,29 @@ describe("SurfaceChart3D", () => {
         [1, 2, 3],
         [2, 3, 4],
         [3, 4, 5],
-      ])
+      ]).then((r) => r.left)
     ).toBeGreaterThan(10)
+  })
+
+  test("the box ends half a cell beyond the outer points on both sides, not at a rounder tick", async () => {
+    // 16 columns stand at 0 to 15: a nice axis would run on to 20, empty beyond the surface.
+    const row = Array.from({ length: 16 }, (_, c) => c % 3)
+    const { left, right, labels } = await room([row, row])
+    expect(right / left).toBeCloseTo(1, 0)
+    expect(labels).not.toContain("20")
+  })
+
+  test("a domain names the box exactly, its ticks within, never rounded out", async () => {
+    const { left, labels } = await room(
+      [
+        [1, 2, 3],
+        [2, 3, 4],
+      ],
+      { domain: { x: [0.3, 9.7] } }
+    )
+    expect(left).toBeLessThan(5)
+    expect(labels).toContain("8")
+    expect(labels).not.toContain("10")
   })
 
   test("a domain the reader hands the chart names the box, without room", async () => {
@@ -115,9 +148,92 @@ describe("SurfaceChart3D", () => {
           [2, 3, 4],
           [3, 4, 5],
         ],
-        { x: [0, 2], z: [0, 2] }
-      )
+        { domain: { x: [0, 2], z: [0, 2] } }
+      ).then((r) => r.left)
     ).toBeLessThan(5)
+  })
+})
+
+describe("SurfaceChart3D places", () => {
+  test("x and z stand the columns and rows at their values: evenly, as a domain does", () => {
+    const html = (props: Partial<SurfaceChart3DProps>) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D
+            data={[
+              [1, 2, 3],
+              [2, 3, 4],
+            ]}
+            {...props}
+          />
+        </ChartContainer3D>
+      )
+    expect(html({ x: [0, 1, 2], z: [5, 6] })).toBe(html({ domain: { x: [0, 2], z: [5, 6] } }))
+  })
+
+  test("unevenly, a wide gap between two columns makes a wide cell", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: Math.PI / 2.2 }}>
+          <SurfaceChart3D
+            data={[
+              [1, 1, 1],
+              [1, 1, 1],
+            ]}
+            x={[0, 1, 10]}
+          />
+        </ChartContainer3D>
+      )
+    )
+    const widths = [...host.querySelectorAll('path[fill^="color-mix"]')]
+      .map((quad) => {
+        const xs = [...quad.getAttribute("d")!.matchAll(/(-?[\d.]+),/g)].map((m) => Number(m[1]))
+        return Math.max(...xs) - Math.min(...xs)
+      })
+      .sort((a, b) => a - b)
+    expect(widths).toHaveLength(2)
+    expect(widths[1] / widths[0]).toBeGreaterThan(5)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("the longest row counts the columns: a short row's missing corners stand at the floor", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D
+          data={[
+            [1, 2],
+            [1, 2, 3],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    expect(quads(html)).toHaveLength(2)
+    expect(html).not.toContain("NaN")
+  })
+
+  test("a column or row without a finite place drops out, its neighbours join", () => {
+    const html = (x?: number[], z?: number[]) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D
+            data={[
+              [1, 2, 3],
+              [2, 3, 4],
+              [3, 4, 5],
+            ]}
+            x={x}
+            z={z}
+          />
+        </ChartContainer3D>
+      )
+    expect(quads(html())).toHaveLength(4)
+    expect(quads(html([0, NaN, 2]))).toHaveLength(2)
+    expect(quads(html([0, NaN, 2], [0, 1, Infinity]))).toHaveLength(1)
+    expect(html([0, NaN, 2])).not.toContain("NaN")
   })
 })
 
@@ -273,6 +389,74 @@ describe("SurfaceChart3D transitions", () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  test("new places of x glide the surface there", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (x: number[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D
+              data={[
+                [1, 2, 3],
+                [2, 3, 4],
+              ]}
+              x={x}
+            />
+          </ChartContainer3D>
+        )
+      )
+    const outline = () =>
+      [...host.querySelectorAll('path[fill^="color-mix"]')].map((p) => p.getAttribute("d")).join()
+    await render([0, 1, 2])
+    const start = outline()
+    // The box scales with its places: only an uneven move shows.
+    await render([0, 1, 5])
+    expect(outline()).toBe(start)
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = outline()
+    expect(mid).not.toBe(start)
+    await act(() => vi.advanceTimersByTime(400))
+    expect(outline()).not.toBe(mid)
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("new data while a column leaves: it never draws without a place", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    await render([
+      [1, 2, 3],
+      [2, 3, 4],
+    ])
+    await render([
+      [1, 2],
+      [2, 3],
+    ])
+    await act(() => vi.advanceTimersByTime(300))
+    // New heights restart the glide of the heights, not of the places.
+    await render([
+      [3, 1],
+      [1, 3],
+    ])
+    await act(() => vi.advanceTimersByTime(400))
+    expect(host.innerHTML).not.toContain("NaN")
+    await act(async () => root.unmount())
+    host.remove()
   })
 
   test("new data glides in over the animationDuration of the container", async () => {

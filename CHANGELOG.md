@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `BarFieldChart3D`, a field of bars over a grid of values, `data[row][column]`,
+  colored on a ramp by height - the bar chart of a height map. Everything
+  about a bar comes from the data: its place, its footprint, its height and
+  its color. Its columns and rows stand evenly over `domain`, or at any
+  values through `x` and `z`, the footprint the smallest gap between them.
+- `x` and `z` on `SurfaceChart3D`: the value every column and row stands
+  at, at any spacing, in place of `domain`; a column or row without a finite
+  value drops out, its neighbours joined.
+- The core helpers the bar, surface and bar field charts now share:
+  `barCorners`, `barMarks`, `floored`, `gridAxis` and `ramp`. A surface of a
+  single row or column without a `domain` now keeps half a cell of room
+  along it, as every other grid does.
 - A drag that turns nothing - the mouse without ⌘ or Ctrl, one finger
   sideways - shows a hint in the middle of the chart, over a light veil, for a
   moment: the gesture that would have turned it, as the shortcut panel names
@@ -62,6 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The canvas turns a surface of thousands of cells faster - the 80 by 80
+  demo from about 30 to about 50 frames a second: it resolves every color
+  once into the sRGB it paints, whose `rgb()` it parses about four times
+  faster than the `oklch()` of the theme, and once per mark, not once for
+  the fill and again for the outline; `SurfaceChart3D` builds its lattice
+  and the color, name and tooltip of every cell once per change of the
+  data, not at every frame the camera turns.
 - `useTween` hands back the record of its target, no copy, while nothing
   glides: read it, never write to it.
 
@@ -108,6 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The box of `SurfaceChart3D` ends where its grid does: its x and z axes
+  were rounded to nice ends, so 16 columns at 0 to 15 got a box running on
+  to 20, empty beyond the surface, and a `domain` of 0.3 to 9.7 a box from
+  0 to 10. The walls now stand half a cell beyond the outer columns and
+  rows, or at the ends a `domain` names, with the ticks within.
+- `SurfaceChart3D` counts its columns by its longest row, as the bar field
+  does: a first row shorter than the others no longer leaves the columns
+  beyond it outside the box.
 - The globe turns faster with thousands of tiles: it reads every tile from
   its id once, places its corners on the globe once and lifts them by its
   height, and makes its tooltip once, not at every frame. The many demo,

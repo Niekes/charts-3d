@@ -4,6 +4,7 @@ import * as React from "react"
 import { nice, ticks } from "d3-array"
 import {
   axes3D,
+  box,
   camera3D,
   normal,
   points3D,
@@ -1349,15 +1350,34 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
   return { canvas, repaint }
 }
 
-/** The color that `css` resolves to on `canvas`, inside the chart, cached per color. */
+/**
+ * The color that `css` resolves to on `canvas`, inside the chart, as the sRGB
+ * the canvas paints it in, cached per color: the canvas parses `fillStyle`
+ * at every mark, and an `rgb()` four times faster than the `oklch()` the
+ * theme resolves to.
+ */
 function resolved(canvas: HTMLCanvasElement, css: string, cache: Map<string, string>) {
   let color = cache.get(css)
   if (color === undefined) {
     canvas.style.color = css
-    color = getComputedStyle(canvas).color
+    color = srgb(getComputedStyle(canvas).color)
     cache.set(css, color)
   }
   return color
+}
+
+// One pixel to read back the sRGB of a color; made the first time a canvas paints.
+let pixel: CanvasRenderingContext2D | null = null
+
+/** `color` as the `rgb()` a canvas paints it in, read back from a pixel. */
+function srgb(color: string) {
+  // useRenderer paints on a canvas only where the browser gives one a 2D context.
+  pixel ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+  pixel.clearRect(0, 0, 1, 1)
+  pixel.fillStyle = color
+  pixel.fillRect(0, 0, 1, 1)
+  const [r, g, b, a] = pixel.getImageData(0, 0, 1, 1).data
+  return `rgb(${r} ${g} ${b} / ${+(a / 255).toFixed(3)})`
 }
 
 /**
@@ -1390,22 +1410,30 @@ function paint(
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"
 
-  for (const { points, r, fill, stroke } of marks) {
-    ctx.beginPath()
-    if (r === undefined) {
-      for (const p of points) ctx.lineTo(p.x, p.y)
-      ctx.closePath()
-    } else {
-      ctx.arc(points[0].x, points[0].y, r, 0, 2 * Math.PI)
-    }
-    ctx.fillStyle = color(fill)
+  for (const mark of marks) {
+    const { r, fill, stroke } = mark
+    trace(ctx, mark)
+    const filled = color(fill)
+    ctx.fillStyle = filled
     ctx.fill()
     // A polygon is outlined in its own color, which closes the seams to its neighbours.
     const outline = r === undefined ? (stroke ?? fill) : stroke
     if (!outline) continue
-    ctx.strokeStyle = color(outline)
+    // Its own color is resolved already: a lookup per mark, not two.
+    ctx.strokeStyle = outline === fill ? filled : color(outline)
     ctx.lineWidth = r === undefined ? 0.5 : 1
     ctx.stroke()
+  }
+}
+
+/** Traces the outline of `mark` as the path of `ctx`: its polygon, or its circle. */
+function trace(ctx: CanvasRenderingContext2D, { points, r }: Mark3D) {
+  ctx.beginPath()
+  if (r === undefined) {
+    for (const p of points) ctx.lineTo(p.x, p.y)
+    ctx.closePath()
+  } else {
+    ctx.arc(points[0].x, points[0].y, r, 0, 2 * Math.PI)
   }
 }
 
@@ -2708,6 +2736,98 @@ function cubeMarks(
     }))
 }
 
+/**
+ * The corners of a bar on the floor of `world`, at `x` and `z` in the values
+ * of the data, from 0 to `value`, `size` wide and deep in the world box.
+ * box() rises towards -y, so a negative bar starts at its value.
+ */
+function barCorners(
+  world: World,
+  x: number,
+  z: number,
+  value: number,
+  size: { width: number; depth: number }
+) {
+  const floor = world.y(0)
+  const top = world.y(value)
+  return box({
+    x: world.x(x),
+    y: Math.max(floor, top),
+    z: world.z(z),
+    ...size,
+    height: Math.abs(floor - top),
+  })
+}
+
+/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar. */
+function barMarks({
+  id,
+  faces,
+  color,
+  tooltip,
+  opacity,
+}: {
+  id: string
+  faces: CubeFace[]
+  color: string
+  tooltip: Mark3D["tooltip"]
+  opacity: number
+}) {
+  return cubeMarks(id, faces, color, tooltip).map((mark) => ({
+    ...mark,
+    fill: faded(mark.fill, opacity),
+    groups: [id],
+  }))
+}
+
+/**
+ * The color at `value` on a ramp from the config color `low` at `lo` to
+ * `high` at `hi` - a value beyond them takes the color of the nearer end: a
+ * CSS color-mix, so it follows the theme.
+ */
+function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, string]) {
+  const t = Math.min(100, Math.max(0, Math.round(((value - lo) / (hi - lo || 1)) * 100)))
+  return `color-mix(in oklch, ${colorOf(high)} ${t}%, ${colorOf(low)})`
+}
+
+/**
+ * Where the `count` columns or rows of a grid stand along one axis of
+ * arrangement: at their value of `at`, in any order, or evenly over `ends`,
+ * by default their indices; one without a finite value has no place. With
+ * the cell, the smallest gap between two places - 1 where there is none -
+ * and the axis over the places, its ticks within: its walls half a cell
+ * beyond them - the padding - or at them where not `padded`, never at a
+ * rounder tick, which would leave the box empty beyond the data.
+ */
+function gridAxis(
+  count: number,
+  {
+    at,
+    ends = [0, count - 1],
+    padded = true,
+  }: { at?: number[]; ends?: [number, number]; padded?: boolean } = {}
+) {
+  const even = linear([0, count - 1], ends)
+  const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
+  const places: Record<number, number> = Object.fromEntries(
+    values.flatMap((v, i) => (finite(v) ? [[i, v]] : []))
+  )
+  const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
+  const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
+  const cell = gaps.length ? Math.min(...gaps) : 1
+  const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
+  // A single place has no span of its own: it keeps its padding either way.
+  const spec = pad({ domain: [lo, hi], ticks: ticks(lo, hi, 5) }, padded || lo === hi ? cell : 0)
+  return { places, cell, spec }
+}
+
+/** `cubes`, each with its bottom face as `floor`, found once: bars on one floor paint back to front by it. */
+function floored<C extends { faces: CubeFace[] }>(cubes: C[]) {
+  return cubes.map((cube) =>
+    Object.assign(cube, { floor: cube.faces.find((f) => f.face === "bottom")! })
+  )
+}
+
 export {
   ChartContainer3D,
   ChartLegend3D,
@@ -2730,6 +2850,11 @@ export {
   nonNegative,
   useSeries,
   cubeMarks,
+  barCorners,
+  barMarks,
+  floored,
+  gridAxis,
+  ramp,
   useTween,
   useTweenAxes,
 }

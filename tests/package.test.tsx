@@ -4,6 +4,7 @@ import { describe, expect, test } from "vite-plus/test"
 import * as pkg from "@/index"
 import * as area from "@/registry/new-york/ui/area-chart-3d"
 import * as bar from "@/registry/new-york/ui/bar-chart-3d"
+import * as barField from "@/registry/new-york/ui/bar-field-chart-3d"
 import * as core from "@/registry/new-york/ui/chart-3d"
 import * as choropleth from "@/registry/new-york/ui/choropleth-chart-3d"
 import * as globe from "@/registry/new-york/ui/globe-chart-3d"
@@ -14,9 +15,17 @@ import * as surface from "@/registry/new-york/ui/surface-chart-3d"
 describe("the npm package", () => {
   // `export *` drops a name that two files export, without a word.
   test("exports everything the registry files export", () => {
-    const registry = [core, area, bar, choropleth, globe, places, scatter, surface].flatMap(
-      (module) => Object.keys(module)
-    )
+    const registry = [
+      core,
+      area,
+      bar,
+      barField,
+      choropleth,
+      globe,
+      places,
+      scatter,
+      surface,
+    ].flatMap((module) => Object.keys(module))
     expect(Object.keys(pkg).sort()).toEqual(registry.sort())
   })
 

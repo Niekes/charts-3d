@@ -13,17 +13,22 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  barCorners,
+  barMarks,
   colorOf,
   cubeMarks,
   earth,
   faded,
   finite,
+  floored,
+  gridAxis,
   globe,
   nonNegative,
   intoWorld,
   linear,
   orthographic,
   pad,
+  ramp,
   shade,
   useChart3D,
   useSeries,
@@ -286,10 +291,20 @@ const pointer = (
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
   const ctx = Object.fromEntries(
-    ["setTransform", "clearRect", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map(
-      (m) => [m, vi.fn()]
-    )
+    [
+      "setTransform",
+      "clearRect",
+      "beginPath",
+      "lineTo",
+      "closePath",
+      "arc",
+      "fill",
+      "stroke",
+      "fillRect",
+    ].map((m) => [m, vi.fn()])
   )
+  // The pixel a color resolves to: half-transparent, as a faded mark is.
+  ctx.getImageData = vi.fn(() => ({ data: [10, 20, 30, 128] }))
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
   vi.stubGlobal(
     "ResizeObserver",
@@ -1830,6 +1845,31 @@ describe("renderer", () => {
     host.remove()
   })
 
+  test("canvas hands a color as the sRGB it paints, resolved once per color", async () => {
+    // The canvas paints in sRGB, and parses rgb() far faster than the oklch() of the theme.
+    const ctx = stubCanvas()
+    const styles = vi.spyOn(window, "getComputedStyle")
+    const square = {
+      key: "square",
+      points: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 150, y: 200 },
+      ],
+      fill: "red",
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[square, { ...square, key: "again" }]} />
+      </ChartContainer3D>
+    )
+    expect(ctx.fillStyle).toBe("rgb(10 20 30 / 0.502)")
+    expect(ctx.strokeStyle).toBe("rgb(10 20 30 / 0.502)")
+    expect(styles).toHaveBeenCalledTimes(1)
+    styles.mockRestore()
+    await chart.unmount()
+  })
+
   test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {
     const ctx = stubCanvas()
     const bare = { key: "bare", points: [{ x: 300, y: 300 }], r: 5, fill: "green" }
@@ -2004,6 +2044,70 @@ describe("helpers", () => {
       expect(mark.points).toHaveLength(4)
       expect(mark.tooltip).toBe(tooltip)
     }
+  })
+
+  test("barCorners stands a bar on 0 of the world, up to its value or down to a negative one", () => {
+    const world = worldBox({ x: axis(0, 1), y: axis(-10, 10), z: axis(0, 1) })
+    const size = { width: 0.2, depth: 0.2 }
+    const ys = (value: number) => [...new Set(barCorners(world, 0, 0, value, size).map((p) => p.y))]
+    // y points down in the world box: 0 is the middle, 10 the top at -1.
+    expect(ys(10).sort()).toEqual([-1, 0])
+    expect(ys(-10).sort()).toEqual([0, 1])
+    expect(ys(0)).toEqual([0])
+  })
+
+  test("barMarks fades the faces of a bar to its opacity and groups them as the bar", () => {
+    const [cube] = cubes3D()
+      .rotateY(Math.PI / 6)
+      .rotateX(-Math.PI / 6)
+      .data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
+    const marks = barMarks({
+      id: "b",
+      faces: cube.faces,
+      color: "red",
+      tooltip: undefined,
+      opacity: 0.5,
+    })
+    expect(marks).toHaveLength(3)
+    for (const mark of marks) {
+      expect(mark.groups).toEqual(["b"])
+      expect(mark.fill).toMatch(/^color-mix\(in oklab, .* 50%, transparent\)$/)
+    }
+  })
+
+  test("floored hands every cube its bottom face as floor", () => {
+    const cubes = cubes3D().data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
+    const [cube] = floored(cubes)
+    expect(cube.floor.face).toBe("bottom")
+    expect(cube.faces).toContain(cube.floor)
+  })
+
+  test("ramp mixes the high color by the share of the span, clamped at its ends", () => {
+    const at = (value: number, span: [number, number]) =>
+      ramp(value, span, ["lo", "hi"]).match(/var\(--color-hi\) (\d+)%, var\(--color-lo\)/)![1]
+    expect(at(15, [10, 20])).toBe("50")
+    expect(at(0, [10, 20])).toBe("0")
+    expect(at(30, [10, 20])).toBe("100")
+    // A flat span has no share to take: the low end, no NaN.
+    expect(at(5, [5, 5])).toBe("0")
+  })
+
+  test("gridAxis stands a grid's columns at their values, a cell of the smallest gap, half of it to the walls", () => {
+    // By default at their indices, with half a cell of room and the ticks within.
+    expect(gridAxis(16)).toMatchObject({ cell: 1, spec: { domain: [-0.5, 15.5] } })
+    expect(gridAxis(16).spec.ticks.at(-1)).toBe(14)
+    // Evenly over ends; at any values, in any order - one without a finite value has no place.
+    expect(gridAxis(3, { ends: [0, 10] }).places).toEqual({ 0: 0, 1: 5, 2: 10 })
+    const uneven = gridAxis(4, { at: [10, 0, NaN, 1] })
+    expect(uneven).toMatchObject({ places: { 0: 10, 1: 0, 3: 1 }, cell: 1 })
+    expect(uneven.spec.domain).toEqual([-0.5, 10.5])
+    // Unpadded the ends are the walls; a single place keeps half a cell, or it has no span.
+    expect(gridAxis(3, { ends: [0.3, 9.7], padded: false }).spec.domain).toEqual([0.3, 9.7])
+    expect(gridAxis(1, { ends: [3, 3], padded: false })).toMatchObject({
+      cell: 1,
+      spec: { domain: [2.5, 3.5], ticks: [3] },
+    })
+    expect(gridAxis(0).spec.domain).toEqual([-0.5, 0.5])
   })
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {
