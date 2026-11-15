@@ -291,10 +291,20 @@ const pointer = (
 /** A 2D context of spies on every canvas, and a ResizeObserver that never fires. */
 function stubCanvas() {
   const ctx = Object.fromEntries(
-    ["setTransform", "clearRect", "beginPath", "lineTo", "closePath", "arc", "fill", "stroke"].map(
-      (m) => [m, vi.fn()]
-    )
+    [
+      "setTransform",
+      "clearRect",
+      "beginPath",
+      "lineTo",
+      "closePath",
+      "arc",
+      "fill",
+      "stroke",
+      "fillRect",
+    ].map((m) => [m, vi.fn()])
   )
+  // The pixel a color resolves to: half-transparent, as a faded mark is.
+  ctx.getImageData = vi.fn(() => ({ data: [10, 20, 30, 128] }))
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
   vi.stubGlobal(
     "ResizeObserver",
@@ -1833,6 +1843,31 @@ describe("renderer", () => {
     expect(set).toHaveBeenCalledWith(480 * devicePixelRatio)
     await act(async () => root.unmount())
     host.remove()
+  })
+
+  test("canvas hands a color as the sRGB it paints, resolved once per color", async () => {
+    // The canvas paints in sRGB, and parses rgb() far faster than the oklch() of the theme.
+    const ctx = stubCanvas()
+    const styles = vi.spyOn(window, "getComputedStyle")
+    const square = {
+      key: "square",
+      points: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 150, y: 200 },
+      ],
+      fill: "red",
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[square, { ...square, key: "again" }]} />
+      </ChartContainer3D>
+    )
+    expect(ctx.fillStyle).toBe("rgb(10 20 30 / 0.502)")
+    expect(ctx.strokeStyle).toBe("rgb(10 20 30 / 0.502)")
+    expect(styles).toHaveBeenCalledTimes(1)
+    styles.mockRestore()
+    await chart.unmount()
   })
 
   test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {

@@ -1350,15 +1350,34 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
   return { canvas, repaint }
 }
 
-/** The color that `css` resolves to on `canvas`, inside the chart, cached per color. */
+/**
+ * The color that `css` resolves to on `canvas`, inside the chart, as the sRGB
+ * the canvas paints it in, cached per color: the canvas parses `fillStyle`
+ * at every mark, and an `rgb()` four times faster than the `oklch()` the
+ * theme resolves to.
+ */
 function resolved(canvas: HTMLCanvasElement, css: string, cache: Map<string, string>) {
   let color = cache.get(css)
   if (color === undefined) {
     canvas.style.color = css
-    color = getComputedStyle(canvas).color
+    color = srgb(getComputedStyle(canvas).color)
     cache.set(css, color)
   }
   return color
+}
+
+// One pixel to read back the sRGB of a color; made the first time a canvas paints.
+let pixel: CanvasRenderingContext2D | null = null
+
+/** `color` as the `rgb()` a canvas paints it in, read back from a pixel. */
+function srgb(color: string) {
+  // useRenderer paints on a canvas only where the browser gives one a 2D context.
+  pixel ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+  pixel.clearRect(0, 0, 1, 1)
+  pixel.fillStyle = color
+  pixel.fillRect(0, 0, 1, 1)
+  const [r, g, b, a] = pixel.getImageData(0, 0, 1, 1).data
+  return `rgb(${r} ${g} ${b} / ${+(a / 255).toFixed(3)})`
 }
 
 /**
@@ -1391,22 +1410,30 @@ function paint(
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"
 
-  for (const { points, r, fill, stroke } of marks) {
-    ctx.beginPath()
-    if (r === undefined) {
-      for (const p of points) ctx.lineTo(p.x, p.y)
-      ctx.closePath()
-    } else {
-      ctx.arc(points[0].x, points[0].y, r, 0, 2 * Math.PI)
-    }
-    ctx.fillStyle = color(fill)
+  for (const mark of marks) {
+    const { r, fill, stroke } = mark
+    trace(ctx, mark)
+    const filled = color(fill)
+    ctx.fillStyle = filled
     ctx.fill()
     // A polygon is outlined in its own color, which closes the seams to its neighbours.
     const outline = r === undefined ? (stroke ?? fill) : stroke
     if (!outline) continue
-    ctx.strokeStyle = color(outline)
+    // Its own color is resolved already: a lookup per mark, not two.
+    ctx.strokeStyle = outline === fill ? filled : color(outline)
     ctx.lineWidth = r === undefined ? 0.5 : 1
     ctx.stroke()
+  }
+}
+
+/** Traces the outline of `mark` as the path of `ctx`: its polygon, or its circle. */
+function trace(ctx: CanvasRenderingContext2D, { points, r }: Mark3D) {
+  ctx.beginPath()
+  if (r === undefined) {
+    for (const p of points) ctx.lineTo(p.x, p.y)
+    ctx.closePath()
+  } else {
+    ctx.arc(points[0].x, points[0].y, r, 0, 2 * Math.PI)
   }
 }
 

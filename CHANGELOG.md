@@ -74,6 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The canvas turns a surface of thousands of cells faster - the 80 by 80
+  demo from about 30 to about 50 frames a second: it resolves every color
+  once into the sRGB it paints, whose `rgb()` it parses about four times
+  faster than the `oklch()` of the theme, and once per mark, not once for
+  the fill and again for the outline; `SurfaceChart3D` builds its lattice
+  and the color, name and tooltip of every cell once per change of the
+  data, not at every frame the camera turns.
 - `useTween` hands back the record of its target, no copy, while nothing
   glides: read it, never write to it.
 

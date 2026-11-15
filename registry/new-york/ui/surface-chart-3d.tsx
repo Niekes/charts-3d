@@ -102,10 +102,14 @@ export function SurfaceChart3D({
   const heights = useTween(target)
   const fade = useTween(present, 0)
   // Every column and row glides to its place.
-  const places = { x: useTween(sides.x.places), z: useTween(sides.z.places) }
-  const lattice = gridLattice(heights, places, floor)
-  // The color ramp follows the heights on screen, the axes glide to those of the data.
-  const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
+  const placesX = useTween(sides.x.places)
+  const placesZ = useTween(sides.z.places)
+  // Everything of a cell but its shade waits for the data to move, not the camera.
+  const { lattice, points } = React.useMemo(() => {
+    const lattice = gridLattice(heights, { x: placesX, z: placesZ }, floor)
+    const cells = { raw, present, keys: [low, high] as [string, string], format, titles, tooltip }
+    return { lattice, points: gridPoints(lattice, { x: placesX, z: placesZ }, cells) }
+  }, [heights, placesX, placesZ, floor, raw, present, low, high, format, titles, tooltip])
   const spec = useTweenAxes({ x: sides.x.spec, y: axis(floor, peak), z: sides.z.spec })
   const world = worldBox(spec)
 
@@ -115,21 +119,10 @@ export function SurfaceChart3D({
   )
     // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
     .rows(Math.max(1, lattice[0]?.length ?? 0))
-  const points = lattice.flatMap((row) =>
-    row.map(({ r, c, y }) => ({ x: places.x[c], y, z: places.z[r], r, c }))
-  )
-
   const marks = grid
     .data(points)
     .sort(sort)
-    .flatMap((quad) =>
-      quadMark(
-        quad,
-        fade,
-        { span: [lo, hi], keys: [low, high] },
-        cellTooltip(quad, raw, present, { format, titles, tooltip })
-      )
-    )
+    .map((quad) => quadMark(quad, fade))
 
   return (
     <>
@@ -139,8 +132,52 @@ export function SurfaceChart3D({
   )
 }
 
-/** A point of the lattice, carrying the row and column it stands for. */
-type GridPoint = Point3D & { r: number; c: number }
+/**
+ * A point of the lattice, carrying the row and column it stands for, its key
+ * and, where a cell starts at it, the key, color and tooltip of that cell.
+ */
+type GridPoint = Point3D & {
+  r: number
+  c: number
+  key: string
+  cell?: { key: string; color: string; tooltip: Mark3D["tooltip"] }
+}
+
+/** What the cells of the lattice are colored and named by. */
+type Cells = Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip"> & {
+  raw: number[][]
+  present: Record<string, number>
+  keys: [string, string]
+}
+
+/**
+ * The points of the lattice at their places, each cell on the point it
+ * starts at - its lowest row and column - with its color on the ramp at its
+ * height, the mean of its corners, and its tooltip.
+ */
+function gridPoints(
+  lattice: { r: number; c: number; y: number }[][],
+  places: Record<"x" | "z", Record<string, number>>,
+  { raw, present, keys, ...say }: Cells
+): GridPoint[] {
+  const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
+  return lattice.flatMap((row, i) =>
+    row.map(({ r, c, y }, j) => {
+      const point: GridPoint = { x: places.x[c], y, z: places.z[r], r, c, key: `${r}-${c}` }
+      const corners = [row[j + 1], lattice[i + 1]?.[j], lattice[i + 1]?.[j + 1]]
+      if (corners.every(Boolean)) {
+        const quad = [{ r, c, y }, ...corners] as { r: number; c: number; y: number }[]
+        const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
+        point.cell = {
+          key: point.key,
+          color: ramp(height, [lo, hi], keys),
+          tooltip: cellTooltip(quad, raw, present, say),
+        }
+      }
+      return point
+    })
+  )
+}
 
 /**
  * What a cell says on hover, made when the pointer lands on it: its height,
@@ -150,7 +187,7 @@ type GridPoint = Point3D & { r: number; c: number }
  * stand-in at the floor would make a value up.
  */
 function cellTooltip(
-  quad: GridPlane<GridPoint>,
+  quad: { r: number; c: number }[],
   data: number[][],
   present: Record<string, number>,
   {
@@ -172,29 +209,28 @@ function cellTooltip(
 }
 
 /**
- * The mark of one cell: its quad, shaded by the color ramp at its height and
- * faded in place by `fade` while the cell enters or leaves. It is named by
- * the row and column it starts at, as d3-3d numbers its quads anew as the
- * grid grows.
+ * The mark of one cell: its quad, shaded in the color of its cell and faded
+ * in place by `fade` while the cell enters or leaves. It is named by the row
+ * and column it starts at, as d3-3d numbers its quads anew as the grid grows.
  */
-function quadMark(
-  quad: GridPlane<GridPoint>,
-  fade: Record<string, number>,
-  colors: { span: [number, number]; keys: [string, string] },
-  tooltip: Mark3D["tooltip"]
-) {
-  const height = quad.reduce((sum, p) => sum + p.y, 0) / quad.length
-  const shaded = shade(quad, ramp(height, colors.span, colors.keys))
-  // A corner only one of the tweens still knows is on its way out and stays unseen.
-  const seen = Math.min(...quad.map((p) => fade[`${p.r}-${p.c}`] ?? 0))
-  const cell = `${Math.min(...quad.map((p) => p.r))}-${Math.min(...quad.map((p) => p.c))}`
+function quadMark(quad: GridPlane<GridPoint>, fade: Record<string, number>): Mark3D {
+  let start = quad[0]
+  let seen = 1
+  for (const p of quad) {
+    if (p.r <= start.r && p.c <= start.c) start = p
+    // A corner only one of the tweens still knows is on its way out and stays unseen.
+    seen = Math.min(seen, fade[p.key] ?? 0)
+  }
+  // The point a cell starts at carries it: every quad of the lattice has one.
+  const { key, color, tooltip } = start.cell!
+  const shaded = shade(quad, color)
   return {
-    key: cell,
+    key,
     points: quad.map((p) => p.projected),
     fill:
       seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
     // Its group is the cell, so hovering it lights the cell alone.
-    groups: [cell],
+    groups: [key],
     tooltip,
   }
 }
