@@ -132,6 +132,29 @@ describe("BarFieldChart3D", () => {
     }
   })
 
+  test("the box ends half a cell beyond the outer bars on both sides, not at a rounder tick", async () => {
+    // 16 columns stand at 0 to 15: a nice axis would run on to 20, empty beyond the last bar.
+    const view = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <BarFieldChart3D data={[Array.from({ length: 16 }, () => 1)]} />
+      </ChartContainer3D>
+    )
+    const xs = (paths: Element[]) =>
+      paths.flatMap((p) =>
+        [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
+      )
+    const walls = xs([...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const bars = xs(view.bars())
+    const left = Math.min(...bars) - Math.min(...walls)
+    const right = Math.max(...walls) - Math.max(...bars)
+    expect(right / left).toBeCloseTo(1, 0)
+    const labels = [...view.host.querySelectorAll('[data-slot="chart-3d-axes"] text')].map(
+      (t) => t.textContent
+    )
+    expect(labels).not.toContain("20")
+    await view.unmount()
+  })
+
   test("the y axis starts at 0, so the bars rise from the floor, and a domain names x and z", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>
