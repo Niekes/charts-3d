@@ -9,10 +9,15 @@ import { RoutesChart3D, type RoutesChart3DProps } from "@/registry/new-york/ui/r
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
 
-const config = { a: { color: "red" }, b: { label: "B", color: "blue" } }
+const config = {
+  a: { color: "red" },
+  b: { label: "B", color: "blue" },
+  sea: { label: "By sea", color: "navy" },
+  air: { color: "skyblue" },
+}
 const land: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
 
-type Stop = { id?: string; lon: number; lat?: number | null; s?: string }
+type Stop = { id?: string; lon: number; lat?: number | null; s?: string; by?: string }
 
 /** A globe seen level from the prime meridian: the place at 0, 0 in the middle, at 320, 200. */
 const chart = (data: Stop[], props: Partial<RoutesChart3DProps<Stop>> = {}) => (
@@ -196,6 +201,65 @@ describe("RoutesChart3D", () => {
     expect(same.stops).toHaveLength(2)
     expect(same.html).not.toContain("NaN")
     expect(serverMarks(chart([])).all).toHaveLength(0)
+  })
+})
+
+describe("RoutesChart3D legs of their own color", () => {
+  // Three stops along the equator, the legs meeting in the middle of the globe at 320.
+  const journey: Stop[] = [
+    { id: "west", lon: -40, lat: 0 },
+    { id: "mid", lon: 0, lat: 0, by: "sea" },
+    { id: "east", lon: 40, lat: 0, by: "air" },
+  ]
+  const fillOf = (m: { el: Element }) => m.el.getAttribute("fill")!
+
+  test("a leg takes the color its stop of arrival names, and so does that stop; the first stop takes that of the leg that leaves it", () => {
+    const { quads, stops, fills } = serverMarks(chart(journey, { leg: "by" }))
+    const first = quads.filter((q) => middle(q.corners)[0] < 320)
+    const second = quads.filter((q) => middle(q.corners)[0] > 320)
+    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-sea)"]))
+    expect(new Set(second.map(fillOf))).toEqual(new Set(["var(--color-air)"]))
+    const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
+    expect(byPlace).toEqual(["var(--color-sea)", "var(--color-sea)", "var(--color-air)"])
+    // Nothing is left in the color of the route.
+    expect(fills).not.toContain("var(--color-a)")
+  })
+
+  test("a stop that names no leg keeps the color of its route, for its leg and for itself", () => {
+    // No field at all, or a blank one: no leg is named.
+    const plain = journey.map(({ by, ...stop }) => (stop.id === "mid" ? stop : { ...stop, by }))
+    const blank = serverMarks(
+      chart(
+        journey.map((stop) => ({ ...stop, by: "" })),
+        { leg: "by" }
+      )
+    )
+    expect(new Set(blank.fills)).toEqual(new Set(["var(--color-a)"]))
+    const { quads, stops } = serverMarks(
+      chart(
+        plain.map((stop) => ({ ...stop, s: "b" })),
+        { leg: "by", series: "s" }
+      )
+    )
+    const first = quads.filter((q) => middle(q.corners)[0] < 320)
+    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-b)"]))
+    const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
+    expect(byPlace).toEqual(["var(--color-b)", "var(--color-b)", "var(--color-air)"])
+    // A stop alone has no leg to take a color from but its own.
+    const alone = serverMarks(chart([{ lon: 0, lat: 0, by: "sea" }], { leg: "by" }))
+    expect(alone.stops.map(fillOf)).toEqual(["var(--color-sea)"])
+  })
+
+  test("the title of the tooltip names what the color means: the label of the leg, its key without one", async () => {
+    const view = await mount(chart(journey, { leg: "by", id: "id" }))
+    const { quads, stops } = marks(view.host)
+    await view.point(middle(quads.filter((q) => middle(q.corners)[0] < 320)[3].corners))
+    expect(view.tip()).toBe("By seawest0, -40mid0, 0")
+    await view.point(middle(quads.filter((q) => middle(q.corners)[0] > 320)[3].corners))
+    expect(view.tip()).toBe("airmid0, 0east0, 40")
+    await view.point(stops.find((s) => s.at[0] === 320)!.at)
+    expect(view.tip()).toBe("By seamid0, 0")
+    await view.unmount()
   })
 })
 
@@ -455,6 +519,22 @@ describe("RoutesChart3D transitions", () => {
     expect(xs(marks(view.host))[0]).toBeGreaterThan(tail)
     await glide(400)
     expect(marks(view.host).stops).toHaveLength(2)
+    await view.unmount()
+  })
+
+  test("a leg keeps its color while it draws back, though the stop that named it has left the data", async () => {
+    const stops = [west, { ...mid, by: "sea" }, { ...east, by: "air" }]
+    const view = await mount(chart(stops, { id: "id", leg: "by" }))
+    await view.render(chart(stops.slice(0, 2), { id: "id", leg: "by" }))
+    await glide(300)
+    const now = marks(view.host)
+    const leaving = now.quads.filter((q) => middle(q.corners)[0] > 320)
+    expect(leaving.length).toBeGreaterThan(0)
+    expect(leaving.every((q) => q.el.getAttribute("fill")!.includes("var(--color-air)"))).toBe(true)
+    const gone = now.stops.find((s) => s.at[0] > 321)!
+    expect(gone.el.getAttribute("fill")).toMatch(/^color-mix\(in oklab, var\(--color-air\)/)
+    await glide(400)
+    expect(marks(view.host).fills.some((f) => f.includes("--color-air"))).toBe(false)
     await view.unmount()
   })
 

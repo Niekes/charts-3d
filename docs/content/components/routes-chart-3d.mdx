@@ -30,6 +30,13 @@ says itself.
 An entry whose `lon` or `lat` is missing or not a number is no stop, and its
 route ends before it and starts again after it.
 
+A route has the color of its series. `leg` names a field that gives a leg a
+color of its own: its value, at the stop a leg arrives at, is the config key
+of that leg - how it was travelled, here by air or by sea. The leg and that
+stop take the color, the first stop of a route takes that of the leg that
+leaves it, and the tooltip names it in its title. A stop that names no leg
+keeps the color of its route.
+
 The demos travel between the capitals of
 [Natural Earth](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/),
 public domain. The `land` under the routes is the one every globe takes, cut

@@ -2906,6 +2906,27 @@ function segment(a: Point2D, b: Point2D, width: number): Point2D[] {
 }
 
 /**
+ * The config key of every point, by name, read from `field` of its entry,
+ * `fallback` without one - remembered while a gone point is on its way out,
+ * since its entry has already left the data, so it keeps its color to the
+ * end - and forgotten with the point, so the memory stays the size of the
+ * chart. `alive` holds the points still on their way.
+ */
+function useConfigKeys<T extends Record<string, unknown>>(
+  entries: Map<string, T>,
+  field: (keyof T & string) | undefined,
+  fallback: string,
+  alive: Record<string, number>
+) {
+  const known = React.useRef(new Map<string, string>())
+  entries.forEach((d, name) => known.current.set(name, field ? String(d[field]) : fallback))
+  for (const name of known.current.keys()) {
+    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
+  }
+  return (name: string) => known.current.get(name) ?? fallback
+}
+
+/**
  * What the point of `entry` says on hover, made when the pointer lands on
  * it: its series, where `title` names one, and its x, y and z as the ticks of
  * each axis name them - or what `tooltip` makes of that. A point whose entry
@@ -3156,6 +3177,7 @@ export {
   nonNegative,
   useSeries,
   usePoints,
+  useConfigKeys,
   useRuns,
   segment,
   pointTooltip,

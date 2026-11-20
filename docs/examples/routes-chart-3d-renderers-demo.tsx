@@ -7,7 +7,15 @@ import { chartConfig, chartData, chartView } from "@/docs/examples/routes-chart-
 export default function RoutesChart3DRenderersDemo() {
   return (
     <RendererGrid config={chartConfig} defaultView={chartView}>
-      <RoutesChart3D data={chartData} land={land} lon="lon" lat="lat" id="name" series="route" />
+      <RoutesChart3D
+        data={chartData}
+        land={land}
+        lon="lon"
+        lat="lat"
+        id="name"
+        series="route"
+        leg="by"
+      />
     </RendererGrid>
   )
 }

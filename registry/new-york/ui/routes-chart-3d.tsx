@@ -16,6 +16,7 @@ import {
   placeOf,
   segment,
   useChart3D,
+  useConfigKeys,
   usePoints,
   useRuns,
   type ChartConfig,
@@ -51,9 +52,18 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   series?: keyof T & string
   /**
+   * The field whose value is the config key of the leg that leads to a
+   * stop, such as how it was travelled: the leg and the stop it arrives at
+   * take that color, and the first stop of a route that of the leg that
+   * leaves it. A stop that names none keeps the color of its route.
+   * @defaultValue none: every leg has the color of its route
+   */
+  leg?: keyof T & string
+  /**
    * What a route says on hover, where the leg or the stop under the pointer
-   * alone is highlighted: `tooltip` is what it would say, its series over
-   * that stop, or the two stops of that leg,
+   * alone is highlighted: `tooltip` is what it would say, what its color
+   * stands for - its leg, or else its series - over that stop, or the two
+   * stops of that leg,
    * each with its latitude and longitude; `data` the entries of those stops;
    * `null` shows none.
    * @defaultValue (tooltip) => tooltip
@@ -80,11 +90,15 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   lat,
   id,
   series,
+  leg,
   tooltip,
 }: RoutesChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const stops = useStops(data, { lon, lat, id, series })
+  const fields = { lon, lat, id, series, leg }
+  const stops = useStops(data, fields, Object.keys(config)[0])
   const { named, entries, presence, read } = usePoints(stops, "x", "y", "z", id && "name")
+  // A stop on its way out keeps the color it had.
+  const color = useConfigKeys(entries, "color", "", presence)
   // A stop that comes or goes travels the great circle from its neighbour.
   const runs = useRuns(
     named,
@@ -93,10 +107,10 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
     (name) => placeOf({ x: read(name, "x"), y: read(name, "y"), z: read(name, "z") }),
     (from, to, k) => geoInterpolate(from, to)(k)
   )
-  const reading = { config, entries, fields: { lon, lat, id, series }, tooltip }
+  const reading = { config, entries, fields, tooltip }
   const routes = lineStrips3D<Point3D>()
     .camera(orthographic(camera))
-    .data(runs.flatMap(pieces))
+    .data(runs.flatMap((run) => pieces(run.points, color)))
     // A piece on the far side is hidden by the globe.
     .filter((piece) => piece.every((p) => p.rotated.z > 0))
     // The stops lie over the legs, each among its own from back to front.
@@ -113,29 +127,39 @@ type Place = [number, number]
 /** The fields of an entry the chart reads. */
 type Fields<T> = Pick<
   RoutesChart3DProps<T & Record<string, unknown>>,
-  "lon" | "lat" | "id" | "series"
+  "lon" | "lat" | "id" | "series" | "leg"
 >
 
 /**
- * The entries as the core reads points: each with its name and its route,
- * and, where it has a place, the point of the globe it lies on. A stop that
+ * The entries as the core reads points: each with its name, its route and
+ * the config key of its color - that of the leg that leads to it, where it
+ * names one, or else of its route, `fallback` without series - and, where it
+ * has a place, the point of the globe it lies on. A stop that
  * moves glides as that point, through the globe, so it takes the shortest
  * way to its new place, over the date line too. Built once per change of the
  * data, not at every frame the camera turns.
  */
-function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
-  const { lon, lat, id, series } = fields
+function useStops<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Fields<T>,
+  fallback: string
+) {
+  const { lon, lat, id, series, leg } = fields
   return React.useMemo(
     () =>
-      data.map((entry) => ({
-        entry,
-        name: id && String(entry[id]),
-        route: series && String(entry[series]),
-        ...(finite(entry[lon]) && finite(entry[lat])
-          ? globe(Number(entry[lon]), Number(entry[lat]))
-          : undefined),
-      })),
-    [data, lon, lat, id, series]
+      data.map((entry) => {
+        const route = series && String(entry[series])
+        const placed = finite(entry[lon]) && finite(entry[lat])
+        return {
+          entry,
+          name: id && String(entry[id]),
+          route,
+          // A blank is no name of a leg.
+          color: String((leg && entry[leg]) || route || fallback),
+          ...(placed ? globe(Number(entry[lon]), Number(entry[lat])) : undefined),
+        }
+      }),
+    [data, lon, lat, id, series, leg, fallback]
   )
 }
 
@@ -143,7 +167,13 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
 type Stop = { name: string; seen: number; anchored: boolean; at: Place }
 
 /** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
-type Piece = Point3D[] & { key: string; line: string; seen: number; names: string[]; group: string }
+type Piece = Point3D[] & {
+  key: string
+  color: string
+  seen: number
+  names: string[]
+  group: string
+}
 
 /** What a tooltip is read from. */
 type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
@@ -159,13 +189,21 @@ type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "t
  * beyond the horizon is hidden alone. A leg with a stop on its way grows or
  * draws back with it, a line that draws itself, and is whole all the while;
  * one whose stops both stand in place is seen as far as the better seen of
- * them, so the legs of a route that is all new fade in with its stops.
+ * them, so the legs of a route that is all new fade in with its stops. A
+ * leg has the `color` of the stop it arrives at, a stop its own, and the
+ * first stop that of the leg that leaves it.
  */
-function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
+function pieces(points: Stop[], color: (name: string) => string): Piece[] {
   const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
   // A piece is in focus with the stops it lies between: a leg whole, a stop alone.
   const piece = (points: Point3D[], key: string, seen: number, names: string[]) =>
-    Object.assign(points, { key, line, seen, names, group: names.join("\u2192") })
+    Object.assign(points, {
+      key,
+      seen,
+      names,
+      color: color(names.at(-1)!),
+      group: names.join("\u2192"),
+    })
   return [
     ...points.slice(1).flatMap((to, i) => {
       const from = points[i]
@@ -181,22 +219,27 @@ function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
       )
     }),
     ...points.map((stop) => piece([on(stop.at)], stop.name, stop.seen, [stop.name])),
-  ]
+  ].map((piece) =>
+    // The first stop has no leg that leads to it: it takes the color of the one that leaves it.
+    piece.key === points[0].name
+      ? Object.assign(piece, { color: color(points.at(1)?.name ?? piece.key) })
+      : piece
+  )
 }
 
 /**
- * The mark of a piece, projected, in the color of its route, faded as far
+ * The mark of a piece, projected, in its color, faded as far
  * as it is seen: a segment as wide as a leg, or the circle of a stop, ringed
  * by the background. Its group is its leg, or its stop, so hovering
  * highlights the leg under the pointer alone, or the stop.
  */
 function pieceMark(
-  piece: { projected: Point2D }[] & Pick<Piece, "key" | "line" | "seen" | "group">,
+  piece: { projected: Point2D }[] & Pick<Piece, "key" | "color" | "seen" | "group">,
   tooltip: Mark3D["tooltip"]
 ): Mark3D {
   const mark = {
     key: piece.key,
-    fill: faded(colorOf(piece.line), piece.seen),
+    fill: faded(colorOf(piece.color), piece.seen),
     groups: [piece.group],
     tooltip,
   }
@@ -207,14 +250,14 @@ function pieceMark(
 }
 
 /**
- * What a piece says on hover, made when the pointer lands on it: the series
- * of its route, where `series` names one, over its stops - the one stop, or
+ * What a piece says on hover, made when the pointer lands on it: what its
+ * color stands for, where `leg` or `series` names it, over its stops - the one stop, or
  * the two of a leg - each by its name, or by the fields of its place, with
  * its latitude and longitude - or what `tooltip` makes of that. A piece
  * with a stop whose entry has left the data says nothing.
  */
 function routeTooltip<T extends Record<string, unknown>>(
-  { line, names }: Pick<Piece, "line" | "names">,
+  { color, names }: Pick<Piece, "color" | "names">,
   { config, entries, fields, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   const stops = names.flatMap((name) => {
@@ -222,15 +265,15 @@ function routeTooltip<T extends Record<string, unknown>>(
     return stop ? [stop.entry] : []
   })
   if (stops.length < names.length) return undefined
-  const { lon, lat, id, series } = fields
+  const { lon, lat, id, series, leg } = fields
   return () =>
     tooltip(
       {
-        title: series ? (config[line]?.label ?? line) : undefined,
+        title: (leg ?? series) ? (config[color]?.label ?? color) : undefined,
         items: stops.map((d) => ({
           label: id ? String(d[id]) : `${lat}, ${lon}`,
           value: `${Number(d[lat])}, ${Number(d[lon])}`,
-          color: colorOf(line),
+          color: colorOf(color),
         })),
       },
       { entries: stops }

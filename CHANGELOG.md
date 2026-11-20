@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their `lon` and `lat`, joined in the order of the data along the great
   circle, one route per value of `series`. What lies on the far side is
   hidden by the globe. Pointing at a leg lights that leg alone and says its
-  two stops; a stop lights and says itself. With `id`, a stop that joins the end of a
+  two stops; a stop lights and says itself. `leg` names the field that gives
+  a leg a color of its own, the config key the stop it arrives at names. With `id`, a stop that joins the end of a
   route grows its leg out of the stop before it, and a gone one draws its
   leg back.
 - `view` on `ChartContainer3D`, a view the camera heads for: it starts
@@ -32,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `facing(lon, lat)` is the view that looks at a place on the globe, and
   `placeOf(point)` reads a place back from a point of it.
 - The core helpers the line and the routes chart share: `useRuns` and
-  `segment`.
+  `segment`; and `useConfigKeys`, which the scatter and the routes chart
+  share.
 
 ### Fixed
 

@@ -34,6 +34,7 @@ import {
   segment,
   shade,
   useChart3D,
+  useConfigKeys,
   useSeries,
   useRuns,
   useTween,
@@ -3334,6 +3335,51 @@ describe("lines", () => {
       </ChartContainer3D>
     )
     expect(runsOf(view.host)).toEqual(["first: a 0.2 A, n 0.2 N"])
+    await view.unmount()
+  })
+})
+
+describe("useConfigKeys", () => {
+  /** The key of each of `names`, as the hook reads them from `entries`. */
+  function Keys({
+    entries,
+    field,
+    alive,
+    names,
+  }: {
+    entries: Map<string, { kind: string }>
+    field?: "kind"
+    alive: Record<string, number>
+    names: string[]
+  }) {
+    const key = useConfigKeys(entries, field, "first", alive)
+    return (
+      <svg>
+        <text>{names.map(key).join(" ")}</text>
+      </svg>
+    )
+  }
+  const keys = (host: HTMLElement) => host.querySelector("text")!.textContent
+
+  test("reads the key of a point from its entry, remembers it while the point is on its way out, and forgets it after", async () => {
+    const both = new Map([
+      ["p", { kind: "a" }],
+      ["q", { kind: "b" }],
+    ])
+    const names = ["p", "q"]
+    const view = await mount(
+      <Keys entries={both} field="kind" alive={{ p: 1, q: 1 }} names={names} />
+    )
+    expect(keys(view.host)).toBe("a b")
+    // q has left the data, and is still on its way out: it keeps its key.
+    const one = new Map([["p", { kind: "a" }]])
+    await view.render(<Keys entries={one} field="kind" alive={{ p: 1, q: 0.5 }} names={names} />)
+    expect(keys(view.host)).toBe("a b")
+    // Gone for good, it has the fallback, as every point has without a field.
+    await view.render(<Keys entries={one} field="kind" alive={{ p: 1 }} names={names} />)
+    expect(keys(view.host)).toBe("a first")
+    await view.render(<Keys entries={both} alive={{ p: 1, q: 1 }} names={names} />)
+    expect(keys(view.host)).toBe("first first")
     await view.unmount()
   })
 })

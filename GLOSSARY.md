@@ -117,7 +117,9 @@ _Avoid_: waypoint, node, marker, dot
 **Leg**:
 The part of a route between two stops next to each other, along the great
 circle, the shortest way over the surface. It ends at the horizon. Pointing
-at a leg lights that leg alone, and it names its two stops.
+at a leg lights that leg alone, and it names its two stops. A leg has the
+color of its route, or one of its own, which the stop it arrives at names
+and shares.
 _Avoid_: arc, link, edge, segment
 
 **Ocean**:
