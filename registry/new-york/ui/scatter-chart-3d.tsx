@@ -9,6 +9,7 @@ import {
   faded,
   pointTooltip,
   useChart3D,
+  useConfigKeys,
   usePoints,
   useTween,
   useTweenAxes,
@@ -30,7 +31,7 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
   /**
    * The field that names an entry, so a point follows its name through
    * updates: a new one grows, a gone one shrinks away, one that moves glides.
-   * The names should be unique.
+   * A name that repeats is, in the order of the data, a point of its own.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string
@@ -74,9 +75,20 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, names, entries, axes, presence: opacity, read } = usePoints(all, x, y, z, id)
+  const {
+    fields,
+    names,
+    entries,
+    axes,
+    target,
+    presence: opacity,
+    key: at,
+  } = usePoints(all, x, y, z, id)
+  // The positions glide entry by entry; a gone point stands in place.
+  const values = useTween(target)
+  const read = (name: string, axis: keyof AxesSpec) => values[at(axis, name)]
   const radii = usePointRadii(names, radius)
-  const key = usePointKeys(entries, series, Object.keys(config)[0], radii)
+  const key = useConfigKeys(entries, series, Object.keys(config)[0], radii)
 
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
@@ -159,23 +171,4 @@ function usePointPlaces(
   // Forgotten with the point, so the memory stays the size of the chart.
   for (const name of places.current.keys()) if (!(name in alive)) places.current.delete(name)
   return placed
-}
-
-/**
- * The config key of every point's color, by name - remembered while a gone
- * point shrinks away, since its entry has already left the data - and
- * forgotten with the point, so the memory stays the size of the chart.
- */
-function usePointKeys<T extends Record<string, unknown>>(
-  entries: Map<string, T>,
-  series: (keyof T & string) | undefined,
-  fallback: string,
-  alive: Record<string, number>
-) {
-  const known = React.useRef(new Map<string, string>())
-  entries.forEach((d, name) => known.current.set(name, series ? String(d[series]) : fallback))
-  for (const name of known.current.keys()) {
-    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
-  }
-  return (name: string) => known.current.get(name) ?? fallback
 }

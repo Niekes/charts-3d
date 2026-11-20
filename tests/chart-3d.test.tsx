@@ -22,16 +22,21 @@ import {
   finite,
   floored,
   gridAxis,
+  facing,
   globe,
   nonNegative,
   intoWorld,
   linear,
   orthographic,
+  placeOf,
   pad,
   ramp,
+  segment,
   shade,
   useChart3D,
+  useConfigKeys,
   useSeries,
+  useRuns,
   useTween,
   useTweenAxes,
   worldBox,
@@ -57,11 +62,12 @@ async function mount(element: ReactElement) {
   const svg = host.querySelector("svg")!
   svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
   const send = (event: Event) => act(() => svg.dispatchEvent(event))
+  const render = (next: ReactElement) => act(async () => root.render(next))
   const unmount = async () => {
     await act(async () => root.unmount())
     host.remove()
   }
-  return { host, svg, send, unmount }
+  return { host, svg, send, render, unmount }
 }
 
 const key = (key: string, shiftKey = false) =>
@@ -1349,6 +1355,82 @@ describe("glide", () => {
     await chart.send(key("ArrowRight"))
     await chart.unmount()
     await frames(250)
+  })
+})
+
+describe("view", () => {
+  /** A browser that can tell whether the reader asks for reduced motion. */
+  const motion = (reduced: boolean) =>
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query.includes("no-preference") !== reduced }),
+    })
+  const frames = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+  /** The camera as the view names it: its yaw, its tilt and its scale. */
+  function Heading() {
+    const { camera } = useChart3D()
+    const at = { yaw: camera.rotateY(), tilt: -camera.rotateX(), scale: camera.scale() }
+    return <text>{JSON.stringify(at)}</text>
+  }
+  const chart = (at?: { yaw: number; tilt: number }, animationDuration?: number) => (
+    <ChartContainer3D
+      config={{}}
+      defaultView={{ yaw: 0, tilt: 0 }}
+      view={at}
+      animationDuration={animationDuration}
+    >
+      <Heading />
+    </ChartContainer3D>
+  )
+  afterEach(() => {
+    vi.useRealTimers()
+    Reflect.deleteProperty(window, "matchMedia")
+  })
+
+  test("the camera starts at the view, and a reset returns it to the default view", async () => {
+    const view3d = await mount(chart({ yaw: 1, tilt: 0.5 }))
+    expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5 })
+    await view3d.send(key("0"))
+    expect(view(view3d.host)).toMatchObject({ yaw: 0, tilt: 0 })
+    await view3d.unmount()
+  })
+
+  test("a new view turns the camera there over the animationDuration, and keeps the zoom of the reader", async () => {
+    motion(false)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const view3d = await mount(chart({ yaw: 0, tilt: 0 }, 1000))
+    await view3d.send(key("+"))
+    await frames(250)
+    const zoomed = view(view3d.host).scale
+
+    await view3d.render(chart({ yaw: 1, tilt: 0.5 }, 1000))
+    await frames(250)
+    // In step with the data, which eases in and out: a quarter of the time, well under a quarter of the way.
+    expect(view(view3d.host).yaw).toBeGreaterThan(0)
+    expect(view(view3d.host).yaw).toBeLessThan(0.2)
+    await frames(250)
+    const mid = view(view3d.host)
+    expect(mid.yaw).toBeCloseTo(0.5, 1)
+    expect(mid.tilt).toBeCloseTo(0.25, 1)
+    await frames(600)
+    expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5, scale: zoomed })
+    await view3d.unmount()
+  })
+
+  test("the reader turns on from the view, and the same view again does not take the camera back", async () => {
+    const view3d = await mount(chart({ yaw: 1, tilt: 0.5 }))
+    await view3d.send(key("ArrowRight"))
+    const turned = view(view3d.host).yaw
+    expect(turned).toBeGreaterThan(1)
+    await view3d.render(chart({ yaw: 1, tilt: 0.5 }))
+    expect(view(view3d.host).yaw).toBe(turned)
+    // Where the reader asks for reduced motion, or the browser cannot say, a new view jumps.
+    await view3d.render(chart({ yaw: 2, tilt: 0 }))
+    expect(view(view3d.host)).toMatchObject({ yaw: 2, tilt: 0 })
+    // Without a view the camera stays where it is.
+    await view3d.render(chart())
+    expect(view(view3d.host)).toMatchObject({ yaw: 2, tilt: 0 })
+    await view3d.unmount()
   })
 })
 
@@ -2752,8 +2834,18 @@ describe("useTween", () => {
   })
 
   /** Writes the numbers useTween returns as text, so every render shows them. */
-  function Tween({ values, enter }: { values: Record<string, number>; enter?: number }) {
-    return <text>{JSON.stringify(useTween(values, enter))}</text>
+  type Enter = Parameters<typeof useTween>[1]
+  type Between = Parameters<typeof useTween>[2]
+  function Tween({
+    values,
+    enter,
+    between,
+  }: {
+    values: Record<string, number>
+    enter?: Enter
+    between?: Between
+  }) {
+    return <text>{JSON.stringify(useTween(values, enter, between))}</text>
   }
   const shown = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
@@ -2761,11 +2853,16 @@ describe("useTween", () => {
   async function mountTween(duration: number) {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
-    const render = async (values: Record<string, number>, enter?: number, ms = duration) =>
+    const render = async (
+      values: Record<string, number>,
+      enter?: Enter,
+      ms = duration,
+      between?: Between
+    ) =>
       act(async () =>
         root.render(
           <ChartContainer3D config={{}} animationDuration={ms}>
-            <Tween values={values} enter={enter} />
+            <Tween values={values} enter={enter} between={between} />
           </ChartContainer3D>
         )
       )
@@ -2775,6 +2872,86 @@ describe("useTween", () => {
     }
     return { host, render, unmount }
   }
+
+  test("a frame the glide before had queued does not move the next glide: a number on its way out does not jump to its end", async () => {
+    const frames: ((now: number) => void)[] = []
+    vi.stubGlobal("requestAnimationFrame", (frame: (now: number) => void) => frames.push(frame))
+    // The browser runs a frame it had queued before the chart came to cancel it.
+    vi.stubGlobal("cancelAnimationFrame", () => {})
+    const chart = await mountTween(600)
+    await chart.render({ a: 1 }, 0)
+    await chart.render({ a: 1, b: 1 }, 0)
+    await act(() => frames.shift()!(0))
+    await act(() => frames.shift()!(594))
+    expect(shown(chart.host).b).toBeGreaterThan(0.99)
+    const late = frames.shift()!
+
+    // New data, almost at the end of the glide: `a` goes, from 1.
+    await chart.render({ b: 1 }, 0)
+    expect(shown(chart.host).a).toBe(1)
+    await act(() => late(597))
+    expect(shown(chart.host).a).toBe(1)
+    // Its own glide takes it out: half the time, half the way.
+    await act(() => frames.splice(0).forEach((frame) => frame(1000)))
+    await act(() => frames.splice(0).forEach((frame) => frame(1300)))
+    expect(shown(chart.host).a).toBeCloseTo(0.5)
+    await chart.unmount()
+  })
+
+  test("enter as a function finds where a key comes from among the numbers on screen, and where a gone one goes among the new ones; nowhere, it starts where it ends and stands where it is", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // Half a glide of 960 ms: a frame every 16 ms, the first of which starts it.
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    const asked: [string, string][] = []
+    const beside = (other: string) => (key: string, among: Record<string, number>) => {
+      asked.push([key, Object.keys(among).join()])
+      return among[other]
+    }
+    const chart = await mountTween(960)
+    await chart.render({ a: 40 })
+    // b comes from where a is on screen.
+    await chart.render({ a: 40, b: 100 }, beside("a"))
+    expect(shown(chart.host)).toEqual({ a: 40, b: 40 })
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 40, b: 70 })
+    // a goes to where b will be, from where it is; b goes on from where it is.
+    await chart.render({ b: 200 }, beside("b"))
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 120, b: 135 })
+    // Asked once per key, when its glide starts: among the numbers on screen, then the new ones.
+    expect(asked).toEqual([
+      ["b", "a"],
+      ["a", "b"],
+    ])
+    // Nowhere to come from, c starts where it ends; nowhere to go, a and b stand.
+    await chart.render({ c: 7 }, () => undefined)
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 120, b: 135, c: 7 })
+    await chart.unmount()
+  })
+
+  test("between mixes the numbers on their way: a glide of its own for numbers that belong together", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    // Each number goes the square of the share of its way.
+    const squared: Between = (from, ends, share) =>
+      Object.fromEntries(
+        Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * share ** 2])
+      )
+    const chart = await mountTween(960)
+    await chart.render({ a: 0 }, 0, 960, squared)
+    await chart.render({ a: 100, b: 100 }, 0, 960, squared)
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 25, b: 25 })
+    // A key on its way out is mixed the same way; at rest the numbers are the target itself.
+    await chart.render({ a: 100 }, 0, 960, squared)
+    await half()
+    expect(shown(chart.host).b).toBeCloseTo(25 - 25 * 0.25)
+    await half()
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 100 })
+    await chart.unmount()
+  })
 
   test("glides from the numbers on screen into the new ones over the duration", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
@@ -2980,6 +3157,44 @@ describe("useTween", () => {
 })
 
 describe("geo helpers", () => {
+  test("facing is the view that looks at a place: the place lies in the middle of the globe, on the near side", () => {
+    for (const [lon, lat] of [
+      [0, 0],
+      [-35, -8],
+      [139.7, 35.7],
+      [170, -80],
+    ]) {
+      const at = facing(lon, lat)
+      const camera = camera3D()
+        .origin({ x: 320, y: 200 })
+        .scale(120)
+        .rotateY(at.yaw)
+        .rotateX(-at.tilt)
+      const [seen] = points3D()
+        .camera(camera)
+        .data([globe(lon, lat)])
+      expect(seen.projected.x).toBeCloseTo(320)
+      expect(seen.projected.y).toBeCloseTo(200)
+      expect(seen.rotated.z).toBeGreaterThan(0)
+    }
+  })
+
+  test("placeOf reads the longitude and latitude back from a point of the globe, at any radius, and the middle of the globe as a place, not NaN", () => {
+    for (const [lon, lat] of [
+      [0, 0],
+      [-35, -8],
+      [139.7, 35.7],
+      [-179, 80],
+      [45, -90],
+    ]) {
+      const [east, north] = placeOf(globe(lon, lat, 0.4))
+      expect(north).toBeCloseTo(lat)
+      // At a pole every longitude is the same place.
+      if (Math.abs(lat) < 90) expect(east).toBeCloseTo(lon)
+    }
+    expect(placeOf({ x: 0, y: 0, z: 0 }).map(Math.abs)).toEqual([0, 0])
+  })
+
   test("orthographic copies the camera without its perspective", () => {
     const camera = camera3D()
       .origin({ x: 10, y: 20 })
@@ -3104,6 +3319,200 @@ describe("marks", () => {
     expect(lazy).toHaveBeenCalledTimes(1)
     expect(chart.host.textContent).toContain("Lazy")
     await chart.unmount()
+  })
+})
+
+describe("lines", () => {
+  test("segment gives the corners of a line as wide on the screen, along one side and back along the other", () => {
+    expect(segment({ x: 0, y: 0 }, { x: 10, y: 0 }, 2)).toEqual([
+      { x: 0, y: 1 },
+      { x: 10, y: 1 },
+      { x: 10, y: -1 },
+      { x: 0, y: -1 },
+    ])
+    // Its ends are as wide whichever way it runs.
+    const [a, , , d] = segment({ x: 3, y: 4 }, { x: 6, y: 8 }, 5)
+    expect(Math.hypot(a.x - d.x, a.y - d.y)).toBeCloseTo(5)
+    // Without a length it has no side to turn to: it stays a point, no NaN.
+    expect(segment({ x: 7, y: 7 }, { x: 7, y: 7 }, 2)).toEqual(
+      Array.from({ length: 4 }, () => ({ x: 7, y: 7 }))
+    )
+  })
+
+  /** The runs of `named`, each point with where it is along x. */
+  function Runs({
+    named,
+    series,
+    presence,
+    target,
+  }: {
+    named: { d: { s: string }; name: string; placed: boolean }[]
+    series?: "s"
+    presence: Record<string, number>
+    target: Record<string, number>
+  }) {
+    const runs = useRuns(named, series, presence, target)
+    return <text>{JSON.stringify(runs)}</text>
+  }
+  const point = (name: string, s: string, placed = true) => ({ d: { s }, name, placed })
+  /** The position of every point of `xs`, by name, the same along every axis. */
+  const places = (xs: Record<string, number>) =>
+    Object.fromEntries(
+      Object.entries(xs).flatMap(([name, x]) => ["x", "y", "z"].map((a) => [`${a}${name}`, x]))
+    )
+  const runsOf = (host: HTMLElement) =>
+    (
+      JSON.parse(host.querySelector("text")!.textContent!) as {
+        line: string
+        points: { name: string; seen: number; moves: boolean; at: { x: number } }[]
+      }[]
+    ).map(
+      (run) =>
+        `${run.line}: ${run.points.map((p) => `${p.name}@${Math.round(p.at.x)}${p.moves ? "~" : ""}`).join(" ")}`
+    )
+  const chartOf = (
+    named: ReturnType<typeof point>[],
+    presence: Record<string, number>,
+    xs: Record<string, number>,
+    series?: "s"
+  ) => (
+    <ChartContainer3D config={{ first: {} }} animationDuration={960}>
+      <Runs named={named} series={series} presence={presence} target={places(xs)} />
+    </ChartContainer3D>
+  )
+
+  test("useRuns joins the points of a series in the order of the data and cuts a run at an entry without a place; a gone point keeps its run and its place in it", async () => {
+    const named = [
+      point("a", "x"),
+      point("n", "y"),
+      point("gap", "x", false),
+      point("b", "x"),
+      point("c", "x"),
+    ]
+    const xs = { a: 0, n: 5, b: 10, c: 20 }
+    const view = await mount(chartOf(named, { a: 1, n: 1, b: 1, c: 1 }, xs, "s"))
+    expect(runsOf(view.host)).toEqual(["x: a@0", "y: n@5", "x: b@10 c@20"])
+    // Without motion the points jump: b has left the data, and with the presence that
+    // still holds it, it stays the first of its run, after the gap - until that drops it.
+    await view.render(
+      chartOf(
+        named.filter((p) => p.name !== "b"),
+        { a: 1, n: 1, b: 0.3, c: 1 },
+        { a: 0, n: 5, c: 20 },
+        "s"
+      )
+    )
+    expect(runsOf(view.host)).toEqual(["x: a@0", "y: n@5", "x: c@20"])
+    // Without series all the points are one line, that of the first key of the config.
+    await view.render(chartOf([point("a", "x"), point("n", "y")], { a: 1, n: 1 }, { a: 0, n: 5 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 n@5"])
+    await view.unmount()
+  })
+
+  test("useRuns takes a neighbour from the run of a point only: a run that is all new stands, whatever the points of other runs are named", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // An entry without its id field is named so.
+    const other = point("undefined", "x")
+    const view = await mount(chartOf([other], { undefined: 1 }, { undefined: 0 }, "s"))
+    await view.render(
+      chartOf(
+        [other, point("p", "y"), point("q", "y")],
+        { undefined: 1, p: 0, q: 0 },
+        { undefined: 0, p: 10, q: 20 },
+        "s"
+      )
+    )
+    expect(runsOf(view.host)).toEqual(["x: undefined@0", "y: p@10 q@20"])
+    await view.unmount()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  test("useRuns glides the points: one that comes starts on its neighbour where that is now, one that goes heads for the nearest that stays, from where it is", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // Half a glide of 960 ms: a frame every 16 ms, the first of which starts it.
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    const [a, b, c] = ["a", "b", "c"].map((name) => point(name, "x"))
+    const view = await mount(chartOf([a], { a: 1 }, { a: 0 }))
+    // b comes: it starts on a, and is on its way.
+    await view.render(chartOf([a, b], { a: 1, b: 0 }, { a: 0, b: 100 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@0~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@50~"])
+    // c comes while b is half-way: it starts where b is now, not where b is heading.
+    await view.render(chartOf([a, b, c], { a: 1, b: 0.5, c: 0 }, { a: 0, b: 100, c: 200 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@50~ c@50~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@75~ c@125~"])
+    // a and b go while they are on their way: they head for c, the one that stays, where
+    // it will stand, from where they are - a, which stood, too.
+    await view.render(chartOf([c], { a: 0.5, b: 0.5, c: 0.5 }, { c: 200 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0~ b@75~ c@125~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@100~ b@138~ c@163~"])
+    // The presence drops a and b while their numbers are still on their way: they stay
+    // points of the run until they have arrived, and head on for c, which has moved.
+    await view.render(chartOf([c], { c: 1 }, { c: 300 }))
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@200~ b@219~ c@231~"])
+    // A run that is all gone stands where it is.
+    await view.render(chartOf([], { c: 0.2 }, {}))
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@200 b@219 c@231"])
+    // And is gone when its glide is done.
+    await half()
+    await half()
+    expect(runsOf(view.host)).toEqual([])
+    await view.unmount()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+})
+
+describe("useConfigKeys", () => {
+  /** The key of each of `names`, as the hook reads them from `entries`. */
+  function Keys({
+    entries,
+    field,
+    alive,
+    names,
+  }: {
+    entries: Map<string, { kind: string }>
+    field?: "kind"
+    alive: Record<string, number>
+    names: string[]
+  }) {
+    const key = useConfigKeys(entries, field, "first", alive)
+    return (
+      <svg>
+        <text>{names.map(key).join(" ")}</text>
+      </svg>
+    )
+  }
+  const keys = (host: HTMLElement) => host.querySelector("text")!.textContent
+
+  test("reads the key of a point from its entry, remembers it while the point is on its way out, and forgets it after", async () => {
+    const both = new Map([
+      ["p", { kind: "a" }],
+      ["q", { kind: "b" }],
+    ])
+    const names = ["p", "q"]
+    const view = await mount(
+      <Keys entries={both} field="kind" alive={{ p: 1, q: 1 }} names={names} />
+    )
+    expect(keys(view.host)).toBe("a b")
+    // q has left the data, and is still on its way out: it keeps its key.
+    const one = new Map([["p", { kind: "a" }]])
+    await view.render(<Keys entries={one} field="kind" alive={{ p: 1, q: 0.5 }} names={names} />)
+    expect(keys(view.host)).toBe("a b")
+    // Gone for good, it has the fallback, as every point has without a field.
+    await view.render(<Keys entries={one} field="kind" alive={{ p: 1 }} names={names} />)
+    expect(keys(view.host)).toBe("a first")
+    await view.render(<Keys entries={both} alive={{ p: 1, q: 1 }} names={names} />)
+    expect(keys(view.host)).toBe("first first")
+    await view.unmount()
   })
 })
 

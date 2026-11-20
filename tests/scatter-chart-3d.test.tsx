@@ -32,6 +32,25 @@ describe("ScatterChart3D", () => {
     expect(html).toContain('fill="var(--color-b)"')
   })
 
+  test("with id, entries of the same name are points of their own", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={[
+            { id: "p", x: 0, y: 0, z: 0 },
+            { id: "p", x: 1, y: 2, z: 3 },
+          ]}
+          id="id"
+          x="x"
+          y="y"
+          z="z"
+        />
+      </ChartContainer3D>
+    )
+    const at = [...html.matchAll(/<circle cx="([^"]+)" cy="([^"]+)"/g)].map((m) => m[1] + m[2])
+    expect(new Set(at).size).toBe(2)
+  })
+
   test("a single point, an extent of zero width, stays a number", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>

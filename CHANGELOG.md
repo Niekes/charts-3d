@@ -19,6 +19,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grows at its end and shrinks from its start.
 - The core helpers the scatter and the line chart share: `usePoints` and
   `pointTooltip`.
+- `RoutesChart3D`, routes over a globe: the entries of `data` are stops at
+  their `lon` and `lat`, joined in the order of the data along the great
+  circle, one route per value of `series`. What lies on the far side is
+  hidden by the globe. Pointing at a leg lights that leg alone and says its
+  two stops; a stop lights and says itself. `leg` names the field that gives
+  a leg a color of its own, the config key the stop it arrives at names. With `id`, a stop that joins the end of a
+  route grows its leg out of the stop before it, and a gone one draws its
+  leg back.
+- `view` on `ChartContainer3D`, a view the camera heads for: it starts
+  there and glides there over the `animationDuration` when the view changes,
+  moving only what the view names; the reader turns on from it (ADR-0010).
+  `facing(lon, lat)` is the view that looks at a place on the globe, and
+  `placeOf(point)` reads a place back from a point of it.
+- `useTween` takes a function for `enter`: where a key comes from among the
+  numbers on screen, and where a gone one goes among the new ones, such as
+  the number of its neighbour.
+- The core helpers the line and the routes chart share: `useRuns` and
+  `segment`; and `useConfigKeys`, which the scatter and the routes chart
+  share.
+
+### Fixed
+
+- `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are
+  points of their own, told apart by the order of the data, where they
+  shared one point before.
+- New data that comes while a chart glides no longer flashes: a frame the
+  glide before had queued could move the next one, so a mark on its way out
+  jumped to its end for a frame.
+- `LineChart3D`: a point that goes from the start of a line after a gap
+  folds into its line, where it stood alone before; and new data that comes
+  while points are on their way moves every one on from where it is, where
+  the line jumped to its places before - a new point starts on its
+  neighbour wherever that has come to, and a gone one heads for the nearest
+  that stays.
 
 ## [0.7.0] - 2026-11-15
 

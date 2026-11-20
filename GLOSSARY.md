@@ -101,6 +101,27 @@ The straight piece of a line between two points next to each other. On
 hover, each half of it speaks for the point at its end.
 _Avoid_: edge, link, section
 
+**Route**:
+The stops of one series joined in the order of the data, over the globe -
+the mark of the routes chart. A stop that joins the end of a route grows its
+leg out of the stop before it, and a gone one draws its leg back; an entry
+without a place breaks the route.
+_Avoid_: flow, arc, path, trip, flight
+
+**Stop**:
+A place a route visits, a circle on the globe at its longitude and latitude.
+One on the far side of the globe is hidden by it. Pointing at a stop lights
+that stop alone.
+_Avoid_: waypoint, node, marker, dot
+
+**Leg**:
+The part of a route between two stops next to each other, along the great
+circle, the shortest way over the surface. It ends at the horizon. Pointing
+at a leg lights that leg alone, and it names its two stops. A leg has the
+color of its route, or one of its own, which the stop it arrives at names
+and shares.
+_Avoid_: arc, link, edge, segment
+
 **Ocean**:
 The disc of the globe the land lies on, in the color of a wall unless the
 theme gives it one.
@@ -222,6 +243,11 @@ and a trackpad pinch arrives as Ctrl and the wheel on every platform - or,
 with `+` and `-`, to the middle of the chart. On a touch screen two fingers
 pinch, and the point between them stays. The wheel alone scrolls the page.
 _Avoid_: dolly, scale, zoom to the centre (the wheel)
+
+**Heading**:
+A view the page gives the camera to head for: the camera glides there when
+the heading changes, and the reader turns on from it.
+_Avoid_: controlled view, camera lock, fly-to
 
 **Gesture**:
 What the pointer does to move the camera - a drag with a modifier, the wheel

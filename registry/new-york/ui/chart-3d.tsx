@@ -364,6 +364,14 @@ export type ChartContainer3DProps = {
    */
   defaultView?: View3D
   /**
+   * The view the camera heads for: it starts there, and when the view
+   * changes it glides there over the `animationDuration`, as the data does.
+   * A view moves only what it names, so the zoom and the pan of the reader
+   * stay, and the reader turns the camera on from it.
+   * @defaultValue none: the camera starts at the default view
+   */
+  view?: View3D
+  /**
    * The width of the view box the chart is drawn in.
    * @defaultValue 640
    */
@@ -414,16 +422,16 @@ function ChartContainer3D({
   id,
   config,
   defaultView = { yaw: Math.PI / 6, tilt: Math.PI / 6 },
+  view: heading,
   width = 640,
   height = 400,
-  animationDuration,
+  animationDuration: ms,
   legend = false,
   renderer: requested = "svg",
   shortcuts = true,
   keymap = {},
   gizmo = "bottom-left",
   tooltip = "top-right",
-  className,
   children,
   "aria-label": ariaLabel,
   ...props
@@ -432,19 +440,19 @@ function ChartContainer3D({
   const drawing = useScene(requested, width, height, tooltip)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
-  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover)
+  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { heading, ms })
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration }),
-    [config, camera, renderer, place, repaint, focus, animationDuration]
+    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration: ms }),
+    [config, camera, renderer, place, repaint, focus, ms]
   )
 
   return (
     <div
       data-slot="chart-3d"
       data-chart={chartId}
-      className={cn("relative w-full text-xs", className)}
       {...props}
+      className={cn("relative w-full text-xs", props.className)}
     >
       <ChartStyle id={chartId} config={config} />
       <div className="relative rounded-lg has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50">
@@ -651,20 +659,54 @@ function animates() {
   return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: no-preference)").matches)
 }
 
-/** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
-type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
+// The time in ms a chart takes to glide into new data, unless its container says otherwise.
+const DURATION = 600
+
+/** The share of the way a glide of the data has come at the share `t` of its time: it eases in and out. */
+const smooth = (t: number) => t * t * (3 - 2 * t)
+
+/** The same for a step of the camera, which answers a key at once: it eases out. */
+const prompt = (t: number) => 1 - (1 - t) ** 3
+
+/**
+ * One glide of numbers: from `from` into `to`, come the share `t` of the
+ * way, the keys the new numbers dropped gliding out to `out`.
+ */
+type Tween = {
+  key: string
+  from: Record<string, number>
+  to: Record<string, number>
+  out: Record<string, number>
+  t: number
+}
 
 /**
  * Eases a chart into new data: the numbers of `values` glide from the ones
  * on screen to these over the animationDuration of the container. A key
  * that is new starts at `enter`, or where it ends; a key that is gone glides
  * back to `enter`, the mirror of its entering - without one it stands where
- * it is - and leaves when the glide is done. Without time, or with reduced
- * motion, the numbers jump. At rest it hands back the record of its target,
- * no copy, so no frame rebuilds it: read it, never write to it.
+ * it is - and leaves when the glide is done. `enter` is one number for every
+ * key, or a function that finds it `among` numbers - those on screen for a
+ * key that comes, the new ones for a key that goes - such as the number of
+ * its neighbour, and `undefined` for nowhere. `between` gives the numbers
+ * the `share` of the way from their start to their ends, each on its own
+ * unless it says otherwise - numbers that are a point together may take a
+ * way of their own. A glide settles where its keys start and end when it
+ * starts, so new data that comes on the way moves every number on from
+ * where it is. Without time, or with reduced motion, the numbers jump. At
+ * rest it hands back the record of its target, no copy, so no frame rebuilds
+ * it: read it, never write to it.
  */
-function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
-  const { animationDuration: duration = 600 } = useChart3D()
+function useTween(
+  values: Record<string, number>,
+  enter?: number | ((key: string, among: Record<string, number>) => number | undefined),
+  between: (
+    from: Record<string, number>,
+    ends: Record<string, number>,
+    share: number
+  ) => Record<string, number> = straight
+): Record<string, number> {
+  const { animationDuration: duration = DURATION } = useChart3D()
   // The content, not the record, keys the glide: a chart may build `values`
   // anew at any render. The same record as before is the same content, so a
   // chart that keeps its records while the camera turns compares nothing.
@@ -673,12 +715,12 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
     last.current = { values, key: JSON.stringify(values) }
   }
   const key = last.current.key
-  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
-  const shown = tweenNumbers(tween, enter)
+  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, out: {}, t: 1 })
+  const shown = tweenNumbers(tween, between)
 
   // Numbers from the render before, the React pattern of state set while rendering.
   if (key !== tween.key) {
-    setTween({ key, from: shown, to: values, t: duration > 0 && animates() ? 0 : 1 })
+    setTween({ key, ...glideOf(shown, values, enter), t: duration > 0 && animates() ? 0 : 1 })
   }
 
   React.useEffect(() => {
@@ -689,7 +731,9 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
       start ??= now
       // A duration that turned 0 during the glide: 0 / 0 is NaN, so it jumps to the end.
       const t = duration > 0 ? Math.min(1, (now - start) / duration) : 1
-      setTween((tw) => ({ ...tw, t }))
+      // A frame may run after new data has started the next glide and before
+      // this one is cancelled: it moves its own glide only.
+      setTween((tw) => (tw.key === tween.key ? { ...tw, t } : tw))
       if (t < 1) frame = requestAnimationFrame(step)
     }
     frame = requestAnimationFrame(step)
@@ -700,24 +744,43 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
 }
 
 /**
- * The numbers of `tween` on screen: `from` eased into `to`, a new key from
- * `enter` or where it ends, a gone one gliding back to `enter` until the
- * glide is done. At rest, as while the camera turns, they are the target
+ * The glide from the numbers `shown` into `to`: a new key starts where it
+ * enters from, or where it ends, and a gone one heads back there - or stands
+ * where it is.
+ */
+function glideOf(
+  shown: Record<string, number>,
+  to: Record<string, number>,
+  enter: Parameters<typeof useTween>[1]
+) {
+  const origin = (key: string, among: Record<string, number>) =>
+    typeof enter === "function" ? enter(key, among) : enter
+  const fresh = Object.keys(to).filter((k) => !(k in shown))
+  const gone = Object.keys(shown).filter((k) => !(k in to))
+  return {
+    from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, origin(k, shown) ?? to[k]])) },
+    to,
+    out: Object.fromEntries(gone.map((k) => [k, origin(k, to) ?? shown[k]])),
+  }
+}
+
+/**
+ * The numbers of `tween` on screen: `from` eased into `to`, and into `out`
+ * for the keys on their way out, until the glide is done, mixed as `between`
+ * mixes them. At rest, as while the camera turns, they are the target
  * itself: nothing to build.
  */
-function tweenNumbers({ from, to, t }: Tween, enter?: number) {
+function tweenNumbers({ from, to, out, t }: Tween, between: typeof straight) {
   if (t >= 1) return to
-  const s = t * t * (3 - 2 * t)
-  const gone = Object.entries(from).filter(([k]) => !(k in to))
-  return Object.fromEntries([
-    ...Object.entries(to).map(([k, end]) => {
-      const start = from[k] ?? enter ?? end
-      return [k, start + (end - start) * s]
-    }),
-    // A gone key glides back to `enter`, the mirror of its entering - without
-    // one it stands where it is - and leaves when the glide is done.
-    ...gone.map(([k, start]) => [k, start + ((enter ?? start) - start) * s]),
-  ])
+  const s = smooth(t)
+  return { ...between(from, to, s), ...between(from, out, s) }
+}
+
+/** Every number the `share` of the way from its start to its end, each on its own. */
+function straight(from: Record<string, number>, ends: Record<string, number>, share: number) {
+  return Object.fromEntries(
+    Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * share])
+  )
 }
 
 /**
@@ -784,14 +847,16 @@ const GLIDE = 200
 
 /**
  * The view of the camera, `jump`, which moves it at once, and `glide`, which
- * moves it there in `GLIDE` milliseconds, easing out. A glide under way
+ * moves it there in `ms` milliseconds, `GLIDE` unless told, easing out. A glide under way
  * heads for the next view from where it is, so a held key turns the camera
  * smoothly; a jump stops it. Where the reader asks for reduced motion, or
- * the browser cannot say, a glide jumps.
+ * the browser cannot say, a glide jumps. The camera starts at `heading`,
+ * over the default view, and glides to a new one in its `ms`.
  */
-function useGlide(defaultView: View3D) {
-  const [view, setView] = React.useState(defaultView)
-  const now = React.useRef(defaultView)
+function useGlide(defaultView: View3D, { heading, ms = DURATION }: Heading) {
+  const start = { ...defaultView, ...heading }
+  const [view, setView] = React.useState(start)
+  const now = React.useRef(start)
   const run = React.useRef<{ to: View3D; frame: number } | null>(null)
   const show = React.useCallback((v: View3D) => setView((now.current = v)), [])
   const stop = React.useCallback(() => {
@@ -807,7 +872,7 @@ function useGlide(defaultView: View3D) {
   )
   React.useEffect(() => stop, [stop])
 
-  const glide = (to: (from: View3D) => View3D) => {
+  const glide = (to: (from: View3D) => View3D, ms = GLIDE, ease = prompt) => {
     if (!animates()) return jump(to)
     const end = to(run.current?.to ?? now.current)
     // The yaw turns the short way round, to an angle that looks the same.
@@ -815,15 +880,35 @@ function useGlide(defaultView: View3D) {
     const start = performance.now()
     stop()
     const frame = (time: number) => {
-      const t = clamp(0, 1, (time - start) / GLIDE)
-      show(t < 1 ? between(from, end, 1 - (1 - t) ** 3) : end)
+      const t = clamp(0, 1, (time - start) / ms)
+      show(t < 1 ? between(from, end, ease(t)) : end)
       if (t < 1) run.current = { to: end, frame: requestAnimationFrame(frame) }
       else run.current = null
     }
     run.current = { to: end, frame: requestAnimationFrame(frame) }
   }
+  // In step with the data: over the same time, eased the same way.
+  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms, smooth))
 
   return { view, jump, glide }
+}
+
+/** The view the page heads the camera for, and the time in ms the camera takes there. */
+type Heading = { heading?: View3D; ms?: number }
+
+/**
+ * Heads the camera for `view` when it changes: `head` takes it there. The
+ * same view again, as a chart that renders anew hands in, moves nothing, so
+ * the reader keeps the view they turned to.
+ */
+function useHeading(view: View3D | undefined, head: (to: View3D) => void) {
+  const key = JSON.stringify(view)
+  const last = React.useRef(key)
+  React.useEffect(() => {
+    if (key === last.current) return
+    last.current = key
+    if (view) head(view)
+  })
 }
 
 /** The angle `a` in the turn from -π to π. */
@@ -853,16 +938,17 @@ function between(from: View3D, to: View3D, k: number): View3D {
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one - but
  * under two fingers, where the tooltip would jump from one to the other, it
- * goes, as in a drag.
+ * goes, as in a drag. `heading` is the view the page heads the camera for.
  */
 function useOrbit(
   defaultView: View3D,
   width: number,
   keys: Keymap,
   onDragStart: () => void,
-  onHover: (e: React.PointerEvent<SVGSVGElement>) => void
+  onHover: (e: React.PointerEvent<SVGSVGElement>) => void,
+  heading: Heading
 ) {
-  const { view, jump, glide } = useGlide(defaultView)
+  const { view, jump, glide } = useGlide(defaultView, heading)
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -888,8 +974,7 @@ function useOrbit(
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return touching.current ? onDragStart() : onHover(e)
-      // A drag moves only while its modifier is held: the platform modifier
-      // turning, Alt panning.
+      // A drag moves only while its modifier is held: the platform one turning, Alt panning.
       if (d.rotate ? !platformMod(e) : !e.altKey) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
@@ -2469,6 +2554,28 @@ function globe(lon: number, lat: number, radius = 1): Point3D {
   return { x: flat * Math.sin(theta), y: -radius * Math.sin(phi), z: flat * Math.cos(theta) }
 }
 
+/**
+ * The longitude and latitude, in degrees, of the place a point lies over, as
+ * seen from the middle of the globe: `globe` read back, at any radius. A
+ * geo chart glides a place as a point through the globe - the chord between
+ * two places lies under their great circle, so the place takes the shortest
+ * way, over the date line too - and reads the place on the way back with it.
+ */
+function placeOf({ x, y, z }: Point3D): [number, number] {
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  return [degrees(Math.atan2(x, z)), degrees(Math.atan2(-y, Math.hypot(x, z)))]
+}
+
+/**
+ * The view that looks at the place at `lon` and `lat`, in degrees: the
+ * place lies in the middle of the globe. A page hands it to the `view` of
+ * the container, so the camera turns to a place, since a chart may not do
+ * trigonometry of its own, and neither should a page have to.
+ */
+function facing(lon: number, lat: number): View3D {
+  return { yaw: (-lon * Math.PI) / 180, tilt: (lat * Math.PI) / 180 }
+}
+
 /** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
 const GLOBE_RADIUS = 1.15
 
@@ -2642,11 +2749,11 @@ function nonNegative(value: unknown) {
  * the data, so a point keeps its name when an entry before it gains or loses
  * its place; one whose x, y or z is not a finite number is not `placed` and
  * is not among the `names` and the `entries` behind them. The `axes` hold
- * every placed entry, a nice one per field. Each point glides by name: `read`
- * gives its position along an axis - a gone point stands in place - and
- * `presence` runs from 0 to 1 as it comes and back as it goes, the gone ones
- * still among them. Built once per change of the data, not at every frame
- * the camera turns.
+ * every placed entry, a nice one per field. `target` holds the position of
+ * every point, under the `key` of its axis and its name, for the chart to glide into,
+ * and `presence` runs by name from 0 to 1 as a point comes and back as it
+ * goes, the gone ones still among them. Built once per change of the data,
+ * not at every frame the camera turns.
  */
 function usePoints<T extends Record<string, unknown>>(
   data: T[],
@@ -2657,13 +2764,13 @@ function usePoints<T extends Record<string, unknown>>(
 ) {
   const points = React.useMemo(() => {
     const fields = { x, y, z }
+    const names = id ? uniqueIds(data.map((d) => String(d[id]))) : data.map((_, i) => String(i))
     const named = data.map((d, i) => ({
       d,
-      name: id ? String(d[id]) : String(i),
+      name: names[i],
       placed: [x, y, z].every((f) => finite(d[f])),
     }))
     const placed = named.filter((p) => p.placed)
-    const names = placed.map((p) => p.name)
     const range = (a: keyof AxesSpec) => {
       const [lo = 0, hi = 0] = extent(placed, (p) => Number(p.d[fields[a]]))
       return axis(lo, hi)
@@ -2671,23 +2778,226 @@ function usePoints<T extends Record<string, unknown>>(
     return {
       fields,
       named,
-      names,
+      names: placed.map((p) => p.name),
       entries: new Map(placed.map((p) => [p.name, p.d])),
       target: Object.fromEntries(
-        placed.flatMap((p) =>
-          (["x", "y", "z"] as const).map((a) => [`${a}${p.name}`, Number(p.d[fields[a]])])
-        )
+        placed.flatMap((p) => AXES.map((a) => [positionKey(a, p.name), Number(p.d[fields[a]])]))
       ),
-      present: Object.fromEntries(names.map((name) => [name, 1])),
+      present: Object.fromEntries(placed.map((p) => [p.name, 1])),
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
   }, [data, x, y, z, id])
-  const values = useTween(points.target)
-  return {
-    ...points,
-    presence: useTween(points.present, 0),
-    read: (name: string, a: keyof AxesSpec) => values[`${a}${name}`],
+  return { ...points, presence: useTween(points.present, 0), key: positionKey }
+}
+
+/** What a chart of lines knows of an entry: the config key of its line, and whether it is a gap, an entry without a place, where the line breaks. */
+type Joint = { line: string; gap: boolean }
+
+/**
+ * The runs of the lines of a chart that joins its entries in the order of
+ * the data, as the line and the routes chart do: per line - the entries of
+ * one value of `series`, all of them without it - its points in order, cut
+ * where an entry has no place, so a line stops before it and starts again
+ * after it. `named` is every entry with its name and whether it is placed,
+ * `presence` how far each point has come, from 0 to 1, the gone ones still
+ * among them: a gone point keeps its line and its place after the entry it
+ * followed - a gap too, so it stays in its run - since its own entry has
+ * already left the data, and is forgotten when it has arrived: when neither
+ * the presence nor the glide of the positions holds it any more.
+ * `target` is the position of every point, by its axis and its name, as
+ * `usePoints` gives it, and the points glide into it: a point that comes
+ * starts on the nearest point of its run that is on screen - the one before
+ * it, or after it at the start - where that one is now, and a point that
+ * goes heads for the nearest one that stays, from where it is. So new data
+ * that comes while points are on their way moves every one on from where it
+ * is. A point goes the straight way, or the way `toward` gives: the place
+ * the `share` of the way from one point to another. A point `moves` while it is off its place, or goes to one that stays;
+ * in a run that is all new, or all gone, the points stand.
+ */
+function useRuns<T extends Record<string, unknown>>(
+  named: { d: T; name: string; placed: boolean }[],
+  series: (keyof T & string) | undefined,
+  presence: Record<string, number>,
+  target: Record<string, number>,
+  toward?: (from: Point3D, to: Point3D, share: number) => Point3D
+) {
+  const { config } = useChart3D()
+  const fallback = Object.keys(config)[0]
+  const known = React.useRef(new Map<string, Joint>())
+  // The positions of the render before: a point is there as long as it has one.
+  const shown = React.useRef<Record<string, number>>({})
+  const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
+  const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
+  const runs = runsOf((known.current = withGone(live, known.current, alive)))
+  const places = useTween(target, neighbour(runs), toward && pointwise(toward))
+  shown.current = places
+  // A point the glide does not know yet is on its way in with the next render,
+  // and one it knows no more is gone with it: a run of such has nothing to show.
+  const drawn = runs
+    .map(({ line, names }) => ({
+      line,
+      names: names.filter((name) => positionKey("x", name) in places),
+    }))
+    .filter(({ names }) => names.length)
+  return drawn.map(({ line, names }) => {
+    const stays = names.some((name) => live.has(name))
+    return {
+      line,
+      points: names.map((name) => {
+        const at = pointOf(places, name)
+        const own = pointOf(target, name)
+        return {
+          name,
+          // A point still on its way when its presence has run out is seen no more.
+          seen: presence[name] ?? 0,
+          moves: live.has(name) ? AXES.some((a) => at[a] !== own[a]) : stays,
+          at,
+        }
+      }),
+    }
+  })
+}
+
+// The axes a position has a number along.
+const AXES = ["x", "y", "z"] as const
+
+/** The key of the position of the point `name` along `axis`, among the numbers of a chart. */
+const positionKey = (axis: keyof AxesSpec, name: string) => `${axis}${name}`
+
+/** The position of the point `name` among `numbers`. */
+function pointOf(numbers: Record<string, number>, name: string): Point3D {
+  const along = (axis: keyof AxesSpec) => numbers[positionKey(axis, name)]
+  return { x: along("x"), y: along("y"), z: along("z") }
+}
+
+/**
+ * Mixes the positions of a glide point by point, for `useTween`: every point
+ * the share of the way `toward` its end that a chart says - over a globe,
+ * say, where the straight way would cut through it. A point that stands
+ * keeps its numbers to the last digit.
+ */
+function pointwise(toward: (from: Point3D, to: Point3D, share: number) => Point3D) {
+  return (from: Record<string, number>, ends: Record<string, number>, share: number) =>
+    Object.fromEntries(
+      Object.keys(ends)
+        .filter((key) => key.startsWith("x"))
+        .flatMap((key) => {
+          const [start, end] = [pointOf(from, key.slice(1)), pointOf(ends, key.slice(1))]
+          const stands = AXES.every((a) => start[a] === end[a])
+          const at = stands ? end : toward(start, end, share)
+          return AXES.map((a) => [positionKey(a, key.slice(1)), at[a]])
+        })
+    )
+}
+
+/**
+ * Where a point of `runs` enters from, for `useTween`: the number of the
+ * nearest point of its run that is `among` the numbers - the one before it,
+ * or after it at the start - along the axis of the key, and nowhere where
+ * its run has none.
+ */
+function neighbour(runs: { names: string[] }[]) {
+  let where: Map<string, { names: string[]; i: number }> | undefined
+  return (key: string, among: Record<string, number>) => {
+    where ??= new Map(runs.flatMap(({ names }) => names.map((name, i) => [name, { names, i }])))
+    const [axis, spot] = [key[0] as keyof AxesSpec, where.get(key.slice(1))]
+    const has = (name: string) => positionKey(axis, name) in among
+    // A point the runs have dropped already has no run to find a neighbour in.
+    const near =
+      spot?.names.slice(0, spot.i).reverse().find(has) ?? spot?.names.slice(spot.i + 1).find(has)
+    return near === undefined ? undefined : among[positionKey(axis, near)]
   }
+}
+
+/** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */
+function liveJoints<T extends Record<string, unknown>>(
+  named: { d: T; name: string; placed: boolean }[],
+  series: (keyof T & string) | undefined,
+  fallback: string
+) {
+  return new Map(
+    named.map(({ d, name, placed }): [string, Joint] => [
+      name,
+      { line: series ? String(d[series]) : fallback, gap: !placed },
+    ])
+  )
+}
+
+/**
+ * The `live` joints with the gone ones of `known` that are still `alive`
+ * among them, each after the living one it followed - before the first, if
+ * it followed none.
+ */
+function withGone(
+  live: Map<string, Joint>,
+  known: Map<string, Joint>,
+  alive: (name: string) => boolean
+) {
+  const gone = new Map<string | undefined, [string, Joint][]>([
+    [undefined, []],
+    ...[...live.keys()].map((name): [string, [string, Joint][]] => [name, []]),
+  ])
+  let last: string | undefined
+  for (const [name, joint] of known) {
+    if (live.has(name)) last = name
+    else if (alive(name)) gone.get(last)!.push([name, joint])
+  }
+  return new Map([
+    ...gone.get(undefined)!,
+    ...[...live].flatMap((joint) => [joint, ...gone.get(joint[0])!]),
+  ])
+}
+
+/** The names of the points of every run, in order: a run per line, and a new one after a gap in it. */
+function runsOf(joints: Map<string, Joint>) {
+  const open = new Map<string, string[]>()
+  const runs: { line: string; names: string[] }[] = []
+  for (const [name, { line, gap }] of joints) {
+    if (gap) open.delete(line)
+    else {
+      if (!open.has(line)) runs.push({ line, names: open.set(line, []).get(line)! })
+      open.get(line)!.push(name)
+    }
+  }
+  return runs
+}
+
+/**
+ * The corners of the segment from `a` to `b`, `width` wide, in the units of
+ * the view box: a line of the same width on the screen from every side, as a
+ * polygon every renderer draws. A segment without a length, as of a point
+ * that has yet to unfold, has no side to turn to and stays a point.
+ */
+function segment(a: Point2D, b: Point2D, width: number): Point2D[] {
+  const half = width / 2 / (Math.hypot(b.x - a.x, b.y - a.y) || 1)
+  const n = { x: (a.y - b.y) * half, y: (b.x - a.x) * half }
+  return [
+    { x: a.x + n.x, y: a.y + n.y },
+    { x: b.x + n.x, y: b.y + n.y },
+    { x: b.x - n.x, y: b.y - n.y },
+    { x: a.x - n.x, y: a.y - n.y },
+  ]
+}
+
+/**
+ * The config key of every point, by name, read from `field` of its entry,
+ * `fallback` without one - remembered while a gone point is on its way out,
+ * since its entry has already left the data, so it keeps its color to the
+ * end - and forgotten with the point, so the memory stays the size of the
+ * chart. `alive` holds the points still on their way.
+ */
+function useConfigKeys<T extends Record<string, unknown>>(
+  entries: Map<string, T>,
+  field: (keyof T & string) | undefined,
+  fallback: string,
+  alive: Record<string, number>
+) {
+  const known = React.useRef(new Map<string, string>())
+  entries.forEach((d, name) => known.current.set(name, field ? String(d[field]) : fallback))
+  for (const name of known.current.keys()) {
+    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
+  }
+  return (name: string) => known.current.get(name) ?? fallback
 }
 
 /**
@@ -2928,6 +3238,8 @@ export {
   linear,
   worldBox,
   globe,
+  placeOf,
+  facing,
   GLOBE_RADIUS,
   orthographic,
   earth,
@@ -2939,6 +3251,9 @@ export {
   nonNegative,
   useSeries,
   usePoints,
+  useConfigKeys,
+  useRuns,
+  segment,
   pointTooltip,
   cubeMarks,
   barCorners,

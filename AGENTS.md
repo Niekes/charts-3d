@@ -251,9 +251,18 @@ How the charts draw, so that a new one draws the same way:
   the glide is done. A mark that grows from its enter value fades in as it
   grows and out as it shrinks - its opacity a tween of its own, 1 with the
   enter value 0, handed to `faded` after `shade` - so a flat bar or a dot
-  never pops in or out at the end of a glide. A point of a line - the area
-  chart - unfolds from its neighbour instead, as far as its presence, and folds
-  back into it, so the line opens and closes without a notch. Build the axes from the data the chart glides into
+  never pops in or out at the end of a glide. A point of a line - the area,
+  the line and the routes chart - unfolds from its neighbour instead and folds
+  back into it, so the line opens and closes without a notch. In the area
+  chart it does so as far as its presence. In the line and the routes chart
+  its place glides, through the core's `useRuns`: `enter` may be a function
+  for `useTween`, so a point that comes starts on its neighbour where that is
+  on screen and one that goes heads for the nearest that stays - and since a
+  glide starts from the numbers on screen, data that comes faster than it
+  arrives moves every point on from where it is. Over a globe the way is the
+  great circle, which `useRuns` takes as `toward`. The leg of a route that
+  grows out of a stop that stands is whole from the start, a line that draws
+  itself, and fades only where both its stops do. Build the axes from the data the chart glides into
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a
@@ -353,6 +362,12 @@ gesture is a new action, so the panel never misses one.
   there; a drag and the wheel follow the pointer at once and stop a glide.
   Where `animates()` is false, as in jsdom, a glide jumps, so the tests read
   the view right after a key.
+- **The page may head the camera for a view**
+  ([ADR-0010](docs/adr/0010-the-page-heads-the-camera.md)). `view` on the
+  container is a heading, not a lock: the camera starts there, glides there
+  over the `animationDuration` when it changes, moves only what the view
+  names, and the reader turns on from it. `facing(lon, lat)` is the view that
+  looks at a place on the globe. A chart never moves the camera itself.
 - **`orbiting` is true while the camera turns**, not while it pans or zooms.
   Nothing in the core reads it; `data-orbiting` on the svg is there to style.
 

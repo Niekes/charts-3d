@@ -1,0 +1,154 @@
+---
+title: Routes Chart 3D
+description: Routes over a globe, from stop to stop along the great circle.
+---
+
+import RoutesChart3DDemo from "@/docs/examples/routes-chart-3d-demo"
+import RoutesChart3DUpdateDemo from "@/docs/examples/routes-chart-3d-update-demo"
+import RoutesChart3DEnterDemo from "@/docs/examples/routes-chart-3d-enter-demo"
+import RoutesChart3DRenderersDemo from "@/docs/examples/routes-chart-3d-renderers-demo"
+import RoutesChart3DManyDemo from "@/docs/examples/routes-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <RoutesChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/routes-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The routes chart joins the entries of `data` over the globe: every entry is
+a stop at its `lon` and `lat`, and a leg runs from each stop to the next
+along the great circle, the shortest way over the surface. `series` names
+the field that tells the routes apart; without it all the entries are one
+route. What lies on the far side is hidden by the globe, so a leg ends at
+the horizon. `id` names a stop, in the tooltip and through updates; a route
+may come back to a stop, since a name that repeats is a stop of its own. Pointing
+at a leg lights that leg alone and says its two stops; a stop lights and
+says itself.
+An entry whose `lon` or `lat` is missing or not a number is no stop, and its
+route ends before it and starts again after it.
+
+A route has the color of its series. `leg` names a field that gives a leg a
+color of its own: its value, at the stop a leg arrives at, is the config key
+of that leg - how it was travelled, here by air or by sea. The leg and that
+stop take the color, the first stop of a route takes that of the leg that
+leaves it, and the tooltip names it in its title. A stop that names no leg,
+and one no leg touches, keeps the color of its route. With a leg named at
+every stop, as here, the config needs the keys of the legs only: `series`
+still tells the routes apart.
+
+The demos travel between the capitals of
+[Natural Earth](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/),
+public domain. The `land` under the routes is the one every globe takes, cut
+at the horizon by d3-geo; see the [globe](/docs/components/globe-chart-3d)
+for where it comes from and how its regions must be wound. For places
+without a route between them, see the [places chart](/docs/components/places-chart-3d).
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/routes-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `RoutesChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array d3-geo
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/routes-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/routes-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: every stop keeps its number and moves to another capital, the
+legs following along, over the `animationDuration` of the container.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <RoutesChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/routes-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+A stop that joins the end of its route grows its leg out of the stop before
+it, along the great circle, as it fades in; a stop that goes draws its leg
+back into its neighbour, the mirror of its entering (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
+Here a tour rests on one stop. A step adds the next stop, so its leg grows
+out of the stop the tour is on, and then drops the stop left behind, so the
+leg draws back towards the new one. The globe turns to the new stop through
+the `view` of the container, set to `facing(lon, lat)`: a heading, so you can
+turn the globe away at any time (see [chart-3d](/docs/components/chart-3d#view)).
+Steps may come faster than they end: every stop goes on from where it is,
+a new one starting on the stop before it wherever that has come to, and
+each step drops only what lies behind the stop it added.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <RoutesChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/routes-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <RoutesChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/routes-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+Every place of half a million people and more on one route, each time on to
+the nearest one not yet visited: a thousand stops and the pieces of a
+thousand legs, nearly three thousand marks - and the chart stays interactive.
+The scene is one list of marks, so the demo starts on `"canvas"`, the
+renderer for many marks, and the select shows the same scene on SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <RoutesChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/routes-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/routes-chart-3d.tsx"
+  name="RoutesChart3DProps"
+/>

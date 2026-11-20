@@ -80,7 +80,9 @@ entering - and one that moves glides (see Enter in the
 line grows at its end as the data gains a point, and shrinks from its start
 as it loses one. Without an `id`, points are named by their position in
 `data`, which animates appending and removing at the end. A line that is all
-new stands in place and fades in.
+new stands in place and fades in. Data may come faster than the line glides,
+as from a feed: every point goes on from where it is, a new one starting on
+the point before it wherever that has come to.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
