@@ -1,0 +1,134 @@
+---
+title: Line Chart 3D
+description: Lines through a box, a point of the data after another.
+---
+
+import LineChart3DUpdateDemo from "@/docs/examples/line-chart-3d-update-demo"
+import LineChart3DEnterDemo from "@/docs/examples/line-chart-3d-enter-demo"
+import LineChart3DRenderersDemo from "@/docs/examples/line-chart-3d-renderers-demo"
+import LineChart3DManyDemo from "@/docs/examples/line-chart-3d-many-demo"
+import LineChart3DDemo from "@/docs/examples/line-chart-3d-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <LineChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/line-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The entries of `data` are points in space, joined in the order of the data:
+a trajectory, a spiral, a walk. `series` names the field that tells the lines
+apart. Pointing at a line lights the whole line, and the tooltip reads the
+point nearest the pointer. For entries along x with a value per series - the
+line chart of a spreadsheet - see the [area chart](/docs/components/area-chart-3d).
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/line-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `LineChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies:
+
+    ```package-install
+    npm install d3-3d d3-array
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/line-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/line-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: the points glide to their new positions over the `animationDuration`
+of the container, the line between them follows, and the axes scale along.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <LineChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/line-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+With an `id` field, a point follows its name through updates: a new one
+unfolds from the point before it on its line - from the one after it, at the
+start - as it fades in, a gone one folds back into it - the mirror of its
+entering - and one that moves glides (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)). So a
+line grows at its end as the data gains a point, and shrinks from its start
+as it loses one. Without an `id`, points are named by their position in
+`data`, which animates appending and removing at the end. A line that is all
+new stands in place and fades in.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <LineChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/line-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <LineChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/line-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+The Lorenz attractor, three thousand points of it - and the chart stays
+interactive. The scene is one list of marks, so the demo starts on
+`"canvas"`, the renderer for many marks, and the select shows the same scene
+on SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <LineChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/line-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Gaps
+
+An entry whose `x`, `y` or `z` is missing or not a number has no point, and
+its line stops before it and starts again after it: no segment bridges a
+value the data does not have. A point alone between two gaps is a circle as wide as the line.
+
+## API Reference
+
+<auto-type-table
+  path="../../../registry/new-york/ui/line-chart-3d.tsx"
+  name="LineChart3DProps"
+/>

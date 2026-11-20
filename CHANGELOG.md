@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LineChart3D`, lines through the chart box: the entries of `data` at their
+  fields `x`, `y` and `z`, joined in the order of the data - a trajectory, a
+  spiral, a walk - one line per value of `series`. A line is as wide on the
+  screen from every side, pointing at it lights the whole line and the
+  tooltip reads the point nearest the pointer. An entry without a finite x,
+  y or z breaks its line instead of being bridged. With `id`, a new point
+  unfolds from the point before it and a gone one folds back, so a line
+  grows at its end and shrinks from its start.
+- The core helpers the scatter and the line chart share: `usePoints` and
+  `pointTooltip`.
+
 ## [0.7.0] - 2026-11-15
 
 ### Added

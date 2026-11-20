@@ -88,6 +88,19 @@ of the places chart. It grows from nothing as it fades in, and a dot on the
 far side of the globe is hidden by it.
 _Avoid_: bubble, marker, pin, point
 
+**Line**:
+The points of one series joined in the order of the data, as wide on the
+screen from every side - the mark of the line chart. A point that comes
+unfolds from its neighbour on the line as it fades in, and a gone one folds
+back into it; an entry without a place breaks the line. Pointing at a line
+lights the whole of it, and it answers with the point nearest the pointer.
+_Avoid_: path, trajectory, curve, polyline, stroke
+
+**Segment**:
+The straight piece of a line between two points next to each other. On
+hover, each half of it speaks for the point at its end.
+_Avoid_: edge, link, section
+
 **Ocean**:
 The disc of the globe the land lies on, in the color of a wall unless the
 theme gives it one.

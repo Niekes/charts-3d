@@ -7,6 +7,7 @@
     "bar-field-chart-3d",
     "choropleth-chart-3d",
     "globe-chart-3d",
+    "line-chart-3d",
     "places-chart-3d",
     "scatter-chart-3d",
     "surface-chart-3d"
