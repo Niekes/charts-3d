@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grows at its end and shrinks from its start.
 - The core helpers the scatter and the line chart share: `usePoints` and
   `pointTooltip`.
+- `RoutesChart3D`, routes over a globe: the entries of `data` are stops at
+  their `lon` and `lat`, joined in the order of the data along the great
+  circle, one route per value of `series`. What lies on the far side is
+  hidden by the globe. Pointing at a route lights the whole route; a leg says
+  its two stops, a stop itself. With `id`, a stop that joins the end of a
+  route grows its leg out of the stop before it, and a gone one draws its
+  leg back.
+- `view` on `ChartContainer3D`, a view the camera heads for: it starts
+  there and glides there over the `animationDuration` when the view changes,
+  moving only what the view names; the reader turns on from it (ADR-0010).
+  `facing(lon, lat)` is the view that looks at a place on the globe.
+- The core helpers the line and the routes chart share: `useRuns` and
+  `stroke`.
 
 ## [0.7.0] - 2026-11-15
 

@@ -123,6 +123,22 @@
       "categories": ["charts", "3d"]
     },
     {
+      "name": "routes-chart-3d",
+      "type": "registry:ui",
+      "title": "Routes Chart 3D",
+      "description": "Routes over a globe, from stop to stop along the great circle.",
+      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "dependencies": ["d3-geo@^3.1.2"],
+      "devDependencies": ["@types/d3-geo", "@types/geojson"],
+      "files": [
+        {
+          "path": "registry/new-york/ui/routes-chart-3d.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "categories": ["charts", "3d"]
+    },
+    {
       "name": "scatter-chart-3d",
       "type": "registry:ui",
       "title": "Scatter Chart 3D",
