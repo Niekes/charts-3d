@@ -4,7 +4,7 @@ import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { RoutesChart3D } from "@/components/ui/routes-chart-3d"
 import { land } from "@/docs/examples/land"
 import { RendererSelect } from "@/docs/examples/renderer-select"
-import { chartConfig, chartView, stops } from "@/docs/examples/routes-chart-3d-demo"
+import { routeConfig, chartView, stops } from "@/docs/examples/routes-chart-3d-demo"
 
 // The same five legs by two plans: a stop keeps its number and moves to another capital.
 const plans = [
@@ -18,7 +18,7 @@ export default function RoutesChart3DUpdateDemo() {
 
   return (
     <div className="flex flex-col gap-2">
-      <ChartContainer3D config={chartConfig} renderer={renderer} defaultView={chartView}>
+      <ChartContainer3D config={routeConfig} renderer={renderer} defaultView={chartView}>
         <RoutesChart3D data={plans[plan]} land={land} lon="lon" lat="lat" id="number" />
       </ChartContainer3D>
       <button

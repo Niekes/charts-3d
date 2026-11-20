@@ -52,6 +52,11 @@ export const chartConfig = {
   sea: { label: "By sea", color: "var(--chart-2)" },
 } satisfies ChartConfig
 
+// One route in one color, for the demos that show no legs of their own.
+export const routeConfig = {
+  route: { label: "Route", color: "var(--chart-1)" },
+} satisfies ChartConfig
+
 // The globe turned to the middle of the Atlantic, a little north of the equator.
 export const chartView = facing(-10, 15)
 

@@ -46,8 +46,9 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   id?: keyof T & string
   /**
-   * The field whose value is the config key of the route of a stop: the
-   * entries of one key are one route.
+   * The field that tells the routes apart: the entries of one value are one
+   * route. The value is the config key of the route, which gives it its
+   * color and its label wherever no `leg` names another.
    * @defaultValue the first key of the chart config, one route of all the entries
    */
   series?: keyof T & string
@@ -55,7 +56,8 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
    * The field whose value is the config key of the leg that leads to a
    * stop, such as how it was travelled: the leg and the stop it arrives at
    * take that color, and the first stop of a route that of the leg that
-   * leaves it. A stop that names none keeps the color of its route.
+   * leaves it. Any value names a leg but a missing or a blank one: a stop
+   * that names none, and one no leg touches, keeps the color of its route.
    * @defaultValue none: every leg has the color of its route
    */
   leg?: keyof T & string
@@ -95,10 +97,10 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
 }: RoutesChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, id, series, leg }
-  const stops = useStops(data, fields, Object.keys(config)[0])
+  const stops = useStops(data, fields)
   const { named, entries, presence, read } = usePoints(stops, "x", "y", "z", id && "name")
-  // A stop on its way out keeps the color it had.
-  const color = useConfigKeys(entries, "color", "", presence)
+  // The leg a stop names, none as "": a stop on its way out keeps it, and its color with it.
+  const legOf = useConfigKeys(entries, "leg", "", presence)
   // A stop that comes or goes travels the great circle from its neighbour.
   const runs = useRuns(
     named,
@@ -110,7 +112,7 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   const reading = { config, entries, fields, tooltip }
   const routes = lineStrips3D<Point3D>()
     .camera(orthographic(camera))
-    .data(runs.flatMap((run) => pieces(run.points, color)))
+    .data(runs.flatMap((run) => pieces(run, legOf)))
     // A piece on the far side is hidden by the globe.
     .filter((piece) => piece.every((p) => p.rotated.z > 0))
     // The stops lie over the legs, each among its own from back to front.
@@ -132,36 +134,30 @@ type Fields<T> = Pick<
 
 /**
  * The entries as the core reads points: each with its name, its route and
- * the config key of its color - that of the leg that leads to it, where it
- * names one, or else of its route, `fallback` without series - and, where it
- * has a place, the point of the globe it lies on. A stop that
- * moves glides as that point, through the globe, so it takes the shortest
- * way to its new place, over the date line too. Built once per change of the
- * data, not at every frame the camera turns.
+ * the leg it names, and, where it has a place, the point of the globe it
+ * lies on. A stop that moves glides as that point, through the globe, so it
+ * takes the shortest way to its new place, over the date line too. Built
+ * once per change of the data, not at every frame the camera turns.
  */
-function useStops<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Fields<T>,
-  fallback: string
-) {
+function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
   const { lon, lat, id, series, leg } = fields
   return React.useMemo(
     () =>
-      data.map((entry) => {
-        const route = series && String(entry[series])
-        const placed = finite(entry[lon]) && finite(entry[lat])
-        return {
-          entry,
-          name: id && String(entry[id]),
-          route,
-          // A blank is no name of a leg.
-          color: String((leg && entry[leg]) || route || fallback),
-          ...(placed ? globe(Number(entry[lon]), Number(entry[lat])) : undefined),
-        }
-      }),
-    [data, lon, lat, id, series, leg, fallback]
+      data.map((entry) => ({
+        entry,
+        name: id && String(entry[id]),
+        route: series && String(entry[series]),
+        leg: legKey(leg && entry[leg]),
+        ...(finite(entry[lon]) && finite(entry[lat])
+          ? globe(Number(entry[lon]), Number(entry[lat]))
+          : undefined),
+      })),
+    [data, lon, lat, id, series, leg]
   )
 }
+
+/** The config key a value of the `leg` field names: any value read as text, and none, "", for a missing or a blank one. */
+const legKey = (value: unknown) => (value == null ? "" : String(value).trim())
 
 /** A stop of a route, where it is now, and how far it has come, from 0 to 1. */
 type Stop = { name: string; seen: number; anchored: boolean; at: Place }
@@ -169,7 +165,9 @@ type Stop = { name: string; seen: number; anchored: boolean; at: Place }
 /** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
 type Piece = Point3D[] & {
   key: string
-  color: string
+  /** The config key of its color, and whether a stop names it as the key of a leg. */
+  colorKey: string
+  named: boolean
   seen: number
   names: string[]
   group: string
@@ -190,20 +188,23 @@ type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "t
  * draws back with it, a line that draws itself, and is whole all the while;
  * one whose stops both stand in place is seen as far as the better seen of
  * them, so the legs of a route that is all new fade in with its stops. A
- * leg has the `color` of the stop it arrives at, a stop its own, and the
- * first stop that of the leg that leaves it.
+ * leg has the color of the leg the stop it arrives at names, `legOf` it,
+ * and so has that stop; the first stop has that of the leg that leaves it.
+ * Where no leg is named, or none touches a stop, the color is that of the
+ * route, `line`.
  */
-function pieces(points: Stop[], color: (name: string) => string): Piece[] {
+function pieces(
+  { line, points }: { line: string; points: Stop[] },
+  legOf: (name: string) => string
+): Piece[] {
   const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
   // A piece is in focus with the stops it lies between: a leg whole, a stop alone.
-  const piece = (points: Point3D[], key: string, seen: number, names: string[]) =>
-    Object.assign(points, {
-      key,
-      seen,
-      names,
-      color: color(names.at(-1)!),
-      group: names.join("\u2192"),
-    })
+  // The stop `by` names the leg that colors it; with no such leg, it has the color of its route.
+  const piece = (points: Point3D[], key: string, seen: number, names: string[], by?: string) => {
+    const leg = by === undefined ? "" : legOf(by)
+    const [colorKey, named, group] = [leg || line, leg !== "", names.join("\u2192")]
+    return Object.assign(points, { key, seen, names, group, colorKey, named })
+  }
   return [
     ...points.slice(1).flatMap((to, i) => {
       const from = points[i]
@@ -214,17 +215,16 @@ function pieces(points: Stop[], color: (name: string) => string): Piece[] {
           [on(along(k / count)), on(along((k + 1) / count))],
           `${from.name}-${to.name}-${k}`,
           from.anchored || to.anchored ? 1 : Math.max(from.seen, to.seen),
-          [from.name, to.name]
+          [from.name, to.name],
+          to.name
         )
       )
     }),
-    ...points.map((stop) => piece([on(stop.at)], stop.name, stop.seen, [stop.name])),
-  ].map((piece) =>
-    // The first stop has no leg that leads to it: it takes the color of the one that leaves it.
-    piece.key === points[0].name
-      ? Object.assign(piece, { color: color(points.at(1)?.name ?? piece.key) })
-      : piece
-  )
+    // A stop is the end of the leg that leads to it; the first one, of the leg that leaves it.
+    ...points.map((stop, i) =>
+      piece([on(stop.at)], stop.name, stop.seen, [stop.name], i ? stop.name : points[1]?.name)
+    ),
+  ]
 }
 
 /**
@@ -234,12 +234,12 @@ function pieces(points: Stop[], color: (name: string) => string): Piece[] {
  * highlights the leg under the pointer alone, or the stop.
  */
 function pieceMark(
-  piece: { projected: Point2D }[] & Pick<Piece, "key" | "color" | "seen" | "group">,
+  piece: { projected: Point2D }[] & Pick<Piece, "key" | "colorKey" | "seen" | "group">,
   tooltip: Mark3D["tooltip"]
 ): Mark3D {
   const mark = {
     key: piece.key,
-    fill: faded(colorOf(piece.color), piece.seen),
+    fill: faded(colorOf(piece.colorKey), piece.seen),
     groups: [piece.group],
     tooltip,
   }
@@ -251,13 +251,14 @@ function pieceMark(
 
 /**
  * What a piece says on hover, made when the pointer lands on it: what its
- * color stands for, where `leg` or `series` names it, over its stops - the one stop, or
+ * color stands for - the leg a stop names, or else its route, where `series`
+ * names one - over its stops - the one stop, or
  * the two of a leg - each by its name, or by the fields of its place, with
  * its latitude and longitude - or what `tooltip` makes of that. A piece
  * with a stop whose entry has left the data says nothing.
  */
 function routeTooltip<T extends Record<string, unknown>>(
-  { color, names }: Pick<Piece, "color" | "names">,
+  { colorKey, named, names }: Pick<Piece, "colorKey" | "named" | "names">,
   { config, entries, fields, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   const stops = names.flatMap((name) => {
@@ -265,15 +266,15 @@ function routeTooltip<T extends Record<string, unknown>>(
     return stop ? [stop.entry] : []
   })
   if (stops.length < names.length) return undefined
-  const { lon, lat, id, series, leg } = fields
+  const { lon, lat, id, series } = fields
   return () =>
     tooltip(
       {
-        title: (leg ?? series) ? (config[color]?.label ?? color) : undefined,
+        title: named || series ? (config[colorKey]?.label ?? colorKey) : undefined,
         items: stops.map((d) => ({
           label: id ? String(d[id]) : `${lat}, ${lon}`,
           value: `${Number(d[lat])}, ${Number(d[lon])}`,
-          color: colorOf(color),
+          color: colorOf(colorKey),
         })),
       },
       { entries: stops }

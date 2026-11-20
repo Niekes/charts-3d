@@ -4,7 +4,7 @@ import { ChartContainer3D, facing, type Renderer3D } from "@/components/ui/chart
 import { RoutesChart3D } from "@/components/ui/routes-chart-3d"
 import { land } from "@/docs/examples/land"
 import { RendererSelect } from "@/docs/examples/renderer-select"
-import { chartConfig, stops } from "@/docs/examples/routes-chart-3d-demo"
+import { routeConfig, stops } from "@/docs/examples/routes-chart-3d-demo"
 
 // A tour of the world, capital by capital, eastwards and home again.
 const tour = stops("atlantic", [
@@ -36,7 +36,7 @@ export default function RoutesChart3DEnterDemo() {
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer3D
-        config={chartConfig}
+        config={routeConfig}
         renderer={renderer}
         animationDuration={STEP}
         view={facing(at.lon, at.lat)}

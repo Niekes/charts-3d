@@ -245,9 +245,38 @@ describe("RoutesChart3D legs of their own color", () => {
     expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-b)"]))
     const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
     expect(byPlace).toEqual(["var(--color-b)", "var(--color-b)", "var(--color-air)"])
-    // A stop alone has no leg to take a color from but its own.
+  })
+
+  test("a stop no leg touches has the color of its route, whatever it names: one alone, and one alone after a gap", () => {
     const alone = serverMarks(chart([{ lon: 0, lat: 0, by: "sea" }], { leg: "by" }))
-    expect(alone.stops.map(fillOf)).toEqual(["var(--color-sea)"])
+    expect(alone.stops.map(fillOf)).toEqual(["var(--color-a)"])
+    const { stops } = serverMarks(
+      chart(
+        [
+          { lon: -40, lat: 0 },
+          { lon: 0, lat: 0, by: "sea" },
+          { lon: 20, lat: null },
+          { lon: 40, lat: 0, by: "sea" },
+        ],
+        { leg: "by" }
+      )
+    )
+    const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
+    expect(byPlace).toEqual(["var(--color-sea)", "var(--color-sea)", "var(--color-a)"])
+  })
+
+  test("any value names a leg but a missing or a blank one: a number is read as its key, and spaces are no name", () => {
+    const by = (value: unknown) =>
+      serverMarks(
+        chart(
+          journey.map((stop) => ({ ...stop, by: value as string })),
+          { leg: "by" }
+        )
+      ).fills
+    expect(new Set(by(0))).toEqual(new Set(["var(--color-0)"]))
+    expect(new Set(by("  "))).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(by(null))).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(by(" sea "))).toEqual(new Set(["var(--color-sea)"]))
   })
 
   test("the title of the tooltip names what the color means: the label of the leg, its key without one", async () => {
@@ -259,6 +288,18 @@ describe("RoutesChart3D legs of their own color", () => {
     expect(view.tip()).toBe("airmid0, 0east0, 40")
     await view.point(stops.find((s) => s.at[0] === 320)!.at)
     expect(view.tip()).toBe("By seamid0, 0")
+    await view.unmount()
+  })
+
+  test("a leg no stop names has the title of its route, where series names one, and none without", async () => {
+    const unnamed = journey.map(({ by: _, ...stop }) => ({ ...stop, s: "b" }))
+    const view = await mount(chart(unnamed, { leg: "by", id: "id" }))
+    const at = middle(marks(view.host).quads[3].corners)
+    await view.point(at)
+    expect(view.tip()).toMatch(/^(west0, -40mid0, 0|mid0, 0east0, 40)$/)
+    await view.render(chart(unnamed, { leg: "by", id: "id", series: "s" }))
+    await view.point(at)
+    expect(view.tip()).toMatch(/^B(west0, -40mid0, 0|mid0, 0east0, 40)$/)
     await view.unmount()
   })
 })
