@@ -1,22 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { extent } from "d3-array"
 import { points3D, sort, type AxesSpec, type Point3D } from "d3-3d"
 
 import {
   Axes3D,
   Marks3D,
-  axis,
   faded,
-  finite,
+  pointTooltip,
   useChart3D,
+  usePoints,
   useTween,
   useTweenAxes,
   worldBox,
   colorOf,
-  type ChartConfig,
-  type Mark3D,
   type Tooltip3D,
   type World,
 } from "@/registry/new-york/ui/chart-3d"
@@ -77,8 +74,9 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, data, names, entries, values, axes } = usePoints(all, x, y, z, id)
-  const { radii, opacity, read, key } = usePointTweens(names, data, values, series, config, radius)
+  const { fields, names, entries, axes, presence: opacity, read } = usePoints(all, x, y, z, id)
+  const radii = usePointRadii(names, radius)
+  const key = usePointKeys(entries, series, Object.keys(config)[0], radii)
 
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
@@ -120,110 +118,15 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
 }
 
 /**
- * What a point says on hover, made when the pointer lands on it: its series,
- * where `title` names one, and its x, y and z as the ticks of each axis name
- * them - or what `tooltip` makes of that. A point whose entry has left the
- * data says nothing.
+ * The radius of every point, by name, entering from 0, so a new point grows
+ * as it fades in and a gone one shrinks as it fades away.
  */
-function pointTooltip<T extends Record<string, unknown>>(
-  entry: T | undefined,
-  title: React.ReactNode,
-  fields: Record<keyof AxesSpec, keyof T & string>,
-  {
-    format = {},
-    titles = {},
-    tooltip = (tip) => tip,
-  }: Pick<ScatterChart3DProps<T>, "format" | "titles" | "tooltip">
-): Mark3D["tooltip"] {
-  if (!entry) return undefined
-  return () =>
-    tooltip(
-      {
-        title,
-        items: (["x", "y", "z"] as const).map((a) => {
-          const value = Number(entry[fields[a]])
-          return { label: titles[a] ?? fields[a], value: format[a]?.(value) ?? value }
-        }),
-      },
-      { entry }
-    )
-}
-
-/**
- * The entries with a place in the box, their names, the entry behind each
- * name, their positions and the axes that hold them - built once per change
- * of the data, not at every frame the camera turns.
- */
-function usePoints<T extends Record<string, unknown>>(
-  all: T[],
-  x: keyof T & string,
-  y: keyof T & string,
-  z: keyof T & string,
-  id: (keyof T & string) | undefined
-) {
-  return React.useMemo(() => {
-    const fields = { x, y, z }
-    // An entry without a place in the box has no point.
-    // Named by its position in all the data, so a point keeps its name when an
-    // entry before it gains or loses its place.
-    const placed = all.flatMap((d, i) =>
-      [x, y, z].every((f) => finite(d[f])) ? [{ d, name: id ? String(d[id]) : String(i) }] : []
-    )
-    const data = placed.map((p) => p.d)
-    const names = placed.map((p) => p.name)
-    return {
-      fields,
-      data,
-      names,
-      entries: new Map(names.map((name, i) => [name, data[i]])),
-      values: pointValues(names, data, fields),
-      axes: pointAxes(data, fields),
-    }
-  }, [all, x, y, z, id])
-}
-
-/** The axes that hold every entry of `data`, a nice one per field. */
-function pointAxes<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Record<keyof AxesSpec, keyof T & string>
-): AxesSpec {
-  const range = (a: keyof AxesSpec) => {
-    const [lo = 0, hi = 0] = extent(data, (d) => Number(d[fields[a]]))
-    return axis(lo, hi)
-  }
-  return { x: range("x"), y: range("y"), z: range("z") }
-}
-
-/**
- * The tweened numbers of the chart, by the name of each entry: the positions
- * glide entry by entry - a gone point stands in place - and the radius and
- * the opacity enter from 0, so a new point grows as it fades in and a gone
- * one shrinks as it fades away. `read` and `key` look them up, also for a
- * point still leaving.
- */
-function usePointTweens<T extends Record<string, unknown>>(
-  names: string[],
-  data: T[],
-  target: Record<string, number>,
-  series: (keyof T & string) | undefined,
-  config: ChartConfig,
-  radius: number
-) {
-  const values = useTween(target)
+function usePointRadii(names: string[], radius: number) {
   const sizes = React.useMemo(
     () => Object.fromEntries(names.map((name) => [name, radius])),
     [names, radius]
   )
-  const radii = useTween(sizes, 0)
-  const present = React.useMemo(() => Object.fromEntries(names.map((name) => [name, 1])), [names])
-  const opacity = useTween(present, 0)
-  const fallback = Object.keys(config)[0]
-  return {
-    radii,
-    opacity,
-    read: (name: string, axis: keyof AxesSpec) => values[`${axis}${name}`],
-    key: usePointKeys(names, data, series, fallback, radii),
-  }
+  return useTween(sizes, 0)
 }
 
 /**
@@ -258,35 +161,21 @@ function usePointPlaces(
   return placed
 }
 
-/** The position of every entry, keyed by its axis and name, gliding into new data. */
-function pointValues<T extends Record<string, unknown>>(
-  names: string[],
-  data: T[],
-  fields: Record<keyof AxesSpec, keyof T & string>
-) {
-  return Object.fromEntries(
-    data.flatMap((d, i) =>
-      (["x", "y", "z"] as const).map((a) => [`${a}${names[i]}`, Number(d[fields[a]])])
-    )
-  )
-}
-
 /**
  * The config key of every point's color, by name - remembered while a gone
  * point shrinks away, since its entry has already left the data - and
  * forgotten with the point, so the memory stays the size of the chart.
  */
 function usePointKeys<T extends Record<string, unknown>>(
-  names: string[],
-  data: T[],
+  entries: Map<string, T>,
   series: (keyof T & string) | undefined,
   fallback: string,
   alive: Record<string, number>
 ) {
   const known = React.useRef(new Map<string, string>())
-  data.forEach((d, i) => known.current.set(names[i], series ? String(d[series]) : fallback))
+  entries.forEach((d, name) => known.current.set(name, series ? String(d[series]) : fallback))
   for (const name of known.current.keys()) {
-    if (!(name in alive) && !names.includes(name)) known.current.delete(name)
+    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
   }
   return (name: string) => known.current.get(name) ?? fallback
 }

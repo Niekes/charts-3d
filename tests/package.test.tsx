@@ -8,6 +8,7 @@ import * as barField from "@/registry/new-york/ui/bar-field-chart-3d"
 import * as core from "@/registry/new-york/ui/chart-3d"
 import * as choropleth from "@/registry/new-york/ui/choropleth-chart-3d"
 import * as globe from "@/registry/new-york/ui/globe-chart-3d"
+import * as line from "@/registry/new-york/ui/line-chart-3d"
 import * as places from "@/registry/new-york/ui/places-chart-3d"
 import * as scatter from "@/registry/new-york/ui/scatter-chart-3d"
 import * as surface from "@/registry/new-york/ui/surface-chart-3d"
@@ -22,6 +23,7 @@ describe("the npm package", () => {
       barField,
       choropleth,
       globe,
+      line,
       places,
       scatter,
       surface,
