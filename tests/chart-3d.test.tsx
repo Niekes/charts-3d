@@ -2857,6 +2857,31 @@ describe("useTween", () => {
     return { host, render, unmount }
   }
 
+  test("a frame the glide before had queued does not move the next glide: a number on its way out does not jump to its end", async () => {
+    const frames: ((now: number) => void)[] = []
+    vi.stubGlobal("requestAnimationFrame", (frame: (now: number) => void) => frames.push(frame))
+    // The browser runs a frame it had queued before the chart came to cancel it.
+    vi.stubGlobal("cancelAnimationFrame", () => {})
+    const chart = await mountTween(600)
+    await chart.render({ a: 1 }, 0)
+    await chart.render({ a: 1, b: 1 }, 0)
+    await act(() => frames.shift()!(0))
+    await act(() => frames.shift()!(594))
+    expect(shown(chart.host).b).toBeGreaterThan(0.99)
+    const late = frames.shift()!
+
+    // New data, almost at the end of the glide: `a` goes, from 1.
+    await chart.render({ b: 1 }, 0)
+    expect(shown(chart.host).a).toBe(1)
+    await act(() => late(597))
+    expect(shown(chart.host).a).toBe(1)
+    // Its own glide takes it out: half the time, half the way.
+    await act(() => frames.splice(0).forEach((frame) => frame(1000)))
+    await act(() => frames.splice(0).forEach((frame) => frame(1300)))
+    expect(shown(chart.host).a).toBeCloseTo(0.5)
+    await chart.unmount()
+  })
+
   test("glides from the numbers on screen into the new ones over the duration", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const chart = await mountTween(600)

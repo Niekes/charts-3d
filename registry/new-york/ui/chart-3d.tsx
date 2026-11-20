@@ -706,7 +706,9 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
       start ??= now
       // A duration that turned 0 during the glide: 0 / 0 is NaN, so it jumps to the end.
       const t = duration > 0 ? Math.min(1, (now - start) / duration) : 1
-      setTween((tw) => ({ ...tw, t }))
+      // A frame may run after new data has started the next glide and before
+      // this one is cancelled: it moves its own glide only.
+      setTween((tw) => (tw.key === tween.key ? { ...tw, t } : tw))
       if (t < 1) frame = requestAnimationFrame(step)
     }
     frame = requestAnimationFrame(step)

@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are
   points of their own, told apart by the order of the data, where they
   shared one point before.
+- New data that comes while a chart glides no longer flashes: a frame the
+  glide before had queued could move the next one, so a mark on its way out
+  jumped to its end for a frame.
 - `LineChart3D`: a point that goes from the start of a line after a gap
   folds into its line, where it stood alone before; and new data that comes
   while a point is on its way moves it on from where it is, where the line

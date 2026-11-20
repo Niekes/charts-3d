@@ -363,6 +363,48 @@ describe("RoutesChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("a route left with one stop draws its leg back into it, and one given a second stop grows it out", async () => {
+    const view = await mount(chart([west, mid], { id: "id" }))
+    const [first, second] = xs(marks(view.host))
+    await view.render(chart([mid], { id: "id" }))
+    await glide(300)
+    let now = marks(view.host)
+    expect(xs(now)).toHaveLength(2)
+    expect(xs(now)[0]).toBeGreaterThan(first)
+    expect(xs(now)[0]).toBeLessThan(second)
+    expect(now.quads.length).toBeGreaterThan(0)
+    await glide(400)
+    now = marks(view.host)
+    expect(xs(now)).toEqual([second])
+    expect(now.quads).toHaveLength(0)
+
+    await view.render(chart([mid, east], { id: "id" }))
+    await glide(300)
+    now = marks(view.host)
+    expect(xs(now)).toHaveLength(2)
+    expect(now.quads.length).toBeGreaterThan(0)
+    await view.unmount()
+  })
+
+  test("a step that ends just as the leg has grown still draws the leg back", async () => {
+    const view = await mount(chart([west], { id: "id" }))
+    await view.render(chart([west, mid], { id: "id" }))
+    // A frame short of the end of the glide, as a timer of the same length fires.
+    await glide(590)
+    const grown = marks(view.host).quads.length
+    expect(grown).toBeGreaterThan(0)
+    await view.render(chart([mid], { id: "id" }))
+    await glide(16)
+    expect(xs(marks(view.host))).toHaveLength(2)
+    expect(marks(view.host).quads.length).toBeGreaterThan(grown - 3)
+    await glide(300)
+    expect(marks(view.host).quads.length).toBeGreaterThan(0)
+    expect(marks(view.host).quads.length).toBeLessThan(grown)
+    await glide(400)
+    expect(marks(view.host).quads).toHaveLength(0)
+    await view.unmount()
+  })
+
   test("a tour that moves on before the last step is done goes on from where it is: nothing jumps back", async () => {
     const far = { id: "far", lon: 70, lat: 0 }
     const view = await mount(chart([west, mid], { id: "id" }))
