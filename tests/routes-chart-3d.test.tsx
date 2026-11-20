@@ -4,7 +4,11 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import {
+  ChartContainer3D,
+  type ChartConfig,
+  type Renderer3D,
+} from "@/registry/new-york/ui/chart-3d"
 import { RoutesChart3D, type RoutesChart3DProps } from "@/registry/new-york/ui/routes-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -26,11 +30,17 @@ const chart = (data: Stop[], props: Partial<RoutesChart3DProps<Stop>> = {}) => (
   </ChartContainer3D>
 )
 
-/** The marks of the routes in paint order, without the ocean: the quads of the legs and the circles on the stops. */
+/**
+ * The marks of the routes in paint order, without the ocean: the quads of the
+ * legs, the circles on the stops and the symbols on the tips, each where it
+ * lies, how far it is turned and the color of its outline.
+ */
 function marks(root: ParentNode) {
   const all = [...root.querySelectorAll('[data-slot="chart-3d-marks"] > *')].filter((m) =>
-    m.getAttribute("fill")!.includes("--color-")
+    m.outerHTML.includes("--color-")
   )
+  const lie = (g: Element) =>
+    g.getAttribute("transform")!.match(/translate\((\S+) (\S+)\) rotate\((\S+)\) scale\((\S+)\)/)!
   const corners = (path: Element) =>
     [...path.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [
       Number(m[1]),
@@ -42,6 +52,15 @@ function marks(root: ParentNode) {
     stops: all
       .filter((m) => m.tagName === "circle")
       .map((m) => ({ el: m, at: ["cx", "cy"].map((a) => Number(m.getAttribute(a))) })),
+    tips: all
+      .filter((m) => m.tagName === "g")
+      .map((m) => ({
+        el: m,
+        at: [Number(lie(m)[1]), Number(lie(m)[2])],
+        turn: Number(lie(m)[3]),
+        scale: Number(lie(m)[4]),
+        color: m.lastElementChild!.getAttribute("stroke"),
+      })),
     fills: all.map((m) => m.getAttribute("fill")!),
   }
 }
@@ -772,6 +791,331 @@ describe("RoutesChart3D transitions", () => {
   })
 })
 
+describe("RoutesChart3D tip", () => {
+  // A line as the symbol of the route: it points up as it is drawn, as the nose of a plane seen from above.
+  const plane = { path: "M12 2v20", points: 0 }
+  const flown = { a: { color: "red", symbol: plane }, b: { color: "blue" } }
+  const tipped = (
+    data: Stop[],
+    props: Partial<RoutesChart3DProps<Stop>> = {},
+    symbols: ChartConfig = flown
+  ) => (
+    <ChartContainer3D config={symbols} defaultView={{ yaw: 0, tilt: 0 }}>
+      <RoutesChart3D data={data} land={land} lon="lon" lat="lat" {...props} />
+    </ChartContainer3D>
+  )
+  const equator = [
+    { lon: -30, lat: 0 },
+    { lon: 0, lat: 0 },
+    { lon: 30, lat: 0 },
+  ]
+
+  test("the last stop of a route is its tip: the symbol of its key, on the stop, turned along the leg that arrives", () => {
+    const plain = serverMarks(chart(equator))
+    const { stops, tips, all } = serverMarks(tipped(equator))
+    // Every stop before the tip stays a circle, and the tip lies where its circle lay, over all else.
+    const xs = (list: { at: number[] }[]) => list.map((s) => s.at[0]).sort((a, b) => a - b)
+    expect(xs(stops)).toEqual(xs(plain.stops).slice(0, 2))
+    expect(tips).toHaveLength(1)
+    expect(tips[0].at[0]).toBeCloseTo(xs(plain.stops)[2], 1)
+    expect(tips[0].at[1]).toBeCloseTo(200, 1)
+    expect(all[all.length - 1]).toBe(tips[0].el)
+    // A box of 24 on a disc 16 across, in the color of the route; the leg runs east, a quarter turn from up.
+    expect(tips[0].scale).toBeCloseTo(16 / 24, 3)
+    expect(tips[0].color).toBe("var(--color-a)")
+    expect(tips[0].turn).toBeCloseTo(90, 0)
+  })
+
+  test("a tip points the way its leg arrives on the screen, less the way its symbol points as drawn", () => {
+    const turn = (data: Stop[], symbol = plane) =>
+      serverMarks(tipped(data, {}, { ...flown, a: { color: "red", symbol } })).tips[0].turn
+    const here = { lon: 0, lat: 0 }
+    // North is up, south down, west a quarter turn back.
+    expect(turn([{ lon: 0, lat: -30 }, here])).toBeCloseTo(0, 0)
+    expect(Math.abs(turn([{ lon: 0, lat: 30 }, here]))).toBeCloseTo(180, 0)
+    expect(turn([{ lon: 30, lat: 0 }, here])).toBeCloseTo(-90, 0)
+    // The plane of Lucide points up and to the right: it turns 45 degrees less.
+    expect(turn([{ lon: -30, lat: 0 }, here], { ...plane, points: 45 })).toBeCloseTo(45, 0)
+    // A great circle through the middle of the globe is a straight line on the screen. From 60 degrees
+    // north and west the stop lies cos 60 x sin 60 to the left and sin 60 up: twice as far up as left,
+    // so the leg arrives 26.57 degrees off straight down - not the 45 of a line on a flat map.
+    expect(turn([{ lon: -60, lat: 60 }, here])).toBeCloseTo(180 - 26.57, 1)
+  })
+
+  test("a symbol that names no way stays upright, and the one stop of a route shows its symbol as it is drawn", () => {
+    const car = { a: { color: "red", symbol: { path: "M2 12h20" } }, b: { color: "blue" } }
+    expect(serverMarks(tipped(equator, {}, car)).tips.map((t) => t.turn)).toEqual([0])
+    const alone = serverMarks(tipped([{ lon: 10, lat: 10 }]))
+    expect(alone.stops).toHaveLength(0)
+    expect(alone.tips.map((t) => t.turn)).toEqual([0])
+  })
+
+  test("a tip on the place of the stop before it has no leg to come along: it shows as it is drawn, at no NaN", () => {
+    const twice = serverMarks(tipped([equator[0], equator[1], equator[1]]))
+    expect(twice.tips.map((t) => t.turn)).toEqual([0])
+    expect(twice.tips[0].at[0]).toBeCloseTo(320, 1)
+    expect(twice.html).not.toContain("NaN")
+  })
+
+  test("a tip just this side of the horizon is drawn, though its leg comes from beyond it", () => {
+    const { tips } = serverMarks(
+      tipped([
+        { lon: 150, lat: 0 },
+        { lon: 89.9, lat: 0 },
+      ])
+    )
+    expect(tips).toHaveLength(1)
+    // It comes round the edge of the globe along the equator, towards the reader: level on the screen.
+    expect(Math.abs(tips[0].turn)).toBeCloseTo(90, 0)
+  })
+
+  test("a route whose key has no symbol keeps the circle on its tip, beside one that has", () => {
+    const { stops, tips } = serverMarks(
+      tipped(
+        [
+          { lon: -20, lat: 10, s: "a" },
+          { lon: -20, lat: -10, s: "b" },
+          { lon: 20, lat: 10, s: "a" },
+          { lon: 20, lat: -10, s: "b" },
+        ],
+        { series: "s" }
+      )
+    )
+    expect(tips.map((t) => t.color)).toEqual(["var(--color-a)"])
+    expect(stops.map((s) => s.el.getAttribute("fill")).sort()).toEqual([
+      "var(--color-a)",
+      "var(--color-b)",
+      "var(--color-b)",
+    ])
+  })
+
+  test("the tip takes the symbol of what colors it: the leg that arrives, where it names one, and else its route", () => {
+    const ship = { path: "M3 20h18" }
+    const modes = { a: { color: "red", symbol: plane }, sea: { color: "navy", symbol: ship } }
+    const path = (data: Stop[]) => {
+      const { tips } = serverMarks(tipped(data, { leg: "by" }, modes))
+      return tips.map((t) => [t.el.lastElementChild!.getAttribute("d"), t.color])
+    }
+    expect(path([equator[0], { ...equator[1], by: "sea" }])).toEqual([
+      ["M3 20h18", "var(--color-sea)"],
+    ])
+    expect(path([{ ...equator[0], by: "sea" }, equator[1]])).toEqual([
+      ["M12 2v20", "var(--color-a)"],
+    ])
+  })
+
+  test("a route broken by an entry without a place has one tip: the last stop that has a place", () => {
+    const gap = { lon: 0, lat: null }
+    const [west, mid, east] = equator
+    const broken = serverMarks(tipped([west, mid, gap, east]))
+    expect(broken.tips).toHaveLength(1)
+    expect(broken.stops).toHaveLength(2)
+    // Alone after the gap, no leg arrives: it shows as it is drawn.
+    expect(broken.tips[0].turn).toBe(0)
+    expect(broken.tips[0].at[0]).toBeGreaterThan(320)
+    // A route that ends on a gap has its tip on the stop before it.
+    const open = serverMarks(tipped([west, mid, gap]))
+    expect(open.tips).toHaveLength(1)
+    expect(open.tips[0].at[0]).toBeCloseTo(320, 1)
+    expect(open.tips[0].turn).toBeCloseTo(90, 0)
+  })
+
+  test("pointing at a tip says its stop and lights its symbol alone", async () => {
+    const named = equator.map((stop, i) => ({ ...stop, id: ["Quito", "Libreville", "Kampala"][i] }))
+    const view = await mount(tipped(named, { id: "id" }))
+    const [tip] = marks(view.host).tips
+    // On its disc, off the middle; beyond the disc of radius 8 it says nothing.
+    await view.point([tip.at[0] + 12, tip.at[1]])
+    expect(view.tip()).toBe("")
+    await view.point([tip.at[0] + 6, tip.at[1]])
+    expect(view.tip()).toBe("Kampala0, 30")
+    const lit = marks(view.host)
+    expect(lit.tips[0].color).toContain("--chart-3d-focus")
+    expect(lit.stops.every((s) => !s.el.getAttribute("fill")!.includes("focus"))).toBe(true)
+    await view.unmount()
+  })
+})
+
+describe("RoutesChart3D tip on its way", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const glide = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+  const flown = { a: { color: "red", symbol: { path: "M12 2v20", points: 0 } } }
+  const tour = (data: Stop[]) => (
+    <ChartContainer3D config={flown} defaultView={{ yaw: 0, tilt: 0 }}>
+      <RoutesChart3D data={data} land={land} lon="lon" lat="lat" id="id" />
+    </ChartContainer3D>
+  )
+  const west = { id: "west", lon: -40, lat: 0 }
+  const mid = { id: "mid", lon: 0, lat: 0 }
+  const east = { id: "east", lon: 40, lat: 0 }
+
+  test("a stop added at the end is the tip at once: the symbol leaves the stop it stood on, whole and turned to where it heads, and flies its leg", async () => {
+    const view = await mount(tour([west, mid]))
+    expect(marks(view.host).tips[0].at[0]).toBeCloseTo(320, 1)
+    await view.render(tour([west, mid, east]))
+    // It has not set out yet, and its leg has no length: it heads east all the same, and is not faded.
+    let now = marks(view.host)
+    expect(now.tips).toHaveLength(1)
+    expect(now.tips[0].at[0]).toBeCloseTo(320, 1)
+    expect(now.tips[0].turn).toBeCloseTo(90, 0)
+    expect(now.tips[0].color).toBe("var(--color-a)")
+    // The stop it left is a circle again.
+    expect(now.stops).toHaveLength(2)
+
+    await glide(300)
+    now = marks(view.host)
+    const half = now.tips[0].at[0]
+    expect(half).toBeGreaterThan(330)
+    expect(now.tips[0].turn).toBeCloseTo(90, 0)
+    expect(now.tips[0].color).toBe("var(--color-a)")
+
+    await glide(400)
+    now = marks(view.host)
+    expect(now.tips[0].at[0]).toBeGreaterThan(half)
+    expect(now.tips[0].turn).toBeCloseTo(90, 0)
+    expect(now.stops).toHaveLength(2)
+    expect(view.host.innerHTML).not.toContain("NaN")
+    await view.unmount()
+  })
+
+  test("a tour moves on: the tip keeps the bearing it came with when the leg behind it has drawn back into it", async () => {
+    const view = await mount(tour([mid]))
+    expect(marks(view.host).tips[0].turn).toBe(0)
+    await view.render(tour([mid, east]))
+    await glide(700)
+    // The stop behind goes: its leg draws back towards the tip, to nothing, and the tip is alone.
+    await view.render(tour([east]))
+    const turns: number[] = []
+    for (let ms = 0; ms < 800; ms += 50) {
+      await glide(50)
+      turns.push(...marks(view.host).tips.map((t) => t.turn))
+    }
+    expect(marks(view.host).stops).toHaveLength(0)
+    expect(turns).toHaveLength(16)
+    for (const turn of turns) expect(turn).toBeCloseTo(90, 0)
+    await view.unmount()
+  })
+
+  test("a tip that sets out is turned to where it heads on every frame, from the first", async () => {
+    // Places whose point on the globe does not read back to the last digit.
+    const from = { id: "from", lon: 12.34567, lat: -45.678 }
+    const to = { id: "to", lon: 60.2, lat: 10.2 }
+    const view = await mount(tour([from]))
+    await view.render(tour([from, to]))
+    const turns = [marks(view.host).tips[0].turn]
+    for (let frame = 0; frame < 12; frame += 1) {
+      await glide(16)
+      turns.push(marks(view.host).tips[0].turn)
+    }
+    // Up and to the right it heads, and its way bends little by little: no frame is off it.
+    for (const [i, turn] of turns.entries())
+      expect(Math.abs(turn - turns[i && i - 1])).toBeLessThan(2)
+    expect(turns[12]).toBeGreaterThan(0)
+    expect(turns[12]).toBeLessThan(90)
+    await view.unmount()
+  })
+
+  /** The way from one point of the screen to another, in degrees clockwise from up. */
+  const way = (from: number[], to: number[]) =>
+    (Math.atan2(to[0] - from[0], from[1] - to[1]) * 180) / Math.PI
+
+  test("a tip whose place changes points along its leg as it is drawn, all the way", async () => {
+    const view = await mount(tour([mid, east]))
+    await view.render(tour([mid, { ...east, lon: 0, lat: 40 }]))
+    // The stop before it lies in the middle of the globe, where every great circle is a
+    // straight line on the screen: the leg arrives the way from the middle to the tip.
+    for (let ms = 0; ms < 700; ms += 100) {
+      await glide(100)
+      const [tip] = marks(view.host).tips
+      expect(tip.turn).toBeCloseTo(way([320, 200], tip.at), 0)
+    }
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(0, 0)
+    await view.unmount()
+  })
+
+  test("a tip without a leg points the way it moves, and keeps it where it comes to rest", async () => {
+    const view = await mount(tour([east]))
+    expect(marks(view.host).tips[0].turn).toBe(0)
+    await view.render(tour([{ ...east, lon: -40, lat: 30 }]))
+    let was = marks(view.host).tips[0].at
+    let turn = 0
+    for (let ms = 0; ms < 600; ms += 100) {
+      await glide(100)
+      const [tip] = marks(view.host).tips
+      // Over a tenth of a second its way bends a little: within a few degrees of the chord.
+      expect(Math.abs(tip.turn - way(was, tip.at))).toBeLessThan(8)
+      ;[was, turn] = [tip.at, tip.turn]
+    }
+    // Up and to the left it went, and so it stays, however often the chart draws again.
+    expect(turn).toBeLessThan(-45)
+    expect(turn).toBeGreaterThan(-90)
+    await glide(200)
+    await view.render(tour([{ ...east, lon: -40, lat: 30 }]))
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(turn, 0)
+    await view.unmount()
+  })
+
+  test("a tip that comes round from the far side of the globe is drawn where it arrives", async () => {
+    const view = await mount(tour([west, { ...east, lon: 130 }]))
+    expect(marks(view.host).tips).toHaveLength(0)
+    await view.render(tour([{ ...east, lon: 130 }]))
+    await glide(700)
+    await view.render(tour([{ ...east, lon: 0 }]))
+    await glide(700)
+    const { tips } = marks(view.host)
+    expect(tips).toHaveLength(1)
+    expect(tips[0].at[0]).toBeCloseTo(320, 1)
+    await view.unmount()
+  })
+
+  test("when a tip that leaves has faded out, the stop before it is the tip, though the gone one is still on its way", async () => {
+    const view = await mount(tour([west, mid, east]))
+    await view.render(tour([west, mid]))
+    await glide(300)
+    // Other data comes: the gone stop travels on from where it is, for longer than it is seen.
+    await view.render(tour([{ ...west, lon: -44 }, mid]))
+    await glide(330)
+    const now = marks(view.host)
+    const seen = now.tips.filter((t) => t.color === "var(--color-a)")
+    expect(seen).toHaveLength(1)
+    expect(seen[0].at[0]).toBeCloseTo(320, 1)
+    expect(seen[0].turn).toBeCloseTo(90, 0)
+    await view.unmount()
+  })
+
+  test("a tip that leaves the data keeps its symbol while its leg draws back, fading, and the stop before it is the tip once it is gone", async () => {
+    const view = await mount(tour([west, mid, east]))
+    const from = marks(view.host).tips[0].at[0]
+    await view.render(tour([west, mid]))
+    await glide(300)
+    // Tail first: it still points the way it came, east, as it draws back west.
+    let now = marks(view.host)
+    expect(now.tips).toHaveLength(1)
+    expect(now.tips[0].at[0]).toBeLessThan(from)
+    expect(now.tips[0].at[0]).toBeGreaterThan(320)
+    expect(now.tips[0].turn).toBeCloseTo(90, 0)
+    expect(now.tips[0].color).toMatch(/^color-mix/)
+    expect(now.stops).toHaveLength(2)
+
+    await glide(500)
+    now = marks(view.host)
+    expect(now.tips).toHaveLength(1)
+    expect(now.tips[0].at[0]).toBeCloseTo(320, 1)
+    expect(now.tips[0].color).toBe("var(--color-a)")
+    expect(now.stops).toHaveLength(1)
+    expect(view.host.innerHTML).not.toContain("NaN")
+    await view.unmount()
+  })
+})
+
 describe("RoutesChart3D renderers", () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -833,6 +1177,51 @@ describe("RoutesChart3D renderers", () => {
     await view.render(scene("webgl"))
     expect(view.host.querySelectorAll('[data-slot="chart-3d-marks"] > *')).toHaveLength(0)
     expect(ctx.fill).toHaveBeenCalledTimes(all)
+    await view.unmount()
+  })
+
+  test("a canvas paints the tip as its symbol, where the svg draws it, and a circle on every stop before it", async () => {
+    const names = ["setTransform", "clearRect", "beginPath", "lineTo", "closePath", "arc", "fill"]
+    const lies = ["stroke", "fillRect", "save", "restore", "translate", "rotate", "scale"]
+    const ctx = Object.fromEntries([...names, ...lies].map((name) => [name, vi.fn()]))
+    ctx.getImageData = vi.fn(() => ({ data: [1, 2, 3, 255] }))
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    // jsdom has no Path2D: the outline of a symbol is its path data.
+    vi.stubGlobal("Path2D", String)
+    const scene = (renderer: Renderer3D) => (
+      <ChartContainer3D
+        config={{ a: { color: "red", symbol: { path: "M12 3v18", points: 0 } } }}
+        renderer={renderer}
+        defaultView={{ yaw: 0, tilt: 0 }}
+      >
+        <RoutesChart3D
+          data={[
+            { lon: -30, lat: 0 },
+            { lon: 0, lat: 0 },
+            { lon: 30, lat: 0 },
+          ]}
+          land={land}
+          lon="lon"
+          lat="lat"
+        />
+      </ChartContainer3D>
+    )
+    const view = await mount(scene("svg"))
+    const [tip] = marks(view.host).tips
+    await view.render(scene("canvas"))
+    expect(ctx.arc).toHaveBeenCalledTimes(2)
+    expect(ctx.translate.mock.calls[0][0]).toBeCloseTo(tip.at[0], 1)
+    expect(ctx.translate.mock.calls[0][1]).toBeCloseTo(tip.at[1], 1)
+    expect(ctx.rotate.mock.calls[0][0]).toBeCloseTo(Math.PI / 2, 2)
+    // Its ring and, over it, its line.
+    expect(ctx.stroke.mock.calls.filter(([outline]) => `${outline}` === "M12 3v18")).toHaveLength(2)
     await view.unmount()
   })
 })

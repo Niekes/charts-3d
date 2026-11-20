@@ -21,6 +21,7 @@ import {
   useRuns,
   type ChartConfig,
   type Mark3D,
+  type Symbol3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
@@ -73,9 +74,12 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
   tooltip?: (tooltip: Tooltip3D, data: { entries: T[] }) => Tooltip3D | null
 }
 
-// The width of a leg and the radius of a stop, in the units of the view box.
+// The width of a leg, the radius of a stop and that of the disc of a tip, in the units of the view box.
 const WIDTH = 2
 const STOP = 3
+const TIP = 8
+// How far behind a tip the point lies that it comes from, as a share of its leg.
+const BACK = 0.01
 // The length of a piece of a leg, in radians of the great circle: two degrees.
 const PIECE = Math.PI / 90
 
@@ -104,13 +108,21 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   // A stop that comes, goes or moves travels the great circle, at an even pace.
   const runs = useRuns(named, series && "route", presence, target, overGlobe)
   const reading = { config, entries, fields, tooltip }
+  const came = useCame(presence)
+  // A route ends with its last run: one after a gap goes on from there.
+  const last = new Map(runs.map((run, i) => [run.line, i]))
   const routes = lineStrips3D<Point3D>()
     .camera(orthographic(camera))
-    .data(runs.flatMap((run) => pieces(run, legOf)))
-    // A piece on the far side is hidden by the globe.
-    .filter((piece) => piece.every((p) => p.rotated.z > 0))
-    // The stops lie over the legs, each among its own from back to front.
-    .sort((a, b) => b.length - a.length || sort(a, b))
+    .data(
+      runs.flatMap((run, i) => {
+        const list = pieces(run, legOf)
+        return last.get(run.line) === i ? tipped(list, run.points, reading, came) : list
+      })
+    )
+    // A piece on the far side is hidden by the globe; a tip is where its stop is, wherever it comes from.
+    .filter((piece) => piece.slice(0, piece.symbol ? 1 : 2).every((p) => p.rotated.z > 0))
+    // The stops lie over the legs and the tips over the stops, each among its own from back to front.
+    .sort((a, b) => layer(a) - layer(b) || sort(a, b))
     .map((piece) => pieceMark(piece, routeTooltip(piece, reading)))
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
@@ -119,6 +131,9 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
 
 /** A place on the globe: its longitude and its latitude, in degrees. */
 type Place = [number, number]
+
+/** The point of the globe the marks lie on, over a place. */
+const onGlobe = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
 
 /**
  * The point of the globe the `share` of the way from one to another along
@@ -166,9 +181,14 @@ const legKey = (value: unknown) => (value == null ? "" : String(value).trim())
 /** A stop of a route: the point it glides as, which lies over its place, how far it has come, from 0 to 1, and whether it is on its way. */
 type Stop = { name: string; seen: number; moves: boolean; at: Point3D }
 
-/** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
+/**
+ * A part of a route on the globe: a stop, one point, or a piece of the leg
+ * between the stops `names`, two. A tip with a symbol is a stop that has it,
+ * and, where a leg arrives, the point behind it that it comes from.
+ */
 type Piece = Point3D[] & {
   key: string
+  symbol?: Symbol3D
   /** The config key of its color, and whether a stop names it as the key of a leg. */
   colorKey: string
   named: boolean
@@ -177,11 +197,26 @@ type Piece = Point3D[] & {
   group: string
 }
 
-/** What a tooltip is read from. */
+/** What a tooltip and a tip are read from. */
 type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
   config: ChartConfig
   entries: Map<string, { entry: T }>
   fields: Fields<T>
+}
+
+/** How a tip came, by the name of its stop: where it was when the chart last drew it, and the place behind it then. */
+type Came = Map<string, { at: Place; back?: Place }>
+
+/**
+ * How every tip came, kept as long as its stop is on screen, so a tip
+ * without a leg has a bearing too: one whose leg has drawn back into it, as
+ * on a tour that drops the stop it left, keeps the one it came with, and
+ * one that moves points the way it goes.
+ */
+function useCame(presence: Record<string, number>) {
+  const came: Came = React.useRef(new Map()).current
+  for (const name of came.keys()) if (!(name in presence)) came.delete(name)
+  return came
 }
 
 /**
@@ -201,7 +236,6 @@ function pieces(
   { line, points }: { line: string; points: Stop[] },
   legOf: (name: string) => string
 ): Piece[] {
-  const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
   const places = points.map((stop) => placeOf(stop.at))
   // A piece is in focus with the stops it lies between: a leg whole, a stop alone.
   // The stop `by` names the leg that colors it; with no such leg, it has the color of its route.
@@ -217,7 +251,7 @@ function pieces(
       const count = Math.max(1, Math.ceil(geoDistance(places[i], places[i + 1]) / PIECE))
       return Array.from({ length: count }, (_, k) =>
         piece(
-          [on(along(k / count)), on(along((k + 1) / count))],
+          [onGlobe(along(k / count)), onGlobe(along((k + 1) / count))],
           `${from.name}-${to.name}-${k}`,
           from.moves || to.moves ? 1 : Math.max(from.seen, to.seen),
           [from.name, to.name],
@@ -227,19 +261,111 @@ function pieces(
     }),
     // A stop is the end of the leg that leads to it; the first one, of the leg that leaves it.
     ...points.map((stop, i) =>
-      piece([on(places[i])], stop.name, stop.seen, [stop.name], i ? stop.name : points[1]?.name)
+      piece(
+        [onGlobe(places[i])],
+        stop.name,
+        stop.seen,
+        [stop.name],
+        i ? stop.name : points[1]?.name
+      )
     ),
   ]
 }
 
+/** The layer a piece is painted in: the legs, over them the stops, and over all the tips with a symbol. */
+const layer = (piece: unknown[] & Pick<Piece, "symbol">) => (piece.symbol ? 2 : 2 - piece.length)
+
+// Two places nearer than this, in radians of the great circle, are one place - millimetres
+// on the earth: a place read back from its point on the globe is off by a last digit.
+const SAME = 1e-9
+
+/** The place the `share` of the way `from` one place `to` another, on their great circle; none where they are one place. */
+const along = (from: Place, to: Place, share: number): Place | undefined =>
+  geoDistance(from, to) > SAME ? geoInterpolate(from, to)(share) : undefined
+
+/**
+ * The place a little behind `at` on the leg that arrives there `from` the
+ * stop before it, as the leg is drawn - whichever of its stops is on its
+ * way. A leg that has no length yet, its stop only setting out, runs `to`
+ * where that stop heads, so the place lies behind the stop it leaves. None
+ * without a stop before it, and none where that stop is at the place this
+ * one heads for: such a leg has no way.
+ */
+function behind(from: Place | undefined, at: Place, to: Place) {
+  if (!from) return undefined
+  return along(from, at, 1 - BACK) ?? along(from, to, -BACK)
+}
+
+/** The place a stop heads for: that of its entry, and where it is once its entry has left the data. */
+function endOf<T extends Record<string, unknown>>(
+  stop: Stop,
+  live: T | undefined,
+  { lon, lat }: Fields<T>
+): Place {
+  return live ? [Number(live[lon]), Number(live[lat])] : placeOf(stop.at)
+}
+
+/**
+ * How the tip of a run comes, noted in `came` for the next time the chart
+ * draws: the place behind it - on the leg that arrives; without one, a
+ * little behind it on its way from where it last was; where it stands,
+ * the one it had - none for a tip that never came from anywhere. And
+ * whether it is `whole` on its way, as its leg is: a tip that grows its leg
+ * out of a stop that stands is the symbol that left that stop, and does not
+ * fade in. One whose entry has left the data draws back as it fades.
+ */
+function coming<T extends Record<string, unknown>>(stops: Stop[], reading: Reading<T>, came: Came) {
+  const [before, tip] = [stops[stops.length - 2], stops[stops.length - 1]]
+  const live = reading.entries.get(tip.name)?.entry
+  const [at, was] = [placeOf(tip.at), came.get(tip.name)]
+  const leg = behind(before && placeOf(before.at), at, endOf(tip, live, reading.fields))
+  const back = leg ?? (was && (along(was.at, at, 1 - BACK) ?? was.back))
+  came.set(tip.name, { at, back })
+  return { whole: live !== undefined && tip.moves, back }
+}
+
+/**
+ * The tip among the stops of a run, by its position: the last one that is
+ * in the data or still seen. One that has left the data and has faded out
+ * is gone, though it may still be on its way.
+ */
+function tipOf(stops: Stop[], entries: Map<string, unknown>) {
+  let last = stops.length - 1
+  while (last > 0 && !entries.has(stops[last].name) && stops[last].seen === 0) last -= 1
+  return last
+}
+
+/**
+ * The pieces of the last run of a route with its tip, which takes the
+ * symbol of the config key that colors it - its leg, or else its route -
+ * where that key has one, and else stays the circle it is. The stops are
+ * the last pieces of a run, in their order.
+ */
+function tipped<T extends Record<string, unknown>>(
+  list: Piece[],
+  stops: Stop[],
+  reading: Reading<T>,
+  came: Came
+): Piece[] {
+  const last = tipOf(stops, reading.entries)
+  const piece = list[list.length - stops.length + last]
+  const symbol = reading.config[piece.colorKey]?.symbol
+  if (!symbol) return list
+  const { whole, back } = coming(stops.slice(0, last + 1), reading, came)
+  if (back) piece.push(onGlobe(back))
+  Object.assign(piece, { symbol, seen: whole ? 1 : piece.seen })
+  return list
+}
+
 /**
  * The mark of a piece, projected, in its color, faded as far
- * as it is seen: a segment as wide as a leg, or the circle of a stop, ringed
+ * as it is seen: a segment as wide as a leg, the circle of a stop, or the
+ * symbol of a tip, turned to the way it comes, each of the two ringed
  * by the background. Its group is its leg, or its stop, so hovering
  * highlights the leg under the pointer alone, or the stop.
  */
 function pieceMark(
-  piece: { projected: Point2D }[] & Pick<Piece, "key" | "colorKey" | "seen" | "group">,
+  piece: { projected: Point2D }[] & Pick<Piece, "key" | "colorKey" | "seen" | "group" | "symbol">,
   tooltip: Mark3D["tooltip"]
 ): Mark3D {
   const mark = {
@@ -248,10 +374,22 @@ function pieceMark(
     groups: [piece.group],
     tooltip,
   }
-  const at = piece.map((p) => p.projected)
-  return at.length > 1
-    ? { ...mark, points: segment(at[0], at[1], WIDTH) }
-    : { ...mark, points: at, r: STOP, stroke: faded("var(--background)", piece.seen) }
+  // The other point of a piece is the end of a leg, or the point a tip comes from.
+  const [at, other] = piece.map((p) => p.projected)
+  const stroke = faded("var(--background)", piece.seen)
+  if (piece.symbol)
+    return {
+      ...mark,
+      shape: "symbol",
+      points: [at],
+      r: TIP,
+      stroke,
+      symbol: piece.symbol,
+      from: other,
+    }
+  return other
+    ? { ...mark, points: segment(at, other, WIDTH) }
+    : { ...mark, shape: "circle", points: [at], r: STOP, stroke }
 }
 
 /**

@@ -188,6 +188,7 @@ function dotMark<T extends Record<string, unknown>>(
 ) {
   return {
     key: p.name,
+    shape: "circle" as const,
     points: [p.projected],
     r: reading.radius * Math.sqrt(share),
     fill: faded(colorOf(place.key), presence),

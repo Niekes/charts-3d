@@ -194,8 +194,8 @@ How the charts draw, so that a new one draws the same way:
   `registry.json`, and it lands in every installing project, so it has to
   earn its place; one that a single chart needs goes on that chart's item
   instead, as the globe's `d3-geo` (ADR-0007).
-- **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon or
-  a circle, a CSS fill and, if it has one, a tooltip, or a function that
+- **Marks.** A chart turns its projected shapes into `Mark3D`s - a polygon, a
+  circle or a symbol, a CSS fill and, if it has one, a tooltip, or a function that
   builds it when the pointer arrives, so a chart of thousands of marks pays
   for one - and hands them to `Marks3D`. The core draws them and finds the one under the pointer, so a
   chart has no pointer handlers.
@@ -211,6 +211,15 @@ How the charts draw, so that a new one draws the same way:
   renderer, ringed by the background. Give a direction that turns with the
   camera, not an anchor that flips from start to end: `beside` slides the box
   round its point, where a flipping anchor makes it jump.
+- **Symbols** ([ADR-0011](docs/adr/0011-the-tip-is-a-path-symbol.md)). A
+  picture in place of a circle, such as the plane on the tip of a route, is
+  a mark of the shape `"symbol"`: the `symbol` of a config key - SVG path
+  data in a box of 24, never a component or an image, so every renderer
+  draws it in the one color of the mark - on a disc of radius `r`, which the
+  pointer hits. A chart hands the core the point the symbol comes `from`,
+  projected with the rest, and the core turns a symbol that names where it
+  `points`; a chart computes no angle. The registry takes on no icon
+  package: a page copies the path from its own.
 - **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md),
   [ADR-0008](docs/adr/0008-hover-lights-the-fill.md)). A mark names the marks
   of the same element in `groups`: the faces of a bar. Pointing at a mark, the
@@ -299,11 +308,12 @@ every renderer, so text stays sharp and the theme stays in CSS.
   ([ADR-0003](docs/adr/0003-one-scene-renderer-parity.md)). Every mark of the
   scene draws on every renderer, and hover, tooltip and focus act the same;
   pixels may differ, such as the width of a ring (ADR-0002). The parity test in
-  `tests/chart-3d.test.tsx` drives one scene with every mark shape - a polygon
-  and a circle - over every renderer. A third mark shape turns `Mark3D`
-  into a discriminated union with an exhaustive switch everywhere the core
-  draws - `Marks3D`, `paint` - so a shape one renderer misses fails to
-  compile.
+  `tests/chart-3d.test.tsx` drives one scene with every mark shape - a
+  polygon, a circle and a symbol - over every renderer. `Mark3D` is a
+  discriminated union on `shape`, a polygon where it names none, and the
+  core reads it exhaustively everywhere it draws - `markElement` for SVG,
+  the painters of `PAINT` for the canvas, `holds` for the pointer - so a
+  shape one renderer misses fails to compile.
 - **No WebGL.** `"webgl"` draws as `"canvas"`, deprecated until 1.0.0
   removes it: measured, it drew no faster, because projecting the marks on
   the CPU takes the time, not filling them (the globe's 2,500 tiles ran at

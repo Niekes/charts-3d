@@ -31,6 +31,8 @@ export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode
     icon?: React.ComponentType
+    /** The symbol a chart draws for the key, where it draws one: the tip of a route. */
+    symbol?: Symbol3D
   } & (
     | { color?: string; theme?: never }
     | { color?: never; theme: Record<keyof typeof THEMES, string> }
@@ -65,16 +67,39 @@ export type Tooltip3D = {
   items: { label: React.ReactNode; value: React.ReactNode; color?: string }[]
 }
 
-/** One shape of a chart, projected, in paint order: a polygon, or a circle of radius `r` around its one point. */
+/**
+ * A picture a mark is drawn as, such as a plane: the outline of an icon, as
+ * its icon set writes it, in the one color of its mark.
+ */
+export type Symbol3D = {
+  /** SVG path data in a box of 24: the `d` of an icon, the `d`s of its paths joined by a space. */
+  path: string
+  /**
+   * Where it points as it is drawn, in degrees clockwise from up: 45 for the
+   * plane of Lucide. A symbol that names it turns to the way it goes; one that
+   * names none stays upright, as a car seen from the side.
+   */
+  points?: number
+  /**
+   * Whether it is filled, as the icons of a solid set are.
+   * @defaultValue false: outlined, as Lucide draws its icons
+   */
+  fill?: boolean
+}
+
+/**
+ * One shape of a chart, projected, in paint order: a polygon, unless its
+ * `shape` says otherwise - a circle of radius `r` around its one point, or a
+ * symbol on that disc.
+ */
 export type Mark3D = {
   /** Stable across renders, so React moves the shape instead of redrawing it. */
   key: string
-  /** The corners of a polygon, or the center of a circle, in the units of the view box. */
+  /** The corners of a polygon, or the center of a circle or a symbol, in the units of the view box. */
   points: Point2D[]
-  r?: number
   /** A CSS color, such as the result of `shade` or `var(--color-x)`. */
   fill: string
-  /** The ring around a circle, a CSS color. */
+  /** The ring around a circle or a symbol, a CSS color. */
   stroke?: string
   /**
    * Shown while the pointer is over the mark. A function is called when the
@@ -89,7 +114,22 @@ export type Mark3D = {
    * leaves the mark; a stroke of their own stays.
    */
   groups?: string[]
-}
+} & (
+  | { shape?: "polygon"; r?: never }
+  | { shape: "circle"; r: number }
+  | {
+      shape: "symbol"
+      /** The radius of the disc the symbol spans, and the pointer hits. */
+      r: number
+      symbol: Symbol3D
+      /** The point it comes from: a symbol that names where it points turns to the way from there. */
+      from?: Point2D
+    }
+)
+
+/** The shapes a mark may have, and the mark of one of them. */
+type Shape3D = NonNullable<Mark3D["shape"]>
+type MarkOf<S extends Shape3D> = Extract<Mark3D, { shape?: S }>
 
 /** The groups in focus, a store, so a change reaches the marks and labels without rendering the chart again. */
 type Focus3D = {
@@ -1361,10 +1401,19 @@ function useLit(items: { groups?: string[] }[]) {
 /** The topmost mark under `at`: the last one painted that holds it. */
 function hit(marks: Mark3D[], at: Point2D) {
   for (let i = marks.length - 1; i >= 0; i -= 1) {
-    const { points, r } = marks[i]
-    const holds =
-      r === undefined ? inside(points, at) : Math.hypot(points[0].x - at.x, points[0].y - at.y) <= r
-    if (holds) return marks[i]
+    if (holds(marks[i], at)) return marks[i]
+  }
+}
+
+/** Whether `mark` holds `at`: inside its polygon, or on the disc of its circle or its symbol. */
+function holds(mark: Mark3D, at: Point2D): boolean {
+  switch (mark.shape) {
+    case "circle":
+    case "symbol":
+      return Math.hypot(mark.points[0].x - at.x, mark.points[0].y - at.y) <= mark.r
+    case "polygon":
+    case undefined:
+      return inside(mark.points, at)
   }
 }
 
@@ -1495,31 +1544,104 @@ function paint(
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.lineJoin = "round"
 
-  for (const mark of marks) {
-    const { r, fill, stroke } = mark
-    trace(ctx, mark)
-    const filled = color(fill)
-    ctx.fillStyle = filled
-    ctx.fill()
-    // A polygon is outlined in its own color, which closes the seams to its neighbours.
-    const outline = r === undefined ? (stroke ?? fill) : stroke
-    if (!outline) continue
-    // Its own color is resolved already: a lookup per mark, not two.
-    ctx.strokeStyle = outline === fill ? filled : color(outline)
-    ctx.lineWidth = r === undefined ? 0.5 : 1
-    ctx.stroke()
+  // The shape of a mark names its painter; a polygon names none.
+  for (const mark of marks) PAINT[mark.shape ?? "polygon"](ctx, mark as never, color)
+}
+
+/** Paints a mark of one shape on `ctx`, its colors resolved by `color`. */
+type Painter<S extends Shape3D> = (
+  ctx: CanvasRenderingContext2D,
+  mark: MarkOf<S>,
+  color: (css: string) => string
+) => void
+
+/** Fills the path of `ctx` with `fill` and, if it has one, outlines it `width` wide. */
+function ink(
+  ctx: CanvasRenderingContext2D,
+  color: (css: string) => string,
+  fill: string,
+  outline: string | undefined,
+  width: number
+) {
+  const filled = color(fill)
+  ctx.fillStyle = filled
+  ctx.fill()
+  if (!outline) return
+  // Its own color is resolved already: a lookup per mark, not two.
+  ctx.strokeStyle = outline === fill ? filled : color(outline)
+  ctx.lineWidth = width
+  ctx.stroke()
+}
+
+// The box an icon set draws a symbol in, the width of its outline in that
+// box, as Lucide draws it, and the width of the ring around it in the units
+// of the view box, as around a circle.
+const SYMBOL_BOX = 24
+const SYMBOL_LINE = 2
+const SYMBOL_RING = 1
+
+/** The way from `from` to `to` on the screen, in degrees clockwise from up; none where they are one point. */
+function wayOf(from: Point2D, to: Point2D) {
+  const [dx, dy] = [to.x - from.x, to.y - from.y]
+  return dx || dy ? (Math.atan2(dx, -dy) * 180) / Math.PI : undefined
+}
+
+/**
+ * How a symbol lies on its disc: how far it is scaled from its box, how far
+ * it is turned, in degrees clockwise - to the way it comes, where it names
+ * the way it points and comes from another point, and else not at all - and
+ * how wide the ring is drawn, in the units of its box: around a filled one,
+ * and around the line of an outlined one. Rounded, so the server and the
+ * browser, whose last bits of a sine differ, write the same HTML.
+ */
+function lieOf({ points: [at], r, symbol, from }: MarkOf<"symbol">) {
+  const scale = (2 * r) / SYMBOL_BOX
+  const [way, points] = [from && wayOf(from, at), symbol.points]
+  return {
+    scale: +scale.toFixed(4),
+    turn: points === undefined || way === undefined ? 0 : +(way - points).toFixed(2),
+    ring: +((symbol.fill ? 0 : SYMBOL_LINE) + (2 * SYMBOL_RING) / scale).toFixed(2),
   }
 }
 
-/** Traces the outline of `mark` as the path of `ctx`: its polygon, or its circle. */
-function trace(ctx: CanvasRenderingContext2D, { points, r }: Mark3D) {
-  ctx.beginPath()
-  if (r === undefined) {
+/** Paints a symbol: its ring, and over it its outline, filled or drawn as a line. */
+const paintSymbol: Painter<"symbol"> = (ctx, mark, color) => {
+  const { scale, turn, ring } = lieOf(mark)
+  // ponytail: parses the path at every paint, which a tip or two can afford; keep the outlines by their path data when a chart draws symbols by the thousand.
+  const outline = new Path2D(mark.symbol.path)
+  ctx.save()
+  ctx.translate(mark.points[0].x, mark.points[0].y)
+  ctx.rotate((turn * Math.PI) / 180)
+  ctx.scale(scale, scale)
+  ctx.translate(-SYMBOL_BOX / 2, -SYMBOL_BOX / 2)
+  ctx.lineCap = "round"
+  if (mark.stroke) {
+    ctx.strokeStyle = color(mark.stroke)
+    ctx.lineWidth = ring
+    ctx.stroke(outline)
+  }
+  ctx.fillStyle = ctx.strokeStyle = color(mark.fill)
+  ctx.lineWidth = SYMBOL_LINE
+  if (mark.symbol.fill) ctx.fill(outline)
+  else ctx.stroke(outline)
+  ctx.restore()
+}
+
+// The painter of every shape: a shape without one fails to compile.
+const PAINT: { [S in Shape3D]: Painter<S> } = {
+  polygon: (ctx, { points, fill, stroke }, color) => {
+    ctx.beginPath()
     for (const p of points) ctx.lineTo(p.x, p.y)
     ctx.closePath()
-  } else {
+    // A polygon is outlined in its own color, which closes the seams to its neighbours.
+    ink(ctx, color, fill, stroke ?? fill, 0.5)
+  },
+  circle: (ctx, { points, r, fill, stroke }, color) => {
+    ctx.beginPath()
     ctx.arc(points[0].x, points[0].y, r, 0, 2 * Math.PI)
-  }
+    ink(ctx, color, fill, stroke, 1)
+  },
+  symbol: paintSymbol,
 }
 
 /** Twice the signed area of the triangle `a`, `b`, `c`: its sign tells which way it turns, 0 on a line. */
@@ -1676,31 +1798,62 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
 
   return (
     <g ref={node} data-slot="chart-3d-marks">
-      {renderer === "svg" &&
-        drawn.map(({ key, points, r, fill, stroke }) =>
-          r === undefined ? (
-            <path
-              key={key}
-              d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
-              fill={fill}
-              stroke={stroke ?? fill}
-              strokeWidth={0.5}
-              strokeLinejoin="round"
-            />
-          ) : (
-            // Rounded like a path, so the server and the browser, whose last
-            // bits of a sine differ, write the same HTML.
-            <circle
-              key={key}
-              cx={+points[0].x.toFixed(2)}
-              cy={+points[0].y.toFixed(2)}
-              r={+r.toFixed(2)}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={stroke ? 1 : undefined}
-            />
-          )
-        )}
+      {renderer === "svg" && drawn.map(markElement)}
+    </g>
+  )
+}
+
+/** `mark` as its SVG element: a shape without one fails to compile. */
+function markElement(mark: Mark3D): React.ReactElement {
+  const { key, points, fill, stroke } = mark
+  switch (mark.shape) {
+    case "symbol":
+      return <SymbolMark3D key={key} mark={mark} />
+    case "circle":
+      return (
+        // Rounded like a path, so the server and the browser, whose last
+        // bits of a sine differ, write the same HTML.
+        <circle
+          key={key}
+          cx={+points[0].x.toFixed(2)}
+          cy={+points[0].y.toFixed(2)}
+          r={+mark.r.toFixed(2)}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={stroke ? 1 : undefined}
+        />
+      )
+    case "polygon":
+    case undefined:
+      return (
+        <path
+          key={key}
+          d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+          fill={fill}
+          stroke={stroke ?? fill}
+          strokeWidth={0.5}
+          strokeLinejoin="round"
+        />
+      )
+  }
+}
+
+/**
+ * A symbol as SVG: its box laid on its disc, and in it its ring and, over
+ * that, its outline, filled or drawn as a line, in the color of the mark.
+ */
+function SymbolMark3D({ mark }: { mark: MarkOf<"symbol"> }) {
+  const { points, symbol, fill, stroke } = mark
+  const { scale, turn, ring } = lieOf(mark)
+  const at = `${+points[0].x.toFixed(2)} ${+points[0].y.toFixed(2)}`
+  const line = { d: symbol.path, strokeLinecap: "round", strokeLinejoin: "round" } as const
+  const look = symbol.fill ? { fill } : { fill: "none", stroke: fill, strokeWidth: SYMBOL_LINE }
+  return (
+    <g
+      transform={`translate(${at}) rotate(${turn}) scale(${scale}) translate(${-SYMBOL_BOX / 2} ${-SYMBOL_BOX / 2})`}
+    >
+      {stroke && <path {...line} fill="none" stroke={stroke} strokeWidth={ring} />}
+      <path {...line} {...look} />
     </g>
   )
 }

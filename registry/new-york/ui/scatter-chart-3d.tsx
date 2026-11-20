@@ -106,6 +106,7 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
     .sort(sort)
     .map((p) => ({
       key: p.name,
+      shape: "circle" as const,
       points: [p.projected],
       r: radii[p.name],
       fill: faded(colorOf(key(p.name)), opacity[p.name]),

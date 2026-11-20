@@ -39,6 +39,55 @@ and one no leg touches, keeps the color of its route. With a leg named at
 every stop, as here, the config needs the keys of the legs only: `series`
 still tells the routes apart.
 
+## The tip
+
+The last stop of a route is its tip: where the route stands now. A config
+key may carry a `symbol`, and the tip is drawn as the symbol of the key that
+colors it - its leg, or else its route - in place of the circle; every stop
+before it stays a circle, and a key without a symbol keeps the circle on the
+tip too. Here the route round the Atlantic comes home by air and ends on a
+plane; the one to the east ends by sea, on a ship off Canberra - turn the
+globe to see it.
+
+```tsx
+const chartConfig = {
+  air: {
+    label: "By air",
+    color: "var(--chart-1)",
+    symbol: { path: "M17.8 19.2 16 11...", points: 45, fill: true },
+  },
+  sea: { label: "By sea", color: "var(--chart-2)", symbol: { path: "M12 2v2 M12 9.189V13..." } },
+} satisfies ChartConfig
+```
+
+A symbol is the outline of an icon as path data, in a box of 24: the `d` of
+its `<path>`, as [Lucide](https://lucide.dev), Tabler, Heroicons or Phosphor
+write it, the `d`s of several paths joined by a space. The registry brings no
+icon package: copy the path from your set. An icon that draws with a
+`<circle>` or a `<rect>`, as the wheels of Lucide's car, has to become a path
+first, which [SVGO](https://svgo.dev/docs/plugins/convertShapeToPath/) does.
+It is drawn in the one color of the tip, as an outline, the way Lucide draws
+its icons, or filled with `fill: true`, as the icons of a solid set; ringed
+by the background, as large on the screen from every side, and it lights on
+hover as a stop does.
+
+`points` says where the symbol points as it is drawn, in degrees clockwise
+from up: 45 for the plane of Lucide. A symbol that names it turns to its
+bearing - the leg that arrives at the tip, as the camera shows it - so the
+plane points the way it flew. One that names none stays upright, as a ship or
+a car seen from the side. A tip without a leg points the way it moves - a
+route of one stop whose place changes is a vehicle on its way - and where it
+stands it keeps the bearing it came with, as one whose leg has drawn back
+into it on a tour that drops the stops behind it. A tip that never came from
+anywhere shows its symbol as it is drawn.
+
+The tip moves with the data. A stop that joins the end of a route takes the
+symbol at once and flies its leg from the stop it stood on, whole all the
+way; one that leaves the data draws back along its leg as it fades, and the
+stop before it is the tip once it is gone. See it fly under
+[Enter and leave](#enter-and-leave). The chart draws no flag: a flag has
+many colors, and belongs in the text beside a stop.
+
 The demos travel between the capitals of
 [Natural Earth](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/),
 public domain. The `land` under the routes is the one every globe takes, cut
@@ -99,7 +148,8 @@ it, along the great circle, as it fades in; a stop that goes draws its leg
 back into its neighbour, the mirror of its entering (see Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
 Here a tour rests on one stop. A step adds the next stop, so its leg grows
-out of the stop the tour is on, and then drops the stop left behind, so the
+out of the stop the tour is on - the plane, the symbol of the route, flies
+it - and then drops the stop left behind, so the
 leg draws back towards the new one. The globe turns to the new stop through
 the `view` of the container, set to `facing(lon, lat)`: a heading, so you can
 turn the globe away at any time (see [chart-3d](/docs/components/chart-3d#view)).

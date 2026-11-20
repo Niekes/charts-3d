@@ -38,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The core helpers the line and the routes chart share: `useRuns` and
   `segment`; and `useConfigKeys`, which the scatter and the routes chart
   share.
+- `symbol` on a key of `ChartConfig`, and the tip of a route: the last stop
+  of a route is drawn as the symbol of the key that colors it, in place of
+  its circle - a plane, a ship, any icon as SVG path data in a box of 24,
+  outlined as Lucide draws it or filled. A symbol that names where it
+  `points` turns to its bearing, the leg that arrives; one that names none
+  stays upright. A stop that joins a route flies its leg as the tip
+  (ADR-0011).
+
+### Changed
+
+- `Mark3D` names its shape: a mark is a polygon unless `shape` says
+  `"circle"` or `"symbol"`, and the core draws each through an exhaustive
+  switch on every renderer. A chart of your own that hands `Marks3D` a
+  circle adds `shape: "circle"` beside its `r`; a polygon stays as it is.
 
 ### Fixed
 
