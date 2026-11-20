@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { nice, ticks } from "d3-array"
+import { extent, nice, ticks } from "d3-array"
 import {
   axes3D,
   box,
@@ -2636,6 +2636,95 @@ function nonNegative(value: unknown) {
 }
 
 /**
+ * The entries of `data` as points in the chart box, for a chart that places
+ * every entry at its fields `x`, `y` and `z`, as the scatter and the line
+ * chart do. Every entry is `named` by its `id` field, or by its position in
+ * the data, so a point keeps its name when an entry before it gains or loses
+ * its place; one whose x, y or z is not a finite number is not `placed` and
+ * is not among the `names` and the `entries` behind them. The `axes` hold
+ * every placed entry, a nice one per field. Each point glides by name: `read`
+ * gives its position along an axis - a gone point stands in place - and
+ * `presence` runs from 0 to 1 as it comes and back as it goes, the gone ones
+ * still among them. Built once per change of the data, not at every frame
+ * the camera turns.
+ */
+function usePoints<T extends Record<string, unknown>>(
+  data: T[],
+  x: keyof T & string,
+  y: keyof T & string,
+  z: keyof T & string,
+  id?: keyof T & string
+) {
+  const points = React.useMemo(() => {
+    const fields = { x, y, z }
+    const named = data.map((d, i) => ({
+      d,
+      name: id ? String(d[id]) : String(i),
+      placed: [x, y, z].every((f) => finite(d[f])),
+    }))
+    const placed = named.filter((p) => p.placed)
+    const names = placed.map((p) => p.name)
+    const range = (a: keyof AxesSpec) => {
+      const [lo = 0, hi = 0] = extent(placed, (p) => Number(p.d[fields[a]]))
+      return axis(lo, hi)
+    }
+    return {
+      fields,
+      named,
+      names,
+      entries: new Map(placed.map((p) => [p.name, p.d])),
+      target: Object.fromEntries(
+        placed.flatMap((p) =>
+          (["x", "y", "z"] as const).map((a) => [`${a}${p.name}`, Number(p.d[fields[a]])])
+        )
+      ),
+      present: Object.fromEntries(names.map((name) => [name, 1])),
+      axes: { x: range("x"), y: range("y"), z: range("z") },
+    }
+  }, [data, x, y, z, id])
+  const values = useTween(points.target)
+  return {
+    ...points,
+    presence: useTween(points.present, 0),
+    read: (name: string, a: keyof AxesSpec) => values[`${a}${name}`],
+  }
+}
+
+/**
+ * What the point of `entry` says on hover, made when the pointer lands on
+ * it: its series, where `title` names one, and its x, y and z as the ticks of
+ * each axis name them - or what `tooltip` makes of that. A point whose entry
+ * has left the data says nothing.
+ */
+function pointTooltip<T extends Record<string, unknown>>(
+  entry: T | undefined,
+  title: React.ReactNode,
+  fields: Record<keyof AxesSpec, keyof T & string>,
+  {
+    format = {},
+    titles = {},
+    tooltip = (tip) => tip,
+  }: {
+    format?: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>
+    titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
+    tooltip?: (tooltip: Tooltip3D, data: { entry: T }) => Tooltip3D | null
+  }
+): Mark3D["tooltip"] {
+  if (!entry) return undefined
+  return () =>
+    tooltip(
+      {
+        title,
+        items: (["x", "y", "z"] as const).map((a) => {
+          const value = Number(entry[fields[a]])
+          return { label: titles[a] ?? fields[a], value: format[a]?.(value) ?? value }
+        }),
+      },
+      { entry }
+    )
+}
+
+/**
  * The entries of `data` and their series, for a chart that lays the entries
  * out along x and the series along z, as the bar and the area chart do. The
  * name of every entry comes from its `index` field, the series are `keys` or
@@ -2849,6 +2938,8 @@ export {
   finite,
   nonNegative,
   useSeries,
+  usePoints,
+  pointTooltip,
   cubeMarks,
   barCorners,
   barMarks,
