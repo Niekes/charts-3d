@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The core helpers the line and the routes chart share: `useRuns` and
   `segment`.
 
+### Fixed
+
+- `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are
+  points of their own, told apart by the order of the data, where they
+  shared one point before.
+- `LineChart3D`: a point that goes from the start of a line after a gap
+  folds into its line, where it stood alone before; and new data that comes
+  while a point is on its way moves it on from where it is, where the line
+  jumped to its places before.
+
 ## [0.7.0] - 2026-11-15
 
 ### Added

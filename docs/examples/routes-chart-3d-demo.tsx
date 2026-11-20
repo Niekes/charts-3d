@@ -11,15 +11,32 @@ import { land } from "@/docs/examples/land"
 import { placeRows } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 
-const capitals = new Map(placeRows().map((place) => [place.name, place]))
+// The capitals by their plain names: a name another place shares, such as
+// London, carries its position in the rows, which a stop does not need.
+const capitals = new Map(
+  placeRows()
+    .filter((place) => place.kind === "capital")
+    .map((place) => ({ ...place, name: place.name.replace(/ \(.*/, "") }))
+    .map((place) => [place.name, place])
+)
 
 /** The capitals of `names` as the stops of the route `route`, in that order. */
 export const stops = (route: string, names: string[]) =>
   names.map((name) => ({ ...capitals.get(name)!, route }))
 
-// Two journeys from capital to capital, one round the Atlantic, one east from Cairo.
+// Two routes from capital to capital: one round the Atlantic and back to London - a name
+// that repeats is a stop of its own - and one east from Cairo.
 export const chartData = [
-  ...stops("atlantic", ["London", "Reykjavík", "Ottawa", "Havana", "Brasília", "Dakar", "Lisbon"]),
+  ...stops("atlantic", [
+    "London",
+    "Reykjavík",
+    "Ottawa",
+    "Havana",
+    "Brasília",
+    "Dakar",
+    "Lisbon",
+    "London",
+  ]),
   ...stops("east", ["Cairo", "Nairobi", "New Delhi", "Singapore", "Canberra"]),
 ]
 

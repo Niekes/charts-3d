@@ -20,30 +20,38 @@ const tour = stops("atlantic", [
   "Reykjavík",
 ])
 
-// The tour shows the stop it left and the stop it heads for. A new stop
-// grows its leg from the one before it, the stop left behind draws its leg
-// back, and the view of the container turns the globe to the new stop.
+// How long a step of the tour takes, in ms: the leg grows for as long, then draws back for as long.
+const STEP = 1250
+
+// The tour rests on one stop. A step adds the next one, so its leg grows
+// out of the stop the tour is on while the view of the container turns the
+// globe to it; then the stop left behind goes, and the leg draws back
+// towards the new one.
 export default function RoutesChart3DEnterDemo() {
-  const [at, setAt] = useState(1)
+  const [[tail, head], setSpan] = useState([0, 0])
   const [renderer, setRenderer] = useState<Renderer3D>("svg")
-  const [from, to] = [tour[(at - 1) % tour.length], tour[at % tour.length]]
+  const shown = tour.concat(tour).slice(tail % tour.length, (tail % tour.length) + head - tail + 1)
+  const at = shown[shown.length - 1]
 
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer3D
         config={chartConfig}
         renderer={renderer}
-        animationDuration={1250}
-        view={facing(to.lon, to.lat)}
+        animationDuration={STEP}
+        view={facing(at.lon, at.lat)}
       >
-        <RoutesChart3D data={[from, to]} land={land} lon="lon" lat="lat" id="name" />
+        <RoutesChart3D data={shown} land={land} lon="lon" lat="lat" id="name" />
       </ChartContainer3D>
       <button
         type="button"
-        onClick={() => setAt(at + 1)}
+        onClick={() => {
+          setSpan(([from, to]) => [from, to + 1])
+          setTimeout(() => setSpan(([, to]) => [to, to]), STEP)
+        }}
         className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        {from.name} → {to.name} · Next stop
+        {at.name} · Next stop
       </button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>

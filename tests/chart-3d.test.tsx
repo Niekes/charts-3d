@@ -1403,12 +1403,14 @@ describe("view", () => {
     const zoomed = view(view3d.host).scale
 
     await view3d.render(chart({ yaw: 1, tilt: 0.5 }, 1000))
-    await frames(500)
+    await frames(250)
+    // In step with the data, which eases in and out: a quarter of the time, well under a quarter of the way.
+    expect(view(view3d.host).yaw).toBeGreaterThan(0)
+    expect(view(view3d.host).yaw).toBeLessThan(0.2)
+    await frames(250)
     const mid = view(view3d.host)
-    expect(mid.yaw).toBeGreaterThan(0)
-    expect(mid.yaw).toBeLessThan(1)
-    expect(mid.tilt).toBeGreaterThan(0)
-    expect(mid.tilt).toBeLessThan(0.5)
+    expect(mid.yaw).toBeCloseTo(0.5, 1)
+    expect(mid.tilt).toBeCloseTo(0.25, 1)
     await frames(600)
     expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5, scale: zoomed })
     await view3d.unmount()
@@ -3263,8 +3265,13 @@ describe("lines", () => {
   const point = (name: string, s: string, placed = true) => ({ d: { s }, name, placed })
   const runsOf = (host: HTMLElement) =>
     (
-      JSON.parse(host.querySelector("text")!.textContent!) as { line: string; points: object[] }[]
-    ).map((run) => `${run.line}: ${run.points.map((p) => Object.values(p).join(" ")).join(", ")}`)
+      JSON.parse(host.querySelector("text")!.textContent!) as {
+        line: string
+        points: { name: string; seen: number; at: string }[]
+      }[]
+    ).map(
+      (run) => `${run.line}: ${run.points.map((p) => `${p.name} ${p.seen} ${p.at}`).join(", ")}`
+    )
 
   test("useRuns joins the points of a series in the order of the data, cuts a run at an entry without a place, and unfolds a point from the one before it", async () => {
     const named = [
@@ -3279,11 +3286,7 @@ describe("lines", () => {
         <Runs named={named} series="s" presence={{ a: 1, n: 1, b: 1, c: 0.5 }} />
       </ChartContainer3D>
     )
-    expect(runsOf(view.host)).toEqual([
-      "x: a 1 A>A@1",
-      "y: n 1 N>N@1",
-      "x: b 1 B>B@1, c 0.5 B>C@0.5",
-    ])
+    expect(runsOf(view.host)).toEqual(["x: a 1 A", "y: n 1 N", "x: b 1 B, c 0.5 B>C@0.5"])
 
     // A gone point keeps its line and its place after the point it followed, and folds into
     // the first that stands - the one after it, at the start of its run.
@@ -3296,11 +3299,7 @@ describe("lines", () => {
         />
       </ChartContainer3D>
     )
-    expect(runsOf(view.host)).toEqual([
-      "x: a 1 A>A@1",
-      "y: n 1 N>N@1",
-      "x: b 0.3 C>B@0.3, c 1 C>C@1",
-    ])
+    expect(runsOf(view.host)).toEqual(["x: a 1 A", "y: n 1 N", "x: b 0.3 C>B@0.3, c 1 C"])
 
     // Dropped by the presence, it is forgotten; without series all the points are one line,
     // that of the first key of the config, and a run that is all new stands in place.

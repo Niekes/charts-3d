@@ -39,7 +39,8 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
   /**
    * The field that names a stop, in the tooltip and through updates: a new
    * stop at the end of its route grows its leg from the stop before it, a
-   * gone one draws its leg back. The names should be unique.
+   * gone one draws its leg back. A name that repeats, as of a route that
+   * comes back to a stop, is, in the order of the data, a stop of its own.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string
@@ -138,7 +139,7 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
 }
 
 /** A stop of a route, where it is now, and how far it has come, from 0 to 1. */
-type Stop = { name: string; seen: number; at: Place }
+type Stop = { name: string; seen: number; anchored: boolean; at: Place }
 
 /** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
 type Piece = Point3D[] & { key: string; line: string; seen: number; names: string[] }
@@ -154,10 +155,10 @@ type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "t
  * The pieces of a run on the globe: every stop, and every leg between two
  * stops next to each other, cut along its great circle into pieces short
  * enough to bend with the globe - each sorts on its own depth, and one
- * beyond the horizon is hidden alone. A leg is seen as far as the better
- * seen of its stops: growing out of a stop that stands, it is whole from
- * the start, as a line that draws itself, and fades only where both its
- * stops do.
+ * beyond the horizon is hidden alone. A leg with a stop on its way grows or
+ * draws back with it, a line that draws itself, and is whole all the while;
+ * one whose stops both stand in place is seen as far as the better seen of
+ * them, so the legs of a route that is all new fade in with its stops.
  */
 function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
   const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
@@ -172,7 +173,7 @@ function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
         piece(
           [on(along(k / count)), on(along((k + 1) / count))],
           `${from.name}-${to.name}-${k}`,
-          Math.max(from.seen, to.seen),
+          from.anchored || to.anchored ? 1 : Math.max(from.seen, to.seen),
           [from.name, to.name]
         )
       )

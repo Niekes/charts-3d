@@ -23,7 +23,8 @@ a stop at its `lon` and `lat`, and a leg runs from each stop to the next
 along the great circle, the shortest way over the surface. `series` names
 the field that tells the routes apart; without it all the entries are one
 route. What lies on the far side is hidden by the globe, so a leg ends at
-the horizon. `id` names a stop, in the tooltip and through updates. Pointing
+the horizon. `id` names a stop, in the tooltip and through updates; a route
+may come back to a stop, since a name that repeats is a stop of its own. Pointing
 at a route lights the whole route: a leg says its two stops, a stop itself.
 An entry whose `lon` or `lat` is missing or not a number is no stop, and its
 route ends before it and starts again after it.
@@ -87,11 +88,13 @@ A stop that joins the end of its route grows its leg out of the stop before
 it, along the great circle, as it fades in; a stop that goes draws its leg
 back into its neighbour, the mirror of its entering (see Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md)).
-Here a tour shows the stop it left and the stop it heads for: with every
-step the leg behind draws back towards the stop it led to as the next one
-grows. The globe turns to the new stop through the `view` of the container,
-set to `facing(lon, lat)`: a heading, so you can turn the globe away at any
-time (see [chart-3d](/docs/components/chart-3d)).
+Here a tour rests on one stop. A step adds the next stop, so its leg grows
+out of the stop the tour is on, and then drops the stop left behind, so the
+leg draws back towards the new one. The globe turns to the new stop through
+the `view` of the container, set to `facing(lon, lat)`: a heading, so you can
+turn the globe away at any time (see [chart-3d](/docs/components/chart-3d#view)).
+A step that comes before the last one is done goes on from where the route
+is.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

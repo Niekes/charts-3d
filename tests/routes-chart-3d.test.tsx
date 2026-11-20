@@ -163,6 +163,19 @@ describe("RoutesChart3D", () => {
     expect(over.quads).toHaveLength(near.quads.length - 1)
   })
 
+  test("a route may come back to a stop: with id, a name that repeats is a stop of its own, and the round closes", () => {
+    const round = [
+      { id: "home", lon: -20, lat: 0 },
+      { id: "out", lon: 20, lat: 20 },
+      { id: "on", lon: 20, lat: -20 },
+      { id: "home", lon: -20, lat: 0 },
+    ]
+    const named = serverMarks(chart(round, { id: "id" }))
+    const numbered = serverMarks(chart(round))
+    expect(named.stops).toHaveLength(4)
+    expect(named.quads).toHaveLength(numbered.quads.length)
+  })
+
   test("a leg is as wide on the screen wherever it runs, and two stops at one place draw no leg at NaN", () => {
     const { quads } = serverMarks(
       chart([
@@ -347,6 +360,38 @@ describe("RoutesChart3D transitions", () => {
     await glide(400)
     expect(marks(view.host).stops).toHaveLength(2)
     expect(Math.min(...reach(marks(view.host)))).toBeCloseTo(second, 0)
+    await view.unmount()
+  })
+
+  test("a tour that moves on before the last step is done goes on from where it is: nothing jumps back", async () => {
+    const far = { id: "far", lon: 70, lat: 0 }
+    const view = await mount(chart([west, mid], { id: "id" }))
+    const [first] = xs(marks(view.host))
+    await view.render(chart([mid, east], { id: "id" }))
+    await glide(300)
+    const before = marks(view.host)
+    const tail = xs(before)[0]
+    expect(tail).toBeGreaterThan(first)
+    // The next step, half-way through this one.
+    await view.render(chart([east, far], { id: "id" }))
+    await glide(16)
+    const after = marks(view.host)
+    // The stop left behind first keeps drawing back from where it was, its leg no longer.
+    expect(xs(after)).toHaveLength(4)
+    expect(Math.abs(xs(after)[0] - tail)).toBeLessThan(3)
+    expect(Math.min(...reach(after))).toBeGreaterThan(tail - 3)
+    // The new stop starts on the stop before it where that one is now, not where it is
+    // heading, so no leg is there before it has grown; and a leg that grows or draws back
+    // is whole, not faded.
+    const [, , head, tip] = xs(after)
+    expect(tip - head).toBeLessThan(2)
+    expect(new Set(after.quads.map((q) => q.el.getAttribute("fill")))).toEqual(
+      new Set(["var(--color-a)"])
+    )
+    await glide(300)
+    expect(xs(marks(view.host))[0]).toBeGreaterThan(tail)
+    await glide(400)
+    expect(marks(view.host).stops).toHaveLength(2)
     await view.unmount()
   })
 

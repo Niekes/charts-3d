@@ -30,7 +30,7 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
   /**
    * The field that names an entry, so a point follows its name through
    * updates: a new one grows, a gone one shrinks away, one that moves glides.
-   * The names should be unique.
+   * A name that repeats is, in the order of the data, a point of its own.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string

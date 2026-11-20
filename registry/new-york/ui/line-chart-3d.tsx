@@ -35,7 +35,8 @@ export type LineChart3DProps<T extends Record<string, unknown> = Record<string, 
   /**
    * The field that names an entry, so a point follows its name through
    * updates: a new one unfolds from the point before it, a gone one folds
-   * back into it, one that moves glides. The names should be unique.
+   * back into it, one that moves glides. A name that repeats is, in the
+   * order of the data, a point of its own.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string

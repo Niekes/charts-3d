@@ -662,6 +662,12 @@ function animates() {
 // The time in ms a chart takes to glide into new data, unless its container says otherwise.
 const DURATION = 600
 
+/** The share of the way a glide of the data has come at the share `t` of its time: it eases in and out. */
+const smooth = (t: number) => t * t * (3 - 2 * t)
+
+/** The same for a step of the camera, which answers a key at once: it eases out. */
+const prompt = (t: number) => 1 - (1 - t) ** 3
+
 /** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
 type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
 
@@ -718,7 +724,7 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
  */
 function tweenNumbers({ from, to, t }: Tween, enter?: number) {
   if (t >= 1) return to
-  const s = t * t * (3 - 2 * t)
+  const s = smooth(t)
   const gone = Object.entries(from).filter(([k]) => !(k in to))
   return Object.fromEntries([
     ...Object.entries(to).map(([k, end]) => {
@@ -818,7 +824,7 @@ function useGlide(start: View3D) {
   )
   React.useEffect(() => stop, [stop])
 
-  const glide = (to: (from: View3D) => View3D, ms = GLIDE) => {
+  const glide = (to: (from: View3D) => View3D, ms = GLIDE, ease = prompt) => {
     if (!animates()) return jump(to)
     const end = to(run.current?.to ?? now.current)
     // The yaw turns the short way round, to an angle that looks the same.
@@ -827,7 +833,7 @@ function useGlide(start: View3D) {
     stop()
     const frame = (time: number) => {
       const t = clamp(0, 1, (time - start) / ms)
-      show(t < 1 ? between(from, end, 1 - (1 - t) ** 3) : end)
+      show(t < 1 ? between(from, end, ease(t)) : end)
       if (t < 1) run.current = { to: end, frame: requestAnimationFrame(frame) }
       else run.current = null
     }
@@ -891,7 +897,8 @@ function useOrbit(
   { heading, ms = DURATION }: { heading?: View3D; ms?: number }
 ) {
   const { view, jump, glide } = useGlide({ ...defaultView, ...heading })
-  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms))
+  // In step with the data: over the same time, eased the same way.
+  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms, smooth))
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -2708,13 +2715,13 @@ function usePoints<T extends Record<string, unknown>>(
 ) {
   const points = React.useMemo(() => {
     const fields = { x, y, z }
+    const names = id ? uniqueIds(data.map((d) => String(d[id]))) : data.map((_, i) => String(i))
     const named = data.map((d, i) => ({
       d,
-      name: id ? String(d[id]) : String(i),
+      name: names[i],
       placed: [x, y, z].every((f) => finite(d[f])),
     }))
     const placed = named.filter((p) => p.placed)
-    const names = placed.map((p) => p.name)
     const range = (a: keyof AxesSpec) => {
       const [lo = 0, hi = 0] = extent(placed, (p) => Number(p.d[fields[a]]))
       return axis(lo, hi)
@@ -2722,14 +2729,14 @@ function usePoints<T extends Record<string, unknown>>(
     return {
       fields,
       named,
-      names,
+      names: placed.map((p) => p.name),
       entries: new Map(placed.map((p) => [p.name, p.d])),
       target: Object.fromEntries(
         placed.flatMap((p) =>
           (["x", "y", "z"] as const).map((a) => [`${a}${p.name}`, Number(p.d[fields[a]])])
         )
       ),
-      present: Object.fromEntries(names.map((name) => [name, 1])),
+      present: Object.fromEntries(placed.map((p) => [p.name, 1])),
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
   }, [data, x, y, z, id])
@@ -2756,8 +2763,11 @@ type Joint = { line: string; gap: boolean }
  * already left the data, and is forgotten when the presence drops it. `at` gives the place of a point, and a point that
  * comes or goes unfolds from the point before it in its run - the one after
  * it, at the start - and folds back into it: `toward` is the place the share
- * `seen` of the way from that anchor to its own. A run that is all new
- * stands in place.
+ * `seen` of the way from that anchor to its own - from where the anchor is
+ * now, if that is on its way too - and it keeps that anchor until it is
+ * seen whole, so new data that comes while it is on its way moves it on from
+ * where it is. A point with an anchor is `anchored`: it moves, where one
+ * of a run that is all new, or all gone, stands in place.
  */
 function useRuns<T extends Record<string, unknown>, P>(
   named: { d: T; name: string; placed: boolean }[],
@@ -2769,19 +2779,62 @@ function useRuns<T extends Record<string, unknown>, P>(
   const { config } = useChart3D()
   const fallback = Object.keys(config)[0]
   const known = React.useRef(new Map<string, Joint>())
+  const anchors = React.useRef(new Map<string, string>())
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
-  known.current = withGone(live, known.current, presence)
-  return runsOf(known.current).map(({ line, names }) => {
-    const points = names.map((name) => ({ name, seen: presence[name], at: at(name) }))
-    let anchor = points.find((p) => p.seen === 1)
+  const joints = (known.current = withGone(live, known.current, presence))
+  // Forgotten with the point, so the memory stays the size of the chart.
+  for (const name of anchors.current.keys()) if (!joints.has(name)) anchors.current.delete(name)
+  return runsOf(joints).map(({ line, names }) => {
+    const points = names.map((name) => ({
+      name,
+      seen: presence[name],
+      at: at(name),
+      stays: live.has(name),
+    }))
+    const index = new Map(points.map((p, i) => [p, i]))
+    const anchored = points.map((_, i) => index.get(anchorOf(points, i, anchors.current)!))
+    // Where each would be if its anchor stood still: the anchor of a point may be on its way too.
+    const from = points.map((p, i) => ({ at: unfolded(p, points[anchored[i]!], toward) }))
     return {
       line,
-      points: points.map((p) => {
-        if (p.seen === 1) anchor = p
-        return anchor ? { ...p, at: toward(anchor.at, p.at, p.seen) } : p
-      }),
+      points: points.map(({ name, seen, at: own }, i) => ({
+        name,
+        seen,
+        anchored: anchored[i] !== undefined,
+        at: unfolded({ seen, at: own }, from[anchored[i]!], toward),
+      })),
     }
   })
+}
+
+/** The place of `point` the share it is seen of the way from its anchor, if it has one, to its own. */
+function unfolded<P>(
+  point: { seen: number; at: P },
+  anchor: { at: P } | undefined,
+  toward: (anchor: P, own: P, seen: number) => P
+) {
+  return anchor ? toward(anchor.at, point.at, point.seen) : point.at
+}
+
+/** A point of a run on its way: how far it has come, where its place is, and whether its entry stays in the data. */
+type RunPoint<P> = { name: string; seen: number; at: P; stays: boolean }
+
+/**
+ * The point the point `i` of a run unfolds from or folds into, if any, by
+ * the name remembered in `anchors`: the nearest point before it - after it,
+ * if there is none - that stays in the data and, for a point that stays
+ * itself, is seen better than it. A point keeps its anchor until it is seen
+ * whole, so when new data comes while it is on its way it goes on from where
+ * it is, and nothing jumps back.
+ */
+function anchorOf<P>(points: RunPoint<P>[], i: number, anchors: Map<string, string>) {
+  const point = points[i]
+  if (point.seen === 1) return void anchors.delete(point.name)
+  const fits = (o: RunPoint<P>) => o.stays && (!point.stays || o.seen > point.seen)
+  const held = points.find((o) => o.name === anchors.get(point.name))
+  const anchor = held ?? points.slice(0, i).reverse().find(fits) ?? points.slice(i + 1).find(fits)
+  if (anchor) anchors.set(point.name, anchor.name)
+  return anchor
 }
 
 /** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */
