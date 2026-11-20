@@ -101,9 +101,8 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   const { named, entries, presence, target } = usePoints(stops, "x", "y", "z", id && "name")
   // The leg a stop names, none as "": a stop on its way out keeps it, and its color with it.
   const legOf = useConfigKeys(entries, "leg", "", presence)
-  // A stop that comes or goes glides as a point through the globe, from or to
-  // its neighbour: over the surface, along the great circle between them.
-  const runs = useRuns(named, series && "route", presence, target)
+  // A stop that comes, goes or moves travels the great circle, at an even pace.
+  const runs = useRuns(named, series && "route", presence, target, overGlobe)
   const reading = { config, entries, fields, tooltip }
   const routes = lineStrips3D<Point3D>()
     .camera(orthographic(camera))
@@ -121,6 +120,17 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
 /** A place on the globe: its longitude and its latitude, in degrees. */
 type Place = [number, number]
 
+/**
+ * The point of the globe the `share` of the way from one to another along
+ * the great circle between them, the shortest way over the surface, over the
+ * date line too - where the straight way through the globe would rush past
+ * its middle.
+ */
+function overGlobe(from: Point3D, to: Point3D, share: number) {
+  const [lon, lat] = geoInterpolate(placeOf(from), placeOf(to))(share)
+  return globe(lon, lat)
+}
+
 /** The fields of an entry the chart reads. */
 type Fields<T> = Pick<
   RoutesChart3DProps<T & Record<string, unknown>>,
@@ -130,9 +140,8 @@ type Fields<T> = Pick<
 /**
  * The entries as the core reads points: each with its name, its route and
  * the leg it names, and, where it has a place, the point of the globe it
- * lies on. A stop that moves glides as that point, through the globe, so it
- * takes the shortest way to its new place, over the date line too. Built
- * once per change of the data, not at every frame the camera turns.
+ * lies on, which the core glides. Built once per change of the data, not at
+ * every frame the camera turns.
  */
 function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
   const { lon, lat, id, series, leg } = fields

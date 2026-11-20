@@ -50,14 +50,19 @@ export default function RoutesChart3DEnterDemo() {
       </ChartContainer3D>
       <button
         type="button"
+        // The tour holds every stop once at most: a step waits until one has gone.
+        disabled={head - tail >= tour.length - 1}
         onClick={() => {
           const next = ++last.current
           setSpan(([from]) => [from, next])
           timers.current.push(
-            setTimeout(() => setSpan(([from, to]) => [Math.max(from, next), to]), STEP)
+            setTimeout(() => {
+              timers.current.shift()
+              setSpan(([from, to]) => [Math.max(from, next), to])
+            }, STEP)
           )
         }}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
       >
         {at.name} · Next stop
       </button>

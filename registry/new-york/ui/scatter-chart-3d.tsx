@@ -75,10 +75,18 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, names, entries, axes, target, presence: opacity } = usePoints(all, x, y, z, id)
+  const {
+    fields,
+    names,
+    entries,
+    axes,
+    target,
+    presence: opacity,
+    key: at,
+  } = usePoints(all, x, y, z, id)
   // The positions glide entry by entry; a gone point stands in place.
   const values = useTween(target)
-  const read = (name: string, axis: keyof AxesSpec) => values[`${axis}${name}`]
+  const read = (name: string, axis: keyof AxesSpec) => values[at(axis, name)]
   const radii = usePointRadii(names, radius)
   const key = useConfigKeys(entries, series, Object.keys(config)[0], radii)
 

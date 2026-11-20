@@ -290,6 +290,28 @@ describe("LineChart3D transitions", () => {
   const stacked = (dots: { at: number[] }[]) =>
     dots.filter((d, i) => dots.some((o, j) => i !== j && o.at.join() === d.at.join())).length
 
+  test("points that come faster than they arrive each start on the point before them, where that one is now", async () => {
+    // A zigzag, so no two points lie on one another on the screen once they have parted.
+    const feed = [0, 1, 2, 3, 4].map((i) => ({ id: `n${i}`, x: i * 10, y: (i % 2) * 10, z: i * 5 }))
+    const view = await mount(chart(feed.slice(0, 1), { id: "id" }))
+    for (const count of [2, 3, 4, 5]) {
+      const quads = marks(view.host).quads.length
+      await view.render(chart(feed.slice(0, count), { id: "id" }))
+      const now = marks(view.host)
+      // The new point lies on another one, and only its own segment is new: two halves of no length.
+      expect(stacked(now.dots)).toBe(2)
+      expect(now.quads.length - quads).toBe(2)
+      expect(view.host.innerHTML).not.toContain("NaN")
+      await glide(200)
+    }
+    await glide(700)
+    const done = marks(view.host)
+    expect(stacked(done.dots)).toBe(0)
+    expect(done.dots).toHaveLength(5)
+    expect(done.fills.filter(faded)).toHaveLength(0)
+    await view.unmount()
+  })
+
   test("a point added at the end unfolds from the point before it, fading in, and the axes follow", async () => {
     const view = await mount(chart([p, q], { id: "id" }))
     await view.render(chart([p, q, r], { id: "id" }))

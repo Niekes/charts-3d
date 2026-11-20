@@ -688,7 +688,10 @@ type Tween = {
  * it is - and leaves when the glide is done. `enter` is one number for every
  * key, or a function that finds it `among` numbers - those on screen for a
  * key that comes, the new ones for a key that goes - such as the number of
- * its neighbour, and `undefined` for nowhere. A glide settles both when it
+ * its neighbour, and `undefined` for nowhere. `between` gives the numbers
+ * the `share` of the way from their start to their ends, each on its own
+ * unless it says otherwise - numbers that are a point together may take a
+ * way of their own. A glide settles where its keys start and end when it
  * starts, so new data that comes on the way moves every number on from
  * where it is. Without time, or with reduced motion, the numbers jump. At
  * rest it hands back the record of its target, no copy, so no frame rebuilds
@@ -696,7 +699,12 @@ type Tween = {
  */
 function useTween(
   values: Record<string, number>,
-  enter?: number | ((key: string, among: Record<string, number>) => number | undefined)
+  enter?: number | ((key: string, among: Record<string, number>) => number | undefined),
+  between: (
+    from: Record<string, number>,
+    ends: Record<string, number>,
+    share: number
+  ) => Record<string, number> = straight
 ): Record<string, number> {
   const { animationDuration: duration = DURATION } = useChart3D()
   // The content, not the record, keys the glide: a chart may build `values`
@@ -708,7 +716,7 @@ function useTween(
   }
   const key = last.current.key
   const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, out: {}, t: 1 })
-  const shown = tweenNumbers(tween)
+  const shown = tweenNumbers(tween, between)
 
   // Numbers from the render before, the React pattern of state set while rendering.
   if (key !== tween.key) {
@@ -745,28 +753,34 @@ function glideOf(
   to: Record<string, number>,
   enter: Parameters<typeof useTween>[1]
 ) {
-  const at = (key: string, among: Record<string, number>) =>
+  const origin = (key: string, among: Record<string, number>) =>
     typeof enter === "function" ? enter(key, among) : enter
   const fresh = Object.keys(to).filter((k) => !(k in shown))
   const gone = Object.keys(shown).filter((k) => !(k in to))
   return {
-    from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, at(k, shown) ?? to[k]])) },
+    from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, origin(k, shown) ?? to[k]])) },
     to,
-    out: Object.fromEntries(gone.map((k) => [k, at(k, to) ?? shown[k]])),
+    out: Object.fromEntries(gone.map((k) => [k, origin(k, to) ?? shown[k]])),
   }
 }
 
 /**
  * The numbers of `tween` on screen: `from` eased into `to`, and into `out`
- * for the keys on their way out, until the glide is done. At rest, as while
- * the camera turns, they are the target itself: nothing to build.
+ * for the keys on their way out, until the glide is done, mixed as `between`
+ * mixes them. At rest, as while the camera turns, they are the target
+ * itself: nothing to build.
  */
-function tweenNumbers({ from, to, out, t }: Tween) {
+function tweenNumbers({ from, to, out, t }: Tween, between: typeof straight) {
   if (t >= 1) return to
   const s = smooth(t)
-  const eased = (ends: Record<string, number>) =>
-    Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * s])
-  return Object.fromEntries([...eased(to), ...eased(out)])
+  return { ...between(from, to, s), ...between(from, out, s) }
+}
+
+/** Every number the `share` of the way from its start to its end, each on its own. */
+function straight(from: Record<string, number>, ends: Record<string, number>, share: number) {
+  return Object.fromEntries(
+    Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * share])
+  )
 }
 
 /**
@@ -836,9 +850,11 @@ const GLIDE = 200
  * moves it there in `ms` milliseconds, `GLIDE` unless told, easing out. A glide under way
  * heads for the next view from where it is, so a held key turns the camera
  * smoothly; a jump stops it. Where the reader asks for reduced motion, or
- * the browser cannot say, a glide jumps.
+ * the browser cannot say, a glide jumps. The camera starts at `heading`,
+ * over the default view, and glides to a new one in its `ms`.
  */
-function useGlide(start: View3D) {
+function useGlide(defaultView: View3D, { heading, ms = DURATION }: Heading) {
+  const start = { ...defaultView, ...heading }
   const [view, setView] = React.useState(start)
   const now = React.useRef(start)
   const run = React.useRef<{ to: View3D; frame: number } | null>(null)
@@ -871,9 +887,14 @@ function useGlide(start: View3D) {
     }
     run.current = { to: end, frame: requestAnimationFrame(frame) }
   }
+  // In step with the data: over the same time, eased the same way.
+  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms, smooth))
 
   return { view, jump, glide }
 }
+
+/** The view the page heads the camera for, and the time in ms the camera takes there. */
+type Heading = { heading?: View3D; ms?: number }
 
 /**
  * Heads the camera for `view` when it changes: `head` takes it there. The
@@ -917,8 +938,7 @@ function between(from: View3D, to: View3D, k: number): View3D {
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one - but
  * under two fingers, where the tooltip would jump from one to the other, it
- * goes, as in a drag. The camera starts at `heading`, over the default view,
- * and glides to a new one in `ms`.
+ * goes, as in a drag. `heading` is the view the page heads the camera for.
  */
 function useOrbit(
   defaultView: View3D,
@@ -926,11 +946,9 @@ function useOrbit(
   keys: Keymap,
   onDragStart: () => void,
   onHover: (e: React.PointerEvent<SVGSVGElement>) => void,
-  { heading, ms = DURATION }: { heading?: View3D; ms?: number }
+  heading: Heading
 ) {
-  const { view, jump, glide } = useGlide({ ...defaultView, ...heading })
-  // In step with the data: over the same time, eased the same way.
-  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms, smooth))
+  const { view, jump, glide } = useGlide(defaultView, heading)
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -956,8 +974,7 @@ function useOrbit(
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return touching.current ? onDragStart() : onHover(e)
-      // A drag moves only while its modifier is held: the platform modifier
-      // turning, Alt panning.
+      // A drag moves only while its modifier is held: the platform one turning, Alt panning.
       if (d.rotate ? !platformMod(e) : !e.altKey) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
@@ -2733,7 +2750,7 @@ function nonNegative(value: unknown) {
  * its place; one whose x, y or z is not a finite number is not `placed` and
  * is not among the `names` and the `entries` behind them. The `axes` hold
  * every placed entry, a nice one per field. `target` holds the position of
- * every point, keyed by its axis and its name, for the chart to glide into,
+ * every point, under the `key` of its axis and its name, for the chart to glide into,
  * and `presence` runs by name from 0 to 1 as a point comes and back as it
  * goes, the gone ones still among them. Built once per change of the data,
  * not at every frame the camera turns.
@@ -2764,15 +2781,13 @@ function usePoints<T extends Record<string, unknown>>(
       names: placed.map((p) => p.name),
       entries: new Map(placed.map((p) => [p.name, p.d])),
       target: Object.fromEntries(
-        placed.flatMap((p) =>
-          (["x", "y", "z"] as const).map((a) => [`${a}${p.name}`, Number(p.d[fields[a]])])
-        )
+        placed.flatMap((p) => AXES.map((a) => [positionKey(a, p.name), Number(p.d[fields[a]])]))
       ),
       present: Object.fromEntries(placed.map((p) => [p.name, 1])),
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
   }, [data, x, y, z, id])
-  return { ...points, presence: useTween(points.present, 0) }
+  return { ...points, presence: useTween(points.present, 0), key: positionKey }
 }
 
 /** What a chart of lines knows of an entry: the config key of its line, and whether it is a gap, an entry without a place, where the line breaks. */
@@ -2787,64 +2802,110 @@ type Joint = { line: string; gap: boolean }
  * `presence` how far each point has come, from 0 to 1, the gone ones still
  * among them: a gone point keeps its line and its place after the entry it
  * followed - a gap too, so it stays in its run - since its own entry has
- * already left the data, and is forgotten when the presence drops it.
+ * already left the data, and is forgotten when it has arrived: when neither
+ * the presence nor the glide of the positions holds it any more.
  * `target` is the position of every point, by its axis and its name, as
  * `usePoints` gives it, and the points glide into it: a point that comes
  * starts on the nearest point of its run that is on screen - the one before
  * it, or after it at the start - where that one is now, and a point that
  * goes heads for the nearest one that stays, from where it is. So new data
  * that comes while points are on their way moves every one on from where it
- * is. A point `moves` while it is off its place, or goes to one that stays;
+ * is. A point goes the straight way, or the way `toward` gives: the place
+ * the `share` of the way from one point to another. A point `moves` while it is off its place, or goes to one that stays;
  * in a run that is all new, or all gone, the points stand.
  */
 function useRuns<T extends Record<string, unknown>>(
   named: { d: T; name: string; placed: boolean }[],
   series: (keyof T & string) | undefined,
   presence: Record<string, number>,
-  target: Record<string, number>
+  target: Record<string, number>,
+  toward?: (from: Point3D, to: Point3D, share: number) => Point3D
 ) {
   const { config } = useChart3D()
   const fallback = Object.keys(config)[0]
   const known = React.useRef(new Map<string, Joint>())
+  // The positions of the render before: a point is there as long as it has one.
+  const shown = React.useRef<Record<string, number>>({})
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
-  const runs = runsOf((known.current = withGone(live, known.current, presence)))
-  const at = useTween(target, neighbour(runs))
-  const read = (name: string, a: keyof AxesSpec) => at[`${a}${name}`]
-  return runs.map(({ line, names }) => {
+  const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
+  const runs = runsOf((known.current = withGone(live, known.current, alive)))
+  const places = useTween(target, neighbour(runs), toward && pointwise(toward))
+  shown.current = places
+  // A point the glide does not know yet is on its way in with the next render,
+  // and one it knows no more is gone with it: a run of such has nothing to show.
+  const drawn = runs
+    .map(({ line, names }) => ({
+      line,
+      names: names.filter((name) => positionKey("x", name) in places),
+    }))
+    .filter(({ names }) => names.length)
+  return drawn.map(({ line, names }) => {
     const stays = names.some((name) => live.has(name))
     return {
       line,
-      // A point the glide does not know yet is on its way in with the next render.
-      points: names
-        .filter((name) => `x${name}` in at)
-        .map((name) => ({
+      points: names.map((name) => {
+        const at = pointOf(places, name)
+        const own = pointOf(target, name)
+        return {
           name,
-          seen: presence[name],
-          moves: live.has(name) ? AXES.some((a) => read(name, a) !== target[`${a}${name}`]) : stays,
-          at: { x: read(name, "x"), y: read(name, "y"), z: read(name, "z") },
-        })),
+          // A point still on its way when its presence has run out is seen no more.
+          seen: presence[name] ?? 0,
+          moves: live.has(name) ? AXES.some((a) => at[a] !== own[a]) : stays,
+          at,
+        }
+      }),
     }
   })
 }
 
+// The axes a position has a number along.
 const AXES = ["x", "y", "z"] as const
+
+/** The key of the position of the point `name` along `axis`, among the numbers of a chart. */
+const positionKey = (axis: keyof AxesSpec, name: string) => `${axis}${name}`
+
+/** The position of the point `name` among `numbers`. */
+function pointOf(numbers: Record<string, number>, name: string): Point3D {
+  const along = (axis: keyof AxesSpec) => numbers[positionKey(axis, name)]
+  return { x: along("x"), y: along("y"), z: along("z") }
+}
+
+/**
+ * Mixes the positions of a glide point by point, for `useTween`: every point
+ * the share of the way `toward` its end that a chart says - over a globe,
+ * say, where the straight way would cut through it. A point that stands
+ * keeps its numbers to the last digit.
+ */
+function pointwise(toward: (from: Point3D, to: Point3D, share: number) => Point3D) {
+  return (from: Record<string, number>, ends: Record<string, number>, share: number) =>
+    Object.fromEntries(
+      Object.keys(ends)
+        .filter((key) => key.startsWith("x"))
+        .flatMap((key) => {
+          const [start, end] = [pointOf(from, key.slice(1)), pointOf(ends, key.slice(1))]
+          const stands = AXES.every((a) => start[a] === end[a])
+          const at = stands ? end : toward(start, end, share)
+          return AXES.map((a) => [positionKey(a, key.slice(1)), at[a]])
+        })
+    )
+}
 
 /**
  * Where a point of `runs` enters from, for `useTween`: the number of the
  * nearest point of its run that is `among` the numbers - the one before it,
- * or after it at the start - along the axis of the key.
+ * or after it at the start - along the axis of the key, and nowhere where
+ * its run has none.
  */
 function neighbour(runs: { names: string[] }[]) {
   let where: Map<string, { names: string[]; i: number }> | undefined
   return (key: string, among: Record<string, number>) => {
     where ??= new Map(runs.flatMap(({ names }) => names.map((name, i) => [name, { names, i }])))
-    const spot = where.get(key.slice(1))
-    // A point the runs have dropped already has no neighbour to go to: it stands.
-    if (!spot) return undefined
-    const has = (name: string) => `${key[0]}${name}` in among
+    const [axis, spot] = [key[0] as keyof AxesSpec, where.get(key.slice(1))]
+    const has = (name: string) => positionKey(axis, name) in among
+    // A point the runs have dropped already has no run to find a neighbour in.
     const near =
-      spot.names.slice(0, spot.i).reverse().find(has) ?? spot.names.slice(spot.i + 1).find(has)
-    return among[`${key[0]}${near}`]
+      spot?.names.slice(0, spot.i).reverse().find(has) ?? spot?.names.slice(spot.i + 1).find(has)
+    return near === undefined ? undefined : among[positionKey(axis, near)]
   }
 }
 
@@ -2867,7 +2928,11 @@ function liveJoints<T extends Record<string, unknown>>(
  * among them, each after the living one it followed - before the first, if
  * it followed none.
  */
-function withGone(live: Map<string, Joint>, known: Map<string, Joint>, alive: object) {
+function withGone(
+  live: Map<string, Joint>,
+  known: Map<string, Joint>,
+  alive: (name: string) => boolean
+) {
   const gone = new Map<string | undefined, [string, Joint][]>([
     [undefined, []],
     ...[...live.keys()].map((name): [string, [string, Joint][]] => [name, []]),
@@ -2875,7 +2940,7 @@ function withGone(live: Map<string, Joint>, known: Map<string, Joint>, alive: ob
   let last: string | undefined
   for (const [name, joint] of known) {
     if (live.has(name)) last = name
-    else if (name in alive) gone.get(last)!.push([name, joint])
+    else if (alive(name)) gone.get(last)!.push([name, joint])
   }
   return new Map([
     ...gone.get(undefined)!,

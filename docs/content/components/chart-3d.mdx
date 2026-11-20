@@ -181,6 +181,8 @@ A chart glides into new data over the `animationDuration` of its container; 0 ma
 - A key that **stays** glides from where it stands to its new number - also to a new place, when the data reorders.
 - A key the data **drops** glides back to its enter value, the mirror of its entering, and leaves when the glide is done: a removed bar shrinks back into the floor and fades out as it shrinks, so nothing flat pops away at the end.
 
+The enter value is one number for every key, or a function that finds it among numbers, such as that of a neighbour: a point of the [line](/docs/components/line-chart-3d) and the [routes chart](/docs/components/routes-chart-3d) starts on its neighbour where that is on screen, and a dropped one heads for the nearest that stays. A glide starts from the numbers on screen, so data that comes while a chart is on its way moves every mark on from where it is.
+
 A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that every renderer draws: tween an opacity per key with `useTween` - 1, with 0 as the enter value - and fade the color after `shade`.
 
 The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it - while the line of the axis grows to a new outermost tick and shrinks from a dropped one. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.

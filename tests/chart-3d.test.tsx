@@ -2834,8 +2834,18 @@ describe("useTween", () => {
   })
 
   /** Writes the numbers useTween returns as text, so every render shows them. */
-  function Tween({ values, enter }: { values: Record<string, number>; enter?: number }) {
-    return <text>{JSON.stringify(useTween(values, enter))}</text>
+  type Enter = Parameters<typeof useTween>[1]
+  type Between = Parameters<typeof useTween>[2]
+  function Tween({
+    values,
+    enter,
+    between,
+  }: {
+    values: Record<string, number>
+    enter?: Enter
+    between?: Between
+  }) {
+    return <text>{JSON.stringify(useTween(values, enter, between))}</text>
   }
   const shown = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
@@ -2843,11 +2853,16 @@ describe("useTween", () => {
   async function mountTween(duration: number) {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
-    const render = async (values: Record<string, number>, enter?: number, ms = duration) =>
+    const render = async (
+      values: Record<string, number>,
+      enter?: Enter,
+      ms = duration,
+      between?: Between
+    ) =>
       act(async () =>
         root.render(
           <ChartContainer3D config={{}} animationDuration={ms}>
-            <Tween values={values} enter={enter} />
+            <Tween values={values} enter={enter} between={between} />
           </ChartContainer3D>
         )
       )
@@ -2880,6 +2895,61 @@ describe("useTween", () => {
     await act(() => frames.splice(0).forEach((frame) => frame(1000)))
     await act(() => frames.splice(0).forEach((frame) => frame(1300)))
     expect(shown(chart.host).a).toBeCloseTo(0.5)
+    await chart.unmount()
+  })
+
+  test("enter as a function finds where a key comes from among the numbers on screen, and where a gone one goes among the new ones; nowhere, it starts where it ends and stands where it is", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // Half a glide of 960 ms: a frame every 16 ms, the first of which starts it.
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    const asked: [string, string][] = []
+    const beside = (other: string) => (key: string, among: Record<string, number>) => {
+      asked.push([key, Object.keys(among).join()])
+      return among[other]
+    }
+    const chart = await mountTween(960)
+    await chart.render({ a: 40 })
+    // b comes from where a is on screen.
+    await chart.render({ a: 40, b: 100 }, beside("a"))
+    expect(shown(chart.host)).toEqual({ a: 40, b: 40 })
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 40, b: 70 })
+    // a goes to where b will be, from where it is; b goes on from where it is.
+    await chart.render({ b: 200 }, beside("b"))
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 120, b: 135 })
+    // Asked once per key, when its glide starts: among the numbers on screen, then the new ones.
+    expect(asked).toEqual([
+      ["b", "a"],
+      ["a", "b"],
+    ])
+    // Nowhere to come from, c starts where it ends; nowhere to go, a and b stand.
+    await chart.render({ c: 7 }, () => undefined)
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 120, b: 135, c: 7 })
+    await chart.unmount()
+  })
+
+  test("between mixes the numbers on their way: a glide of its own for numbers that belong together", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    // Each number goes the square of the share of its way.
+    const squared: Between = (from, ends, share) =>
+      Object.fromEntries(
+        Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * share ** 2])
+      )
+    const chart = await mountTween(960)
+    await chart.render({ a: 0 }, 0, 960, squared)
+    await chart.render({ a: 100, b: 100 }, 0, 960, squared)
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 25, b: 25 })
+    // A key on its way out is mixed the same way; at rest the numbers are the target itself.
+    await chart.render({ a: 100 }, 0, 960, squared)
+    await half()
+    expect(shown(chart.host).b).toBeCloseTo(25 - 25 * 0.25)
+    await half()
+    await half()
+    expect(shown(chart.host)).toEqual({ a: 100 })
     await chart.unmount()
   })
 
@@ -3339,6 +3409,26 @@ describe("lines", () => {
     await view.unmount()
   })
 
+  test("useRuns takes a neighbour from the run of a point only: a run that is all new stands, whatever the points of other runs are named", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // An entry without its id field is named so.
+    const other = point("undefined", "x")
+    const view = await mount(chartOf([other], { undefined: 1 }, { undefined: 0 }, "s"))
+    await view.render(
+      chartOf(
+        [other, point("p", "y"), point("q", "y")],
+        { undefined: 1, p: 0, q: 0 },
+        { undefined: 0, p: 10, q: 20 },
+        "s"
+      )
+    )
+    expect(runsOf(view.host)).toEqual(["x: undefined@0", "y: p@10 q@20"])
+    await view.unmount()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
   test("useRuns glides the points: one that comes starts on its neighbour where that is now, one that goes heads for the nearest that stays, from where it is", async () => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
@@ -3362,15 +3452,19 @@ describe("lines", () => {
     expect(runsOf(view.host)).toEqual(["first: a@0~ b@75~ c@125~"])
     await half()
     expect(runsOf(view.host)).toEqual(["first: a@100~ b@138~ c@163~"])
-    // The presence drops a and b while their numbers are still on their way: they are
-    // no points of the run any more, and c goes on to its new place from where it is.
+    // The presence drops a and b while their numbers are still on their way: they stay
+    // points of the run until they have arrived, and head on for c, which has moved.
     await view.render(chartOf([c], { c: 1 }, { c: 300 }))
     await half()
-    expect(runsOf(view.host)).toEqual(["first: c@231~"])
+    expect(runsOf(view.host)).toEqual(["first: a@200~ b@219~ c@231~"])
     // A run that is all gone stands where it is.
     await view.render(chartOf([], { c: 0.2 }, {}))
     await half()
-    expect(runsOf(view.host)).toEqual(["first: c@231"])
+    expect(runsOf(view.host)).toEqual(["first: a@200 b@219 c@231"])
+    // And is gone when its glide is done.
+    await half()
+    await half()
+    expect(runsOf(view.host)).toEqual([])
     await view.unmount()
     vi.useRealTimers()
     vi.unstubAllGlobals()

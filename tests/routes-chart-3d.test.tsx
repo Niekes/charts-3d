@@ -614,41 +614,96 @@ describe("RoutesChart3D transitions", () => {
       await view.unmount()
     })
 
-    test("stops left behind while still on their way go on to the stop that stays, from where they are: nothing sweeps the globe, nothing goes at a stroke", async () => {
-      const view = await mount(tour(1))
-      for (const count of [2, 3, 4, 5]) {
-        await view.render(tour(count))
-        await glide(200)
+    test.each([3, 5])(
+      "of %i stops, those left behind while still on their way go on to the stop that stays, from where they are: nothing sweeps the globe, nothing goes at a stroke",
+      async (stops) => {
+        const view = await mount(tour(1))
+        for (let count = 2; count <= stops; count += 1) {
+          await view.render(tour(count))
+          await glide(200)
+        }
+        const before = marks(view.host)
+        // All but the last stop go.
+        await view.render(tour(stops, stops - 1))
+        await glide(16)
+        let last = marks(view.host)
+        expect(xs(last)).toHaveLength(stops)
+        expect(Math.abs(last.quads.length - before.quads.length)).toBeLessThanOrEqual(2)
+        for (const [i, x] of xs(last).entries()) expect(Math.abs(x - xs(before)[i])).toBeLessThan(4)
+        // The route draws in towards the stop that stays: no stop goes back the way it came or
+        // beyond the stop that stays, and no leg comes or goes at a stroke.
+        const span = (m: ReturnType<typeof marks>) => Math.max(...xs(m)) - Math.min(...xs(m))
+        // Where the stop that stays lies, once it has arrived.
+        const [reach, end] = [span(last), xs(serverMarks(tour(stops, stops - 1)))[0] + 1]
+        for (let ms = 0; ms < 560; ms += 16) {
+          await glide(16)
+          const now = marks(view.host)
+          expect(Math.min(...xs(now))).toBeGreaterThan(Math.min(...xs(last)) - 1)
+          expect(Math.max(...xs(now))).toBeLessThan(end)
+          // Every leg draws in by a piece or so a frame, and there are up to four of them.
+          expect(Math.abs(last.quads.length - now.quads.length)).toBeLessThanOrEqual(stops - 1)
+          if (ms === 288) expect(span(now)).toBeLessThan(reach * 0.75)
+          last = now
+        }
+        // Just before they go, they lie on the stop that stays.
+        expect(span(last)).toBeLessThan(3)
+        await glide(100)
+        expect(xs(marks(view.host))).toHaveLength(1)
+        expect(marks(view.host).quads).toHaveLength(0)
+        await view.unmount()
       }
-      const before = marks(view.host)
-      // All but the last stop go.
-      await view.render(tour(5, 4))
+    )
+  })
+
+  test("a stop that comes from far away travels at an even pace over the globe: it does not leap half-way", async () => {
+    // Two stops on the equator, a hundred and fifty degrees apart, both on the near side.
+    const [from, to] = [-75, 75].map((lon, i) => ({ id: `s${i}`, lon, lat: 0 }))
+    const view = await mount(chart([from, to], { id: "id" }))
+    const [left, right] = xs(marks(view.host))
+    const radius = (right - left) / 2 / Math.sin((75 * Math.PI) / 180)
+    const lon = (x: number) => (Math.asin((x - 320) / radius) * 180) / Math.PI
+    await view.render(chart([from], { id: "id" }))
+    await glide(700)
+    // The second stop comes back, out of the first.
+    await view.render(chart([from, to], { id: "id" }))
+    let last = -75
+    const steps: number[] = []
+    for (let ms = 0; ms < 640; ms += 16) {
       await glide(16)
-      let last = marks(view.host)
-      expect(xs(last)).toHaveLength(5)
-      expect(Math.abs(last.quads.length - before.quads.length)).toBeLessThanOrEqual(2)
-      for (const [i, x] of xs(last).entries()) expect(Math.abs(x - xs(before)[i])).toBeLessThan(4)
-      // The route draws in towards the stop that stays: no stop goes back the way it came or
-      // beyond the stop that stays, and no leg comes or goes at a stroke.
-      const span = (m: ReturnType<typeof marks>) => Math.max(...xs(m)) - Math.min(...xs(m))
-      // Where the stop that stays lies, once it has arrived.
-      const [reach, end] = [span(last), xs(serverMarks(tour(5, 4)))[0] + 1]
-      for (let ms = 0; ms < 560; ms += 40) {
-        await glide(40)
-        const now = marks(view.host)
-        expect(Math.min(...xs(now))).toBeGreaterThan(Math.min(...xs(last)) - 1)
-        expect(Math.max(...xs(now))).toBeLessThan(end)
-        expect(Math.abs(last.quads.length - now.quads.length)).toBeLessThanOrEqual(10)
-        if (ms === 280) expect(span(now)).toBeLessThan(reach * 0.75)
-        last = now
-      }
-      // Just before they go, they lie on the stop that stays.
-      expect(span(last)).toBeLessThan(3)
-      await glide(100)
-      expect(xs(marks(view.host))).toHaveLength(1)
-      expect(marks(view.host).quads).toHaveLength(0)
-      await view.unmount()
-    })
+      const now = lon(Math.max(...xs(marks(view.host))))
+      steps.push(now - last)
+      last = now
+    }
+    expect(last).toBeCloseTo(75, 0)
+    // A hundred and fifty degrees in 600 ms, eased in and out: six degrees a frame at its fastest.
+    expect(Math.max(...steps)).toBeLessThan(7)
+    expect(Math.min(...steps)).toBeGreaterThan(-0.01)
+    await view.unmount()
+  })
+
+  test("a stop on its way out is there until it has arrived, though other data comes meanwhile", async () => {
+    const view = await mount(chart([west, mid, east], { id: "id" }))
+    const settled = xs(marks(view.host))
+    // The last stop goes; half-way, the first one moves a little, and nothing else changes.
+    await view.render(chart([west, mid], { id: "id" }))
+    await glide(300)
+    await view.render(chart([{ ...west, lon: -44 }, mid], { id: "id" }))
+    // When its own glide would have ended, it is still on its way, its leg with it.
+    await glide(330)
+    let now = marks(view.host)
+    expect(xs(now)).toHaveLength(3)
+    expect(xs(now)[2]).toBeGreaterThan(settled[1] + 3)
+    expect(xs(now)[2]).toBeLessThan(settled[2])
+    expect(now.quads.filter((q) => middle(q.corners)[0] > settled[1]).length).toBeGreaterThan(0)
+    // It leaves when it has reached the stop that stays, its leg drawn back to nothing.
+    await glide(240)
+    now = marks(view.host)
+    const legs = now.quads.filter((q) => middle(q.corners)[0] > settled[1] + 2)
+    expect(legs).toHaveLength(0)
+    await glide(100)
+    expect(xs(marks(view.host))).toHaveLength(2)
+    expect(view.host.innerHTML).not.toContain("NaN")
+    await view.unmount()
   })
 
   test("a stop that moves across the antimeridian takes the short way: it stays on the near side", async () => {
