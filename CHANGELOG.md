@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moving only what the view names; the reader turns on from it (ADR-0010).
   `facing(lon, lat)` is the view that looks at a place on the globe, and
   `placeOf(point)` reads a place back from a point of it.
+- `useTween` takes a function for `enter`: where a key comes from among the
+  numbers on screen, and where a gone one goes among the new ones, such as
+  the number of its neighbour.
 - The core helpers the line and the routes chart share: `useRuns` and
   `segment`; and `useConfigKeys`, which the scatter and the routes chart
   share.
@@ -46,8 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jumped to its end for a frame.
 - `LineChart3D`: a point that goes from the start of a line after a gap
   folds into its line, where it stood alone before; and new data that comes
-  while a point is on its way moves it on from where it is, where the line
-  jumped to its places before.
+  while points are on their way moves every one on from where it is, where
+  the line jumped to its places before - a new point starts on its
+  neighbour wherever that has come to, and a gone one heads for the nearest
+  that stays.
 
 ## [0.7.0] - 2026-11-15
 

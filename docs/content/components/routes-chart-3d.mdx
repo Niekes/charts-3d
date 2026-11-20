@@ -103,8 +103,9 @@ out of the stop the tour is on, and then drops the stop left behind, so the
 leg draws back towards the new one. The globe turns to the new stop through
 the `view` of the container, set to `facing(lon, lat)`: a heading, so you can
 turn the globe away at any time (see [chart-3d](/docs/components/chart-3d#view)).
-A step that comes before the last one is done goes on from where the route
-is.
+Steps may come faster than they end: every stop goes on from where it is,
+a new one starting on the stop before it wherever that has come to, and
+each step drops only what lies behind the stop it added.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

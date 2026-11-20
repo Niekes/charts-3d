@@ -3269,37 +3269,49 @@ describe("lines", () => {
     )
   })
 
-  /** The runs of `named`, a point at the capital of its name, on its way written as from>to@seen. */
+  /** The runs of `named`, each point with where it is along x. */
   function Runs({
     named,
     series,
     presence,
+    target,
   }: {
     named: { d: { s: string }; name: string; placed: boolean }[]
     series?: "s"
     presence: Record<string, number>
+    target: Record<string, number>
   }) {
-    const runs = useRuns(
-      named,
-      series,
-      presence,
-      (name) => name.toUpperCase(),
-      (anchor, own, seen) => `${anchor}>${own}@${seen}`
-    )
+    const runs = useRuns(named, series, presence, target)
     return <text>{JSON.stringify(runs)}</text>
   }
   const point = (name: string, s: string, placed = true) => ({ d: { s }, name, placed })
+  /** The position of every point of `xs`, by name, the same along every axis. */
+  const places = (xs: Record<string, number>) =>
+    Object.fromEntries(
+      Object.entries(xs).flatMap(([name, x]) => ["x", "y", "z"].map((a) => [`${a}${name}`, x]))
+    )
   const runsOf = (host: HTMLElement) =>
     (
       JSON.parse(host.querySelector("text")!.textContent!) as {
         line: string
-        points: { name: string; seen: number; at: string }[]
+        points: { name: string; seen: number; moves: boolean; at: { x: number } }[]
       }[]
     ).map(
-      (run) => `${run.line}: ${run.points.map((p) => `${p.name} ${p.seen} ${p.at}`).join(", ")}`
+      (run) =>
+        `${run.line}: ${run.points.map((p) => `${p.name}@${Math.round(p.at.x)}${p.moves ? "~" : ""}`).join(" ")}`
     )
+  const chartOf = (
+    named: ReturnType<typeof point>[],
+    presence: Record<string, number>,
+    xs: Record<string, number>,
+    series?: "s"
+  ) => (
+    <ChartContainer3D config={{ first: {} }} animationDuration={960}>
+      <Runs named={named} series={series} presence={presence} target={places(xs)} />
+    </ChartContainer3D>
+  )
 
-  test("useRuns joins the points of a series in the order of the data, cuts a run at an entry without a place, and unfolds a point from the one before it", async () => {
+  test("useRuns joins the points of a series in the order of the data and cuts a run at an entry without a place; a gone point keeps its run and its place in it", async () => {
     const named = [
       point("a", "x"),
       point("n", "y"),
@@ -3307,35 +3319,61 @@ describe("lines", () => {
       point("b", "x"),
       point("c", "x"),
     ]
-    const view = await mount(
-      <ChartContainer3D config={{ first: {} }}>
-        <Runs named={named} series="s" presence={{ a: 1, n: 1, b: 1, c: 0.5 }} />
-      </ChartContainer3D>
-    )
-    expect(runsOf(view.host)).toEqual(["x: a 1 A", "y: n 1 N", "x: b 1 B, c 0.5 B>C@0.5"])
-
-    // A gone point keeps its line and its place after the point it followed, and folds into
-    // the first that stands - the one after it, at the start of its run.
+    const xs = { a: 0, n: 5, b: 10, c: 20 }
+    const view = await mount(chartOf(named, { a: 1, n: 1, b: 1, c: 1 }, xs, "s"))
+    expect(runsOf(view.host)).toEqual(["x: a@0", "y: n@5", "x: b@10 c@20"])
+    // Without motion the points jump: b has left the data, and with the presence that
+    // still holds it, it stays the first of its run, after the gap - until that drops it.
     await view.render(
-      <ChartContainer3D config={{ first: {} }}>
-        <Runs
-          named={named.filter((p) => p.name !== "b")}
-          series="s"
-          presence={{ a: 1, n: 1, b: 0.3, c: 1 }}
-        />
-      </ChartContainer3D>
+      chartOf(
+        named.filter((p) => p.name !== "b"),
+        { a: 1, n: 1, b: 0.3, c: 1 },
+        { a: 0, n: 5, c: 20 },
+        "s"
+      )
     )
-    expect(runsOf(view.host)).toEqual(["x: a 1 A", "y: n 1 N", "x: b 0.3 C>B@0.3, c 1 C"])
-
-    // Dropped by the presence, it is forgotten; without series all the points are one line,
-    // that of the first key of the config, and a run that is all new stands in place.
-    await view.render(
-      <ChartContainer3D config={{ first: {} }}>
-        <Runs named={[point("a", "x"), point("n", "y")]} presence={{ a: 0.2, n: 0.2 }} />
-      </ChartContainer3D>
-    )
-    expect(runsOf(view.host)).toEqual(["first: a 0.2 A, n 0.2 N"])
+    expect(runsOf(view.host)).toEqual(["x: a@0", "y: n@5", "x: c@20"])
+    // Without series all the points are one line, that of the first key of the config.
+    await view.render(chartOf([point("a", "x"), point("n", "y")], { a: 1, n: 1 }, { a: 0, n: 5 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 n@5"])
     await view.unmount()
+  })
+
+  test("useRuns glides the points: one that comes starts on its neighbour where that is now, one that goes heads for the nearest that stays, from where it is", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    // Half a glide of 960 ms: a frame every 16 ms, the first of which starts it.
+    const half = () => act(() => vi.advanceTimersByTime(496))
+    const [a, b, c] = ["a", "b", "c"].map((name) => point(name, "x"))
+    const view = await mount(chartOf([a], { a: 1 }, { a: 0 }))
+    // b comes: it starts on a, and is on its way.
+    await view.render(chartOf([a, b], { a: 1, b: 0 }, { a: 0, b: 100 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@0~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@50~"])
+    // c comes while b is half-way: it starts where b is now, not where b is heading.
+    await view.render(chartOf([a, b, c], { a: 1, b: 0.5, c: 0 }, { a: 0, b: 100, c: 200 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@50~ c@50~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@0 b@75~ c@125~"])
+    // a and b go while they are on their way: they head for c, the one that stays, where
+    // it will stand, from where they are - a, which stood, too.
+    await view.render(chartOf([c], { a: 0.5, b: 0.5, c: 0.5 }, { c: 200 }))
+    expect(runsOf(view.host)).toEqual(["first: a@0~ b@75~ c@125~"])
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: a@100~ b@138~ c@163~"])
+    // The presence drops a and b while their numbers are still on their way: they are
+    // no points of the run any more, and c goes on to its new place from where it is.
+    await view.render(chartOf([c], { c: 1 }, { c: 300 }))
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: c@231~"])
+    // A run that is all gone stands where it is.
+    await view.render(chartOf([], { c: 0.2 }, {}))
+    await half()
+    expect(runsOf(view.host)).toEqual(["first: c@231"])
+    await view.unmount()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 })
 

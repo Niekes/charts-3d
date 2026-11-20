@@ -98,17 +98,12 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const fields = { lon, lat, id, series, leg }
   const stops = useStops(data, fields)
-  const { named, entries, presence, read } = usePoints(stops, "x", "y", "z", id && "name")
+  const { named, entries, presence, target } = usePoints(stops, "x", "y", "z", id && "name")
   // The leg a stop names, none as "": a stop on its way out keeps it, and its color with it.
   const legOf = useConfigKeys(entries, "leg", "", presence)
-  // A stop that comes or goes travels the great circle from its neighbour.
-  const runs = useRuns(
-    named,
-    series && "route",
-    presence,
-    (name) => placeOf({ x: read(name, "x"), y: read(name, "y"), z: read(name, "z") }),
-    (from, to, k) => geoInterpolate(from, to)(k)
-  )
+  // A stop that comes or goes glides as a point through the globe, from or to
+  // its neighbour: over the surface, along the great circle between them.
+  const runs = useRuns(named, series && "route", presence, target)
   const reading = { config, entries, fields, tooltip }
   const routes = lineStrips3D<Point3D>()
     .camera(orthographic(camera))
@@ -159,8 +154,8 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
 /** The config key a value of the `leg` field names: any value read as text, and none, "", for a missing or a blank one. */
 const legKey = (value: unknown) => (value == null ? "" : String(value).trim())
 
-/** A stop of a route, where it is now, and how far it has come, from 0 to 1. */
-type Stop = { name: string; seen: number; anchored: boolean; at: Place }
+/** A stop of a route: the point it glides as, which lies over its place, how far it has come, from 0 to 1, and whether it is on its way. */
+type Stop = { name: string; seen: number; moves: boolean; at: Point3D }
 
 /** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
 type Piece = Point3D[] & {
@@ -198,6 +193,7 @@ function pieces(
   legOf: (name: string) => string
 ): Piece[] {
   const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
+  const places = points.map((stop) => placeOf(stop.at))
   // A piece is in focus with the stops it lies between: a leg whole, a stop alone.
   // The stop `by` names the leg that colors it; with no such leg, it has the color of its route.
   const piece = (points: Point3D[], key: string, seen: number, names: string[], by?: string) => {
@@ -208,13 +204,13 @@ function pieces(
   return [
     ...points.slice(1).flatMap((to, i) => {
       const from = points[i]
-      const along = geoInterpolate(from.at, to.at)
-      const count = Math.max(1, Math.ceil(geoDistance(from.at, to.at) / PIECE))
+      const along = geoInterpolate(places[i], places[i + 1])
+      const count = Math.max(1, Math.ceil(geoDistance(places[i], places[i + 1]) / PIECE))
       return Array.from({ length: count }, (_, k) =>
         piece(
           [on(along(k / count)), on(along((k + 1) / count))],
           `${from.name}-${to.name}-${k}`,
-          from.anchored || to.anchored ? 1 : Math.max(from.seen, to.seen),
+          from.moves || to.moves ? 1 : Math.max(from.seen, to.seen),
           [from.name, to.name],
           to.name
         )
@@ -222,7 +218,7 @@ function pieces(
     }),
     // A stop is the end of the leg that leads to it; the first one, of the leg that leaves it.
     ...points.map((stop, i) =>
-      piece([on(stop.at)], stop.name, stop.seen, [stop.name], i ? stop.name : points[1]?.name)
+      piece([on(places[i])], stop.name, stop.seen, [stop.name], i ? stop.name : points[1]?.name)
     ),
   ]
 }

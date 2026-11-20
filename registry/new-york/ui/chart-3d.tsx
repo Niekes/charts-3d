@@ -668,19 +668,36 @@ const smooth = (t: number) => t * t * (3 - 2 * t)
 /** The same for a step of the camera, which answers a key at once: it eases out. */
 const prompt = (t: number) => 1 - (1 - t) ** 3
 
-/** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
-type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
+/**
+ * One glide of numbers: from `from` into `to`, come the share `t` of the
+ * way, the keys the new numbers dropped gliding out to `out`.
+ */
+type Tween = {
+  key: string
+  from: Record<string, number>
+  to: Record<string, number>
+  out: Record<string, number>
+  t: number
+}
 
 /**
  * Eases a chart into new data: the numbers of `values` glide from the ones
  * on screen to these over the animationDuration of the container. A key
  * that is new starts at `enter`, or where it ends; a key that is gone glides
  * back to `enter`, the mirror of its entering - without one it stands where
- * it is - and leaves when the glide is done. Without time, or with reduced
- * motion, the numbers jump. At rest it hands back the record of its target,
- * no copy, so no frame rebuilds it: read it, never write to it.
+ * it is - and leaves when the glide is done. `enter` is one number for every
+ * key, or a function that finds it `among` numbers - those on screen for a
+ * key that comes, the new ones for a key that goes - such as the number of
+ * its neighbour, and `undefined` for nowhere. A glide settles both when it
+ * starts, so new data that comes on the way moves every number on from
+ * where it is. Without time, or with reduced motion, the numbers jump. At
+ * rest it hands back the record of its target, no copy, so no frame rebuilds
+ * it: read it, never write to it.
  */
-function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
+function useTween(
+  values: Record<string, number>,
+  enter?: number | ((key: string, among: Record<string, number>) => number | undefined)
+): Record<string, number> {
   const { animationDuration: duration = DURATION } = useChart3D()
   // The content, not the record, keys the glide: a chart may build `values`
   // anew at any render. The same record as before is the same content, so a
@@ -690,12 +707,12 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
     last.current = { values, key: JSON.stringify(values) }
   }
   const key = last.current.key
-  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, t: 1 })
-  const shown = tweenNumbers(tween, enter)
+  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, out: {}, t: 1 })
+  const shown = tweenNumbers(tween)
 
   // Numbers from the render before, the React pattern of state set while rendering.
   if (key !== tween.key) {
-    setTween({ key, from: shown, to: values, t: duration > 0 && animates() ? 0 : 1 })
+    setTween({ key, ...glideOf(shown, values, enter), t: duration > 0 && animates() ? 0 : 1 })
   }
 
   React.useEffect(() => {
@@ -719,24 +736,37 @@ function useTween(values: Record<string, number>, enter?: number): Record<string
 }
 
 /**
- * The numbers of `tween` on screen: `from` eased into `to`, a new key from
- * `enter` or where it ends, a gone one gliding back to `enter` until the
- * glide is done. At rest, as while the camera turns, they are the target
- * itself: nothing to build.
+ * The glide from the numbers `shown` into `to`: a new key starts where it
+ * enters from, or where it ends, and a gone one heads back there - or stands
+ * where it is.
  */
-function tweenNumbers({ from, to, t }: Tween, enter?: number) {
+function glideOf(
+  shown: Record<string, number>,
+  to: Record<string, number>,
+  enter: Parameters<typeof useTween>[1]
+) {
+  const at = (key: string, among: Record<string, number>) =>
+    typeof enter === "function" ? enter(key, among) : enter
+  const fresh = Object.keys(to).filter((k) => !(k in shown))
+  const gone = Object.keys(shown).filter((k) => !(k in to))
+  return {
+    from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, at(k, shown) ?? to[k]])) },
+    to,
+    out: Object.fromEntries(gone.map((k) => [k, at(k, to) ?? shown[k]])),
+  }
+}
+
+/**
+ * The numbers of `tween` on screen: `from` eased into `to`, and into `out`
+ * for the keys on their way out, until the glide is done. At rest, as while
+ * the camera turns, they are the target itself: nothing to build.
+ */
+function tweenNumbers({ from, to, out, t }: Tween) {
   if (t >= 1) return to
   const s = smooth(t)
-  const gone = Object.entries(from).filter(([k]) => !(k in to))
-  return Object.fromEntries([
-    ...Object.entries(to).map(([k, end]) => {
-      const start = from[k] ?? enter ?? end
-      return [k, start + (end - start) * s]
-    }),
-    // A gone key glides back to `enter`, the mirror of its entering - without
-    // one it stands where it is - and leaves when the glide is done.
-    ...gone.map(([k, start]) => [k, start + ((enter ?? start) - start) * s]),
-  ])
+  const eased = (ends: Record<string, number>) =>
+    Object.entries(ends).map(([k, end]) => [k, from[k] + (end - from[k]) * s])
+  return Object.fromEntries([...eased(to), ...eased(out)])
 }
 
 /**
@@ -2702,11 +2732,11 @@ function nonNegative(value: unknown) {
  * the data, so a point keeps its name when an entry before it gains or loses
  * its place; one whose x, y or z is not a finite number is not `placed` and
  * is not among the `names` and the `entries` behind them. The `axes` hold
- * every placed entry, a nice one per field. Each point glides by name: `read`
- * gives its position along an axis - a gone point stands in place - and
- * `presence` runs from 0 to 1 as it comes and back as it goes, the gone ones
- * still among them. Built once per change of the data, not at every frame
- * the camera turns.
+ * every placed entry, a nice one per field. `target` holds the position of
+ * every point, keyed by its axis and its name, for the chart to glide into,
+ * and `presence` runs by name from 0 to 1 as a point comes and back as it
+ * goes, the gone ones still among them. Built once per change of the data,
+ * not at every frame the camera turns.
  */
 function usePoints<T extends Record<string, unknown>>(
   data: T[],
@@ -2742,12 +2772,7 @@ function usePoints<T extends Record<string, unknown>>(
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
   }, [data, x, y, z, id])
-  const values = useTween(points.target)
-  return {
-    ...points,
-    presence: useTween(points.present, 0),
-    read: (name: string, a: keyof AxesSpec) => values[`${a}${name}`],
-  }
+  return { ...points, presence: useTween(points.present, 0) }
 }
 
 /** What a chart of lines knows of an entry: the config key of its line, and whether it is a gap, an entry without a place, where the line breaks. */
@@ -2762,81 +2787,65 @@ type Joint = { line: string; gap: boolean }
  * `presence` how far each point has come, from 0 to 1, the gone ones still
  * among them: a gone point keeps its line and its place after the entry it
  * followed - a gap too, so it stays in its run - since its own entry has
- * already left the data, and is forgotten when the presence drops it. `at` gives the place of a point, and a point that
- * comes or goes unfolds from the point before it in its run - the one after
- * it, at the start - and folds back into it: `toward` is the place the share
- * `seen` of the way from that anchor to its own - from where the anchor is
- * now, if that is on its way too - and it keeps that anchor until it is
- * seen whole, so new data that comes while it is on its way moves it on from
- * where it is. A point with an anchor is `anchored`: it moves, where one
- * of a run that is all new, or all gone, stands in place.
+ * already left the data, and is forgotten when the presence drops it.
+ * `target` is the position of every point, by its axis and its name, as
+ * `usePoints` gives it, and the points glide into it: a point that comes
+ * starts on the nearest point of its run that is on screen - the one before
+ * it, or after it at the start - where that one is now, and a point that
+ * goes heads for the nearest one that stays, from where it is. So new data
+ * that comes while points are on their way moves every one on from where it
+ * is. A point `moves` while it is off its place, or goes to one that stays;
+ * in a run that is all new, or all gone, the points stand.
  */
-function useRuns<T extends Record<string, unknown>, P>(
+function useRuns<T extends Record<string, unknown>>(
   named: { d: T; name: string; placed: boolean }[],
   series: (keyof T & string) | undefined,
   presence: Record<string, number>,
-  at: (name: string) => P,
-  toward: (anchor: P, own: P, seen: number) => P
+  target: Record<string, number>
 ) {
   const { config } = useChart3D()
   const fallback = Object.keys(config)[0]
   const known = React.useRef(new Map<string, Joint>())
-  const anchors = React.useRef(new Map<string, string>())
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
-  const joints = (known.current = withGone(live, known.current, presence))
-  // Forgotten with the point, so the memory stays the size of the chart.
-  for (const name of anchors.current.keys()) if (!joints.has(name)) anchors.current.delete(name)
-  return runsOf(joints).map(({ line, names }) => {
-    const points = names.map((name) => ({
-      name,
-      seen: presence[name],
-      at: at(name),
-      stays: live.has(name),
-    }))
-    const index = new Map(points.map((p, i) => [p, i]))
-    const anchored = points.map((_, i) => index.get(anchorOf(points, i, anchors.current)!))
-    // Where each would be if its anchor stood still: the anchor of a point may be on its way too.
-    const from = points.map((p, i) => ({ at: unfolded(p, points[anchored[i]!], toward) }))
+  const runs = runsOf((known.current = withGone(live, known.current, presence)))
+  const at = useTween(target, neighbour(runs))
+  const read = (name: string, a: keyof AxesSpec) => at[`${a}${name}`]
+  return runs.map(({ line, names }) => {
+    const stays = names.some((name) => live.has(name))
     return {
       line,
-      points: points.map(({ name, seen, at: own }, i) => ({
-        name,
-        seen,
-        anchored: anchored[i] !== undefined,
-        at: unfolded({ seen, at: own }, from[anchored[i]!], toward),
-      })),
+      // A point the glide does not know yet is on its way in with the next render.
+      points: names
+        .filter((name) => `x${name}` in at)
+        .map((name) => ({
+          name,
+          seen: presence[name],
+          moves: live.has(name) ? AXES.some((a) => read(name, a) !== target[`${a}${name}`]) : stays,
+          at: { x: read(name, "x"), y: read(name, "y"), z: read(name, "z") },
+        })),
     }
   })
 }
 
-/** The place of `point` the share it is seen of the way from its anchor, if it has one, to its own. */
-function unfolded<P>(
-  point: { seen: number; at: P },
-  anchor: { at: P } | undefined,
-  toward: (anchor: P, own: P, seen: number) => P
-) {
-  return anchor ? toward(anchor.at, point.at, point.seen) : point.at
-}
-
-/** A point of a run on its way: how far it has come, where its place is, and whether its entry stays in the data. */
-type RunPoint<P> = { name: string; seen: number; at: P; stays: boolean }
+const AXES = ["x", "y", "z"] as const
 
 /**
- * The point the point `i` of a run unfolds from or folds into, if any, by
- * the name remembered in `anchors`: the nearest point before it - after it,
- * if there is none - that stays in the data and, for a point that stays
- * itself, is seen better than it. A point keeps its anchor until it is seen
- * whole, so when new data comes while it is on its way it goes on from where
- * it is, and nothing jumps back.
+ * Where a point of `runs` enters from, for `useTween`: the number of the
+ * nearest point of its run that is `among` the numbers - the one before it,
+ * or after it at the start - along the axis of the key.
  */
-function anchorOf<P>(points: RunPoint<P>[], i: number, anchors: Map<string, string>) {
-  const point = points[i]
-  if (point.seen === 1) return void anchors.delete(point.name)
-  const fits = (o: RunPoint<P>) => o.stays && (!point.stays || o.seen > point.seen)
-  const held = points.find((o) => o.name === anchors.get(point.name))
-  const anchor = held ?? points.slice(0, i).reverse().find(fits) ?? points.slice(i + 1).find(fits)
-  if (anchor) anchors.set(point.name, anchor.name)
-  return anchor
+function neighbour(runs: { names: string[] }[]) {
+  let where: Map<string, { names: string[]; i: number }> | undefined
+  return (key: string, among: Record<string, number>) => {
+    where ??= new Map(runs.flatMap(({ names }) => names.map((name, i) => [name, { names, i }])))
+    const spot = where.get(key.slice(1))
+    // A point the runs have dropped already has no neighbour to go to: it stands.
+    if (!spot) return undefined
+    const has = (name: string) => `${key[0]}${name}` in among
+    const near =
+      spot.names.slice(0, spot.i).reverse().find(has) ?? spot.names.slice(spot.i + 1).find(has)
+    return among[`${key[0]}${near}`]
+  }
 }
 
 /** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */

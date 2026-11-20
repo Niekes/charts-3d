@@ -81,15 +81,9 @@ export function LineChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: LineChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, named, entries, axes, presence, read } = usePoints(data, x, y, z, id)
+  const { fields, named, entries, axes, presence, target } = usePoints(data, x, y, z, id)
   // A point that comes or goes unfolds from its neighbour straight through the box.
-  const runs = useRuns(
-    named,
-    series,
-    presence,
-    (name) => ({ x: read(name, "x"), y: read(name, "y"), z: read(name, "z") }),
-    between
-  )
+  const runs = useRuns(named, series, presence, target)
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
   const world = worldBox(spec)

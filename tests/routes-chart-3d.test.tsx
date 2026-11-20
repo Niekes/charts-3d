@@ -579,6 +579,78 @@ describe("RoutesChart3D transitions", () => {
     await view.unmount()
   })
 
+  describe("stops that come faster than they arrive", () => {
+    // Five stops along the equator, thirty degrees apart, the globe seen from the third.
+    const line = [-60, -30, 0, 30, 60].map((lon, i) => ({ id: `s${i}`, lon, lat: 0 }))
+    const tour = (count: number, from = 0) => chart(line.slice(from, count), { id: "id" })
+    /** The stop that has just come: the one not yet seen at all. */
+    const unseen = (m: ReturnType<typeof marks>) =>
+      m.stops.filter((s) => s.el.getAttribute("fill")!.includes(" 0%, transparent"))
+    const near = (m: ReturnType<typeof marks>, at: number[]) =>
+      m.stops.filter((s) => Math.hypot(s.at[0] - at[0], s.at[1] - at[1]) < 2).length
+
+    test("each new stop starts on the stop before it, where that one is now, however many are on their way: no leg is there before it has grown", async () => {
+      const view = await mount(tour(1))
+      for (const count of [2, 3, 4, 5]) {
+        const pieces = marks(view.host).quads.length
+        await view.render(tour(count))
+        const now = marks(view.host)
+        const [fresh] = unseen(now)
+        // It lies on another stop: the one before it, wherever that has come to.
+        expect(unseen(now)).toHaveLength(1)
+        expect(near(now, fresh.at)).toBe(2)
+        // Its leg has no length yet: a piece for it, and nothing else is new.
+        expect(now.quads.length - pieces).toBeLessThanOrEqual(1)
+        await glide(200)
+      }
+      // They all arrive: five stops in a row, the legs between them whole.
+      await glide(700)
+      const done = marks(view.host)
+      expect(xs(done)).toHaveLength(5)
+      expect(new Set(done.fills)).toEqual(new Set(["var(--color-a)"]))
+      // Four legs of thirty degrees, in pieces of two.
+      expect(done.quads.length).toBeGreaterThanOrEqual(4 * 15)
+      expect(done.quads.length).toBeLessThanOrEqual(4 * 16)
+      await view.unmount()
+    })
+
+    test("stops left behind while still on their way go on to the stop that stays, from where they are: nothing sweeps the globe, nothing goes at a stroke", async () => {
+      const view = await mount(tour(1))
+      for (const count of [2, 3, 4, 5]) {
+        await view.render(tour(count))
+        await glide(200)
+      }
+      const before = marks(view.host)
+      // All but the last stop go.
+      await view.render(tour(5, 4))
+      await glide(16)
+      let last = marks(view.host)
+      expect(xs(last)).toHaveLength(5)
+      expect(Math.abs(last.quads.length - before.quads.length)).toBeLessThanOrEqual(2)
+      for (const [i, x] of xs(last).entries()) expect(Math.abs(x - xs(before)[i])).toBeLessThan(4)
+      // The route draws in towards the stop that stays: no stop goes back the way it came or
+      // beyond the stop that stays, and no leg comes or goes at a stroke.
+      const span = (m: ReturnType<typeof marks>) => Math.max(...xs(m)) - Math.min(...xs(m))
+      // Where the stop that stays lies, once it has arrived.
+      const [reach, end] = [span(last), xs(serverMarks(tour(5, 4)))[0] + 1]
+      for (let ms = 0; ms < 560; ms += 40) {
+        await glide(40)
+        const now = marks(view.host)
+        expect(Math.min(...xs(now))).toBeGreaterThan(Math.min(...xs(last)) - 1)
+        expect(Math.max(...xs(now))).toBeLessThan(end)
+        expect(Math.abs(last.quads.length - now.quads.length)).toBeLessThanOrEqual(10)
+        if (ms === 280) expect(span(now)).toBeLessThan(reach * 0.75)
+        last = now
+      }
+      // Just before they go, they lie on the stop that stays.
+      expect(span(last)).toBeLessThan(3)
+      await glide(100)
+      expect(xs(marks(view.host))).toHaveLength(1)
+      expect(marks(view.host).quads).toHaveLength(0)
+      await view.unmount()
+    })
+  })
+
   test("a stop that moves across the antimeridian takes the short way: it stays on the near side", async () => {
     // The globe seen from the date line, at 180 degrees.
     const pacific = (lon: number) => (
