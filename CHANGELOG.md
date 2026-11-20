@@ -43,8 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its circle - a plane, a ship, any icon as SVG path data in a box of 24,
   outlined as Lucide draws it or filled. A symbol that names where it
   `points` turns to its bearing, the leg that arrives; one that names none
-  stays upright. A stop that joins a route flies its leg as the tip
-  (ADR-0011).
+  stays upright. A stop that joins a route flies its leg as the tip, and
+  its symbol turns into the new bearing as it sets out, the shorter way
+  round, turned when a quarter of the leg is flown (ADR-0011).
+- The core helpers of a geo chart that turns one place round another:
+  `azimuth(from, to)`, the way one place sets out for another, `placeAt`,
+  the place that way and so far on, and `azimuthAt(camera, place, way)`, the
+  way over the globe of a way on the screen.
 
 ### Changed
 

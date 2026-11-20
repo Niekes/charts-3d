@@ -144,6 +144,10 @@ that arrives at the tip, where the leg meets it, as the camera shows it. A
 tip without a leg points the way it moves, and where it stands it keeps the
 bearing it came with, as one whose leg has drawn back into it. A tip that
 never came from anywhere has none: its symbol shows as its icon set draws it.
+A bearing never jumps: where the tip passes from one stop to another, takes
+its first leg or sets out another way, the symbol turns the shorter way as
+it sets out - clockwise where it flies back the way it came - and has
+turned when about a quarter of its leg is flown.
 _Avoid_: heading (the camera's), direction, rotation, angle
 
 **Ocean**:

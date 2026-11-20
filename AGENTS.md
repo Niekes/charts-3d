@@ -218,8 +218,13 @@ How the charts draw, so that a new one draws the same way:
   draws it in the one color of the mark - on a disc of radius `r`, which the
   pointer hits. A chart hands the core the point the symbol comes `from`,
   projected with the rest, and the core turns a symbol that names where it
-  `points`; a chart computes no angle. The registry takes on no icon
-  package: a page copies the path from its own.
+  `points`; a chart computes no angle. A bearing never jumps: where the tip
+  passes to another stop, the routes chart glides how far off its new
+  bearing the symbol still is, a number, with `useTween`, and swings the
+  place behind the tip round it by that, with the core's `azimuth` and
+  `placeAt`, before it projects - so the camera answers at once, and new
+  data turns the symbol on from where it points. The registry takes on no
+  icon package: a page copies the path from its own.
 - **Focus** ([ADR-0002](docs/adr/0002-hover-highlight.md),
   [ADR-0008](docs/adr/0008-hover-lights-the-fill.md)). A mark names the marks
   of the same element in `groups`: the faces of a bar. Pointing at a mark, the

@@ -83,7 +83,14 @@ anywhere shows its symbol as it is drawn.
 
 The tip moves with the data. A stop that joins the end of a route takes the
 symbol at once and flies its leg from the stop it stood on, whole all the
-way; one that leaves the data draws back along its leg as it fades, and the
+way. Its bearing never jumps: the symbol sets out the way it pointed and
+turns into its new bearing as it flies, the shorter way round, and has
+turned when about a quarter of the leg is flown - so with the pace of the
+`animationDuration`. A stop that joins while it still turns turns it on from
+where it points, and a tip that flies back the way it came turns clockwise.
+A tip that takes over from one that left, one on its first leg, which
+starts the way it is drawn, and one without a leg that sets out for another
+place turn the same way; one that leaves the data draws back along its leg as it fades, and the
 stop before it is the tip once it is gone. See it fly under
 [Enter and leave](#enter-and-leave). The chart draws no flag: a flag has
 many colors, and belongs in the text beside a stop.

@@ -15,8 +15,10 @@ its icons, or filled with `fill` - ringed by the background, flat to the
 reader and of one fixed size, and the pointer hits the disc around it. One
 that names where it points at rest, `points` in degrees clockwise from up,
 turns to its bearing, the way it comes: the leg that arrives, as the camera
-shows it, and without a leg the way it last moved. One that names none stays
-upright, as a car seen from the side. Every stop before the
+shows it, and without a leg the way it last moved. A bearing never jumps:
+where the tip passes to another stop the symbol turns into its new bearing
+as it sets out, the shorter way round, a glide of its own. One that names
+none stays upright, as a car seen from the side. Every stop before the
 tip stays a circle; a flag at a stop is text in its label, never a mark. The
 registry takes on no icon package (issue #28): the page copies the path.
 

@@ -13,6 +13,8 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  azimuth,
+  azimuthAt,
   barCorners,
   barMarks,
   colorOf,
@@ -30,6 +32,7 @@ import {
   orthographic,
   placeOf,
   pad,
+  placeAt,
   ramp,
   segment,
   shade,
@@ -2240,6 +2243,54 @@ describe("symbol marks", () => {
 })
 
 describe("helpers", () => {
+  test("azimuth is the way one place sets out for another, clockwise from north, and placeAt the place that way", () => {
+    // From the middle of the map: east a quarter turn, west one back, south half a turn.
+    expect(azimuth([0, 0], [10, 0])).toBeCloseTo(90)
+    expect(azimuth([0, 0], [0, 10])).toBeCloseTo(0)
+    expect(azimuth([0, 0], [-10, 0])).toBeCloseTo(-90)
+    expect(Math.abs(azimuth([0, 0], [0, -10]))).toBeCloseTo(180)
+    // A great circle that sets out due east at 60 degrees north meets the equator a quarter of the globe on.
+    expect(azimuth([0, 60], [90, 0])).toBeCloseTo(90)
+    expect(placeAt([0, 60], 90, Math.PI / 2)[0]).toBeCloseTo(90)
+    expect(placeAt([0, 60], 90, Math.PI / 2)[1]).toBeCloseTo(0)
+    // North from the equator the latitude is the way gone; over the pole it comes down the far meridian.
+    expect(placeAt([20, 0], 0, Math.PI / 4)).toEqual([20, expect.closeTo(45)])
+    const over = placeAt([20, 60], 0, Math.PI / 2)
+    expect(Math.abs(over[0])).toBeCloseTo(160)
+    expect(over[1]).toBeCloseTo(30)
+  })
+
+  test("azimuthAt is the way over the globe of a way on the screen, as the camera shows it at a place", () => {
+    const over = (place: [number, number], way: number, view = { yaw: 0, tilt: 0 }) => {
+      let found = NaN
+      function Over() {
+        found = azimuthAt(useChart3D().camera, place, way)
+        return null
+      }
+      renderToString(
+        <ChartContainer3D config={{}} defaultView={view}>
+          <Over />
+        </ChartContainer3D>
+      )
+      return found
+    }
+    // Seen level, in the middle of the globe up is north and right is east.
+    expect(over([0, 0], 0)).toBeCloseTo(0, 1)
+    expect(over([0, 0], 90)).toBeCloseTo(90, 1)
+    expect(over([0, 0], -135)).toBeCloseTo(-135, 1)
+    // At 60 degrees north and east a place lies cos 60 x sin 60 right and sin 60 up. A step
+    // north moves it sin 60 x sin 60 left and cos 60 up: 3 left to 2 up, 56.31 degrees left of
+    // up. A step east, which is two steps of longitude that far north, moves it cos 60 right.
+    // So up on the screen is 2 parts north to 3 east: 56.31 degrees east of north.
+    expect(over([60, 60], -56.31)).toBeCloseTo(0, 1)
+    expect(over([60, 60], 90)).toBeCloseTo(90, 1)
+    expect(over([60, 60], 0)).toBeCloseTo(56.31, 1)
+    // The camera that faces the place sees north up there.
+    expect(over([60, 60], 30, facing(60, 60))).toBeCloseTo(30, 1)
+    // Behind the globe east lies to the left: the way to the right of the screen heads west.
+    expect(over([180, 0], 90)).toBeCloseTo(-90, 1)
+  })
+
   test("axis ends on nice ticks and widens an empty extent", () => {
     expect(axis(3, 97)).toEqual({ domain: [0, 100], ticks: [0, 20, 40, 60, 80, 100] })
     expect(axis(5, 5).domain[1]).toBeGreaterThan(5)

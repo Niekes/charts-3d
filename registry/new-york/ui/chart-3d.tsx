@@ -2729,6 +2729,34 @@ function facing(lon: number, lat: number): View3D {
   return { yaw: (-lon * Math.PI) / 180, tilt: (lat * Math.PI) / 180 }
 }
 
+/**
+ * The way one place sets out for another along their great circle, in
+ * degrees clockwise from north; `placeAt` reads it back. A geo chart turns
+ * one place round another with the two, since a chart may not do
+ * trigonometry of its own.
+ */
+function azimuth([lon0, lat0]: [number, number], [lon1, lat1]: [number, number]) {
+  const [from, to, east] = [lat0, lat1, lon1 - lon0].map((degrees) => (degrees * Math.PI) / 180)
+  const north = Math.cos(from) * Math.sin(to) - Math.sin(from) * Math.cos(to) * Math.cos(east)
+  return (Math.atan2(Math.sin(east) * Math.cos(to), north) * 180) / Math.PI
+}
+
+/**
+ * The place `far` radians of the great circle from the place at `lon` and
+ * `lat` that sets out the way `setOut`, in degrees clockwise from north:
+ * its longitude, from -180 to 180, and its latitude.
+ */
+function placeAt([lon, lat]: [number, number], setOut: number, far: number): [number, number] {
+  const [from, way] = [lat, setOut].map((degrees) => (degrees * Math.PI) / 180)
+  const up = Math.sin(from) * Math.cos(far) + Math.cos(from) * Math.sin(far) * Math.cos(way)
+  const east = Math.atan2(
+    Math.sin(way) * Math.sin(far) * Math.cos(from),
+    Math.cos(far) - Math.sin(from) * up
+  )
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  return [((lon + degrees(east) + 540) % 360) - 180, degrees(Math.asin(up))]
+}
+
 /** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
 const GLOBE_RADIUS = 1.15
 
@@ -2743,6 +2771,27 @@ function orthographic(camera: Camera3DInstance) {
     .scale(camera.scale())
     .rotateX(camera.rotateX())
     .rotateY(camera.rotateY())
+}
+
+/**
+ * The azimuth over the globe, in degrees clockwise from north, of the way
+ * that points `way` degrees clockwise from up on the screen at a place, as
+ * `camera` shows it: `way` itself where the camera faces the place with
+ * north up. With it a geo chart says which way over the globe a symbol
+ * points that is drawn as it is.
+ */
+function azimuthAt(camera: Camera3DInstance, place: [number, number], way: number) {
+  // A step north and one east, short enough for the bend of the globe: the screen shows a way
+  // over the globe as so much of the one and so much of the other.
+  const [here, north, east] = points3D<Point3D>()
+    .camera(orthographic(camera))
+    .data([place, placeAt(place, 0, 1e-4), placeAt(place, 90, 1e-4)].map((p) => globe(...p)))
+    .map((p) => p.projected)
+  const [n, e] = [north, east].map((p) => ({ x: p.x - here.x, y: p.y - here.y }))
+  const [x, y] = [Math.sin((way * Math.PI) / 180), -Math.cos((way * Math.PI) / 180)]
+  // Seen from behind the globe the two steps change sides, and `side` its sign.
+  const side = n.x * e.y - e.x * n.y
+  return (Math.atan2((n.x * y - n.y * x) * side, (e.y * x - e.x * y) * side) * 180) / Math.PI
 }
 
 /** What `earth` sets on a projection of d3-geo: the three setters it needs, each returning the projection. */
@@ -3392,6 +3441,9 @@ export {
   worldBox,
   globe,
   placeOf,
+  azimuth,
+  azimuthAt,
+  placeAt,
   facing,
   GLOBE_RADIUS,
   orthographic,

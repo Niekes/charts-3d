@@ -869,6 +869,14 @@ describe("RoutesChart3D tip", () => {
     expect(Math.abs(tips[0].turn)).toBeCloseTo(90, 0)
   })
 
+  test("where the reader asks for reduced motion, a tip that passes to a new stop points along its leg at once", async () => {
+    const view = await mount(tipped(equator.slice(0, 2), { id: "id" }))
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(90, 0)
+    await view.render(tipped([...equator.slice(0, 2), { lon: 0, lat: 40 }], { id: "id" }))
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(0, 0)
+    await view.unmount()
+  })
+
   test("a route whose key has no symbol keeps the circle on its tip, beside one that has", () => {
     const { stops, tips } = serverMarks(
       tipped(
@@ -990,7 +998,7 @@ describe("RoutesChart3D tip on its way", () => {
     const view = await mount(tour([mid]))
     expect(marks(view.host).tips[0].turn).toBe(0)
     await view.render(tour([mid, east]))
-    await glide(700)
+    await frames(view, 700)
     // The stop behind goes: its leg draws back towards the tip, to nothing, and the tip is alone.
     await view.render(tour([east]))
     const turns: number[] = []
@@ -1004,7 +1012,217 @@ describe("RoutesChart3D tip on its way", () => {
     await view.unmount()
   })
 
-  test("a tip that sets out is turned to where it heads on every frame, from the first", async () => {
+  /** The turn of the tip and how far up the screen it lies, on every frame for `ms`. */
+  const frames = async (view: Awaited<ReturnType<typeof mount>>, ms: number) => {
+    const seen: { turn: number; up: number }[] = []
+    for (let at = 0; at <= ms; at += 16) {
+      const [tip] = marks(view.host).tips
+      seen.push({ turn: tip.turn, up: 200 - tip.at[1] })
+      await glide(16)
+    }
+    return seen
+  }
+  const north = { id: "north", lon: 0, lat: 40 }
+
+  test("when a stop joins, the tip turns from the bearing it had into the new one as it sets out, and has turned when a quarter of the leg is flown", async () => {
+    const view = await mount(tour([west, mid]))
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(90, 0)
+    await view.render(tour([west, mid, north]))
+    const flown = await frames(view, 700)
+    // It came from the west and points east, and so it still does as it sets out north.
+    expect(flown[0].turn).toBeCloseTo(90, 0)
+    // It turns one way only, a little on every frame, and ends pointing north.
+    for (const [i, { turn }] of flown.entries()) {
+      expect(turn).toBeLessThanOrEqual(flown[i && i - 1].turn + 0.01)
+      expect(flown[i && i - 1].turn - turn).toBeLessThan(15)
+    }
+    expect(flown[flown.length - 1].turn).toBeCloseTo(0, 0)
+    // The leg runs 40 degrees up the middle meridian: a point of it lies the sine of its latitude up.
+    const top = flown[flown.length - 1].up
+    const share = (up: number) =>
+      Math.asin((up / top) * Math.sin((40 * Math.PI) / 180)) / ((40 * Math.PI) / 180)
+    // Its leg shows its way a frame or two after it sets out, and so much later the turn is done.
+    const early = flown.filter((f) => share(f.up) < 0.15)
+    expect(early.length).toBeGreaterThan(3)
+    expect(early[early.length - 1].turn).toBeGreaterThan(20)
+    for (const { turn } of flown.filter((f) => share(f.up) >= 0.25)) expect(turn).toBeLessThan(5)
+    for (const { turn } of flown.filter((f) => share(f.up) >= 0.35)) expect(turn).toBeCloseTo(0, 0)
+    await view.unmount()
+  })
+
+  test("a tip turns the shorter way round, never by the long one", async () => {
+    const view = await mount(tour([west, mid]))
+    // From pointing east to pointing south-west: by way of south, 131 degrees, not by way of north.
+    await view.render(tour([west, mid, { id: "south-west", lon: -30, lat: -30 }]))
+    const turns = (await frames(view, 700)).map((f) => (f.turn + 360) % 360)
+    expect(turns[0]).toBeCloseTo(90, 0)
+    for (const [i, turn] of turns.entries())
+      expect(turn).toBeGreaterThanOrEqual(turns[i && i - 1] - 0.01)
+    // The stop lies cos 30 x sin 30 left of the middle and sin 30 below it.
+    const bearing = 180 + (Math.atan2(Math.cos(Math.PI / 6) * 0.5, 0.5) * 180) / Math.PI
+    expect(turns[turns.length - 1]).toBeCloseTo(bearing, 0)
+    await view.unmount()
+  })
+
+  test("when a tip has left, the stop before it takes over on the bearing the tip had and turns into its own", async () => {
+    const view = await mount(tour([west, mid, north]))
+    await view.render(tour([west, mid]))
+    const seen: { turn: number; whole: boolean; x: number; y: number }[] = []
+    for (let ms = 0; ms <= 1400; ms += 16) {
+      const [tip] = marks(view.host).tips
+      seen.push({
+        turn: tip.turn,
+        whole: tip.color === "var(--color-a)",
+        x: tip.at[0],
+        y: tip.at[1],
+      })
+      await glide(16)
+    }
+    // Tail first the tip draws back, pointing north as it fades; then the stop in the middle is the tip.
+    const fades = seen.findIndex((f) => !f.whole)
+    const over = seen.findIndex((f, i) => i > fades && f.whole)
+    expect(over).toBeGreaterThan(20)
+    for (const f of seen.slice(0, over)) expect(f.turn).toBeCloseTo(0, 0)
+    expect(seen[over].y).toBeCloseTo(200, 1)
+    expect(seen[over].turn).toBeCloseTo(0, 0)
+    // It came from the west: it turns east, one way, and there it stays.
+    for (let i = over + 1; i < seen.length; i += 1) {
+      expect(seen[i].turn).toBeGreaterThanOrEqual(seen[i - 1].turn - 0.01)
+      expect(seen[i].turn - seen[i - 1].turn).toBeLessThan(15)
+    }
+    expect(seen[seen.length - 1].turn).toBeCloseTo(90, 0)
+    await view.unmount()
+  })
+
+  test("a stop that joins while the tip still turns turns it on from where it points: no frame jumps", async () => {
+    const view = await mount(tour([west, mid]))
+    await view.render(tour([west, mid, north]))
+    const first = await frames(view, 80)
+    // A third of the way round, the next stop comes, back to the east of the one the tip left.
+    expect(first[first.length - 1].turn).toBeGreaterThan(20)
+    expect(first[first.length - 1].turn).toBeLessThan(85)
+    await view.render(tour([west, mid, north, { id: "far", lon: 40, lat: 5 }]))
+    const then = await frames(view, 900)
+    const turns = [...first, ...then].map((f) => f.turn)
+    for (const [i, turn] of turns.entries())
+      expect(Math.abs(turn - turns[i && i - 1])).toBeLessThan(15)
+    // It ends on the leg that arrives: from the north-west, down and to the right.
+    expect(turns[turns.length - 1]).toBeGreaterThan(90)
+    expect(turns[turns.length - 1]).toBeLessThan(180)
+    await view.unmount()
+  })
+
+  test("a tour in a hurry: stops join faster than the tip arrives and drop behind it, and no frame jumps", async () => {
+    const places = [
+      { id: "a", lon: -50, lat: 10 },
+      { id: "b", lon: -20, lat: 35 },
+      { id: "c", lon: 10, lat: -20 },
+      { id: "d", lon: 45, lat: 25 },
+    ]
+    const view = await mount(tour(places.slice(0, 1)))
+    // A step every fifth of a glide; a glide after it came, a step drops what lies behind its stop.
+    const steps = [0, 120, 240].map((at, i) => ({ at, data: places.slice(0, i + 2) }))
+    const drops = [600, 720, 840].map((at, i) => ({ at, data: places.slice(i + 1) }))
+    const turns: number[] = []
+    for (let ms = 0; ms <= 1600; ms += 8) {
+      for (const change of [...steps, ...drops]) {
+        if (change.at === ms) await view.render(tour(change.data))
+      }
+      if (ms % 16 === 0) await glide(16)
+      turns.push(marks(view.host).tips[0].turn)
+    }
+    for (const [i, turn] of turns.entries()) {
+      expect(Math.abs(((turn - turns[i && i - 1] + 540) % 360) - 180)).toBeLessThan(15)
+    }
+    expect(marks(view.host).stops).toHaveLength(0)
+    await view.unmount()
+  })
+
+  /** The largest turn from one frame to the next, in degrees, the shorter way round. */
+  const jump = (turns: number[]) =>
+    Math.max(...turns.slice(1).map((turn, i) => Math.abs(((turn - turns[i] + 540) % 360) - 180)))
+
+  test("when the tip steps back to a stop no leg arrives at, its symbol turns into the way it is drawn", async () => {
+    const view = await mount(tour([west, mid]))
+    await view.render(tour([west]))
+    const turns = (await frames(view, 1400)).map((f) => f.turn)
+    expect(turns[0]).toBeCloseTo(90, 0)
+    expect(jump(turns)).toBeLessThan(15)
+    expect(turns[turns.length - 1]).toBe(0)
+    expect(marks(view.host).stops).toHaveLength(0)
+    await view.unmount()
+  })
+
+  test("a tip that leaves as another stop joins, at once or on its way out, hands on its bearing: no frame jumps", async () => {
+    const far = { id: "far", lon: 40, lat: 5 }
+    for (const wait of [0, 208]) {
+      const view = await mount(tour([west, mid, north]))
+      await view.render(tour([west, mid]))
+      const leaving = wait ? (await frames(view, wait)).map((f) => f.turn) : []
+      await view.render(tour([west, mid, far]))
+      const turns = [...leaving, ...(await frames(view, 900)).map((f) => f.turn)]
+      expect(jump(turns)).toBeLessThan(15)
+      // The leg from the middle of the globe runs east and a little north.
+      expect(turns[turns.length - 1]).toBeGreaterThan(75)
+      expect(turns[turns.length - 1]).toBeLessThan(90)
+      await view.unmount()
+    }
+  })
+
+  test("a tip that flies back the way it came turns clockwise, wherever on the globe", async () => {
+    const routes = [
+      [-20, 13.7, 11.3, 27.9],
+      [33.1, -41.2, -7.7, 8.4],
+      [5.5, 5.5, 48.2, -30.9],
+      [-44.4, 21.1, -3.3, -17.6],
+    ]
+    for (const [lon0, lat0, lon1, lat1] of routes) {
+      const out = { id: "out", lon: lon0, lat: lat0 }
+      const there = { id: "there", lon: lon1, lat: lat1 }
+      const view = await mount(tour([out, there]))
+      await view.render(tour([out, there, { ...out, id: "back" }]))
+      const turns = (await frames(view, 300)).map((f) => f.turn)
+      // Clockwise the turn grows, through half a turn and on from the other side. The leg
+      // itself bends on its way, so it is how far round the symbol has come that tells:
+      // never back by more than that bend, and soon most of the half turn.
+      let round = 0
+      const come = turns.slice(1).map((turn, i) => (round += ((turn - turns[i] + 540) % 360) - 180))
+      expect(Math.min(...come)).toBeGreaterThan(-5)
+      expect(Math.max(...come)).toBeGreaterThan(150)
+      expect(Math.max(...come)).toBeLessThan(200)
+      await view.unmount()
+    }
+  })
+
+  test("a tip that kept the bearing of a leg and then moves turns into its way: no frame jumps", async () => {
+    const view = await mount(tour([mid, east]))
+    await view.render(tour([east]))
+    await glide(700)
+    expect(marks(view.host).tips[0].turn).toBeCloseTo(90, 0)
+    await view.render(tour([{ ...east, lat: 40 }]))
+    const turns = (await frames(view, 700)).map((f) => f.turn)
+    expect(turns[0]).toBeCloseTo(90, 0)
+    expect(jump(turns)).toBeLessThan(15)
+    // It went north along its meridian, which leans to the left that far east.
+    expect(turns[turns.length - 1]).toBeLessThan(0)
+    expect(turns[turns.length - 1]).toBeGreaterThan(-45)
+    await view.unmount()
+  })
+
+  test("a symbol that names no way stays upright through every step of a tour", async () => {
+    const ship = { a: { color: "red", symbol: { path: "M3 20h18" } } }
+    const sail = (data: Stop[]) => (
+      <ChartContainer3D config={ship} defaultView={{ yaw: 0, tilt: 0 }}>
+        <RoutesChart3D data={data} land={land} lon="lon" lat="lat" id="id" />
+      </ChartContainer3D>
+    )
+    const view = await mount(sail([west, mid]))
+    await view.render(sail([west, mid, north]))
+    for (const { turn } of await frames(view, 700)) expect(turn).toBe(0)
+    await view.unmount()
+  })
+
+  test("a tip that takes its first leg turns from the way it is drawn to where it heads, a little on every frame from the first", async () => {
     // Places whose point on the globe does not read back to the last digit.
     const from = { id: "from", lon: 12.34567, lat: -45.678 }
     const to = { id: "to", lon: 60.2, lat: 10.2 }
@@ -1015,10 +1233,13 @@ describe("RoutesChart3D tip on its way", () => {
       await glide(16)
       turns.push(marks(view.host).tips[0].turn)
     }
-    // Up and to the right it heads, and its way bends little by little: no frame is off it.
-    for (const [i, turn] of turns.entries())
-      expect(Math.abs(turn - turns[i && i - 1])).toBeLessThan(2)
-    expect(turns[12]).toBeGreaterThan(0)
+    // Drawn it points up; it heads up and to the right, and turns there one way, no frame off it.
+    expect(turns[0]).toBeCloseTo(0, 0)
+    for (const [i, turn] of turns.entries()) {
+      expect(turn).toBeGreaterThan(turns[i && i - 1] - 1)
+      expect(turn - turns[i && i - 1]).toBeLessThan(15)
+    }
+    expect(turns[12]).toBeGreaterThan(30)
     expect(turns[12]).toBeLessThan(90)
     await view.unmount()
   })
@@ -1045,13 +1266,16 @@ describe("RoutesChart3D tip on its way", () => {
     const view = await mount(tour([east]))
     expect(marks(view.host).tips[0].turn).toBe(0)
     await view.render(tour([{ ...east, lon: -40, lat: 30 }]))
+    // It sets out as it is drawn, and turns into its way from there.
+    expect(marks(view.host).tips[0].turn).toBe(0)
     let was = marks(view.host).tips[0].at
     let turn = 0
-    for (let ms = 0; ms < 600; ms += 100) {
+    for (let ms = 100; ms <= 600; ms += 100) {
       await glide(100)
       const [tip] = marks(view.host).tips
-      // Over a tenth of a second its way bends a little: within a few degrees of the chord.
-      expect(Math.abs(tip.turn - way(was, tip.at))).toBeLessThan(8)
+      // Once it has turned from the way it is drawn it points along its way, which bends
+      // a little over a tenth of a second: within a few degrees of the chord.
+      if (ms > 300) expect(Math.abs(tip.turn - way(was, tip.at))).toBeLessThan(8)
       ;[was, turn] = [tip.at, tip.turn]
     }
     // Up and to the left it went, and so it stays, however often the chart draws again.
