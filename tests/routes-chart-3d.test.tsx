@@ -242,15 +242,36 @@ describe("RoutesChart3D hover", () => {
     await view.unmount()
   })
 
-  test("pointing at a route lights the whole route and no other; leaving clears it", async () => {
-    const view = await mount(chart(route, { id: "id", series: "s" }))
+  test("pointing at a leg lights that leg alone - not the next leg, not its stops - and a stop itself alone; leaving clears it", async () => {
+    // Two legs along the equator, meeting in the middle of the globe at 320.
+    const view = await mount(
+      chart(
+        [
+          { id: "west", lon: -40, lat: 0 },
+          { id: "mid", lon: 0, lat: 0 },
+          { id: "east", lon: 40, lat: 0 },
+        ],
+        { id: "id" }
+      )
+    )
     const before = marks(view.host)
-    const ofB = before.fills.filter((f) => f === "var(--color-b)").length
-    const ofA = before.fills.filter((f) => f === "var(--color-a)").length
-    await view.point(before.stops.find((s) => s.el.getAttribute("fill") === "var(--color-b)")!.at)
-    const fills = marks(view.host).fills
-    expect(fills.filter(lit)).toHaveLength(ofB)
-    expect(fills.filter((f) => f === "var(--color-a)")).toHaveLength(ofA)
+    const first = before.quads.filter((q) => middle(q.corners)[0] < 320)
+    expect(first.length).toBeGreaterThan(5)
+    expect(first.length).toBe(before.quads.length / 2)
+
+    await view.point(middle(first[3].corners))
+    let now = marks(view.host)
+    const litQuads = now.quads.filter((q) => lit(q.el.getAttribute("fill")!))
+    expect(litQuads).toHaveLength(first.length)
+    expect(litQuads.every((q) => middle(q.corners)[0] < 320)).toBe(true)
+    expect(now.stops.filter((s) => lit(s.el.getAttribute("fill")!))).toHaveLength(0)
+
+    // On a stop, the stop alone.
+    await view.point(before.stops.find((s) => s.at[0] === 320)!.at)
+    now = marks(view.host)
+    expect(now.fills.filter(lit)).toHaveLength(1)
+    expect(now.stops.filter((s) => lit(s.el.getAttribute("fill")!))).toHaveLength(1)
+
     await view.leave()
     expect(marks(view.host).fills.filter(lit)).toHaveLength(0)
     expect(view.tip()).toBe("")

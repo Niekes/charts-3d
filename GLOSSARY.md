@@ -105,19 +105,19 @@ _Avoid_: edge, link, section
 The stops of one series joined in the order of the data, over the globe -
 the mark of the routes chart. A stop that joins the end of a route grows its
 leg out of the stop before it, and a gone one draws its leg back; an entry
-without a place breaks the route. Pointing at a route lights the whole of
-it.
+without a place breaks the route.
 _Avoid_: flow, arc, path, trip, flight
 
 **Stop**:
 A place a route visits, a circle on the globe at its longitude and latitude.
-One on the far side of the globe is hidden by it.
+One on the far side of the globe is hidden by it. Pointing at a stop lights
+that stop alone.
 _Avoid_: waypoint, node, marker, dot
 
 **Leg**:
 The part of a route between two stops next to each other, along the great
-circle, the shortest way over the surface. It ends at the horizon, and on
-hover it names its two stops.
+circle, the shortest way over the surface. It ends at the horizon. Pointing
+at a leg lights that leg alone, and it names its two stops.
 _Avoid_: arc, link, edge, segment
 
 **Ocean**:

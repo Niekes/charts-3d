@@ -51,8 +51,9 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   series?: keyof T & string
   /**
-   * What a route says on hover: `tooltip` is what it would say, its series
-   * over the stop under the pointer, or the two stops of the leg under it,
+   * What a route says on hover, where the leg or the stop under the pointer
+   * alone is highlighted: `tooltip` is what it would say, its series over
+   * that stop, or the two stops of that leg,
    * each with its latitude and longitude; `data` the entries of those stops;
    * `null` shows none.
    * @defaultValue (tooltip) => tooltip
@@ -142,7 +143,7 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
 type Stop = { name: string; seen: number; anchored: boolean; at: Place }
 
 /** A part of a route on the globe: a stop, one point, or a piece of the leg between the stops `names`, two. */
-type Piece = Point3D[] & { key: string; line: string; seen: number; names: string[] }
+type Piece = Point3D[] & { key: string; line: string; seen: number; names: string[]; group: string }
 
 /** What a tooltip is read from. */
 type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
@@ -162,8 +163,9 @@ type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "t
  */
 function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
   const on = ([lon, lat]: Place) => globe(lon, lat, GLOBE_RADIUS)
+  // A piece is in focus with the stops it lies between: a leg whole, a stop alone.
   const piece = (points: Point3D[], key: string, seen: number, names: string[]) =>
-    Object.assign(points, { key, line, seen, names })
+    Object.assign(points, { key, line, seen, names, group: names.join("\u2192") })
   return [
     ...points.slice(1).flatMap((to, i) => {
       const from = points[i]
@@ -185,17 +187,17 @@ function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
 /**
  * The mark of a piece, projected, in the color of its route, faded as far
  * as it is seen: a segment as wide as a leg, or the circle of a stop, ringed
- * by the background. Its group is the route, so hovering highlights the
- * whole route.
+ * by the background. Its group is its leg, or its stop, so hovering
+ * highlights the leg under the pointer alone, or the stop.
  */
 function pieceMark(
-  piece: { projected: Point2D }[] & Pick<Piece, "key" | "line" | "seen">,
+  piece: { projected: Point2D }[] & Pick<Piece, "key" | "line" | "seen" | "group">,
   tooltip: Mark3D["tooltip"]
 ): Mark3D {
   const mark = {
     key: piece.key,
     fill: faded(colorOf(piece.line), piece.seen),
-    groups: [piece.line],
+    groups: [piece.group],
     tooltip,
   }
   const at = piece.map((p) => p.projected)

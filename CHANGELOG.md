@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RoutesChart3D`, routes over a globe: the entries of `data` are stops at
   their `lon` and `lat`, joined in the order of the data along the great
   circle, one route per value of `series`. What lies on the far side is
-  hidden by the globe. Pointing at a route lights the whole route; a leg says
-  its two stops, a stop itself. With `id`, a stop that joins the end of a
+  hidden by the globe. Pointing at a leg lights that leg alone and says its
+  two stops; a stop lights and says itself. With `id`, a stop that joins the end of a
   route grows its leg out of the stop before it, and a gone one draws its
   leg back.
 - `view` on `ChartContainer3D`, a view the camera heads for: it starts
