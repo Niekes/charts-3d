@@ -28,11 +28,14 @@ import {
   intoWorld,
   linear,
   orthographic,
+  placeOf,
   pad,
   ramp,
+  segment,
   shade,
   useChart3D,
   useSeries,
+  useRuns,
   useTween,
   useTweenAxes,
   worldBox,
@@ -3078,6 +3081,22 @@ describe("geo helpers", () => {
     }
   })
 
+  test("placeOf reads the longitude and latitude back from a point of the globe, at any radius, and the middle of the globe as a place, not NaN", () => {
+    for (const [lon, lat] of [
+      [0, 0],
+      [-35, -8],
+      [139.7, 35.7],
+      [-179, 80],
+      [45, -90],
+    ]) {
+      const [east, north] = placeOf(globe(lon, lat, 0.4))
+      expect(north).toBeCloseTo(lat)
+      // At a pole every longitude is the same place.
+      if (Math.abs(lat) < 90) expect(east).toBeCloseTo(lon)
+    }
+    expect(placeOf({ x: 0, y: 0, z: 0 }).map(Math.abs)).toEqual([0, 0])
+  })
+
   test("orthographic copies the camera without its perspective", () => {
     const camera = camera3D()
       .origin({ x: 10, y: 20 })
@@ -3202,6 +3221,96 @@ describe("marks", () => {
     expect(lazy).toHaveBeenCalledTimes(1)
     expect(chart.host.textContent).toContain("Lazy")
     await chart.unmount()
+  })
+})
+
+describe("lines", () => {
+  test("segment gives the corners of a line as wide on the screen, along one side and back along the other", () => {
+    expect(segment({ x: 0, y: 0 }, { x: 10, y: 0 }, 2)).toEqual([
+      { x: 0, y: 1 },
+      { x: 10, y: 1 },
+      { x: 10, y: -1 },
+      { x: 0, y: -1 },
+    ])
+    // Its ends are as wide whichever way it runs.
+    const [a, , , d] = segment({ x: 3, y: 4 }, { x: 6, y: 8 }, 5)
+    expect(Math.hypot(a.x - d.x, a.y - d.y)).toBeCloseTo(5)
+    // Without a length it has no side to turn to: it stays a point, no NaN.
+    expect(segment({ x: 7, y: 7 }, { x: 7, y: 7 }, 2)).toEqual(
+      Array.from({ length: 4 }, () => ({ x: 7, y: 7 }))
+    )
+  })
+
+  /** The runs of `named`, a point at the capital of its name, on its way written as from>to@seen. */
+  function Runs({
+    named,
+    series,
+    presence,
+  }: {
+    named: { d: { s: string }; name: string; placed: boolean }[]
+    series?: "s"
+    presence: Record<string, number>
+  }) {
+    const runs = useRuns(
+      named,
+      series,
+      presence,
+      (name) => name.toUpperCase(),
+      (anchor, own, seen) => `${anchor}>${own}@${seen}`
+    )
+    return <text>{JSON.stringify(runs)}</text>
+  }
+  const point = (name: string, s: string, placed = true) => ({ d: { s }, name, placed })
+  const runsOf = (host: HTMLElement) =>
+    (
+      JSON.parse(host.querySelector("text")!.textContent!) as { line: string; points: object[] }[]
+    ).map((run) => `${run.line}: ${run.points.map((p) => Object.values(p).join(" ")).join(", ")}`)
+
+  test("useRuns joins the points of a series in the order of the data, cuts a run at an entry without a place, and unfolds a point from the one before it", async () => {
+    const named = [
+      point("a", "x"),
+      point("n", "y"),
+      point("gap", "x", false),
+      point("b", "x"),
+      point("c", "x"),
+    ]
+    const view = await mount(
+      <ChartContainer3D config={{ first: {} }}>
+        <Runs named={named} series="s" presence={{ a: 1, n: 1, b: 1, c: 0.5 }} />
+      </ChartContainer3D>
+    )
+    expect(runsOf(view.host)).toEqual([
+      "x: a 1 A>A@1",
+      "y: n 1 N>N@1",
+      "x: b 1 B>B@1, c 0.5 B>C@0.5",
+    ])
+
+    // A gone point keeps its line and its place after the point it followed, and folds into
+    // the first that stands - the one after it, at the start of its run.
+    await view.render(
+      <ChartContainer3D config={{ first: {} }}>
+        <Runs
+          named={named.filter((p) => p.name !== "b")}
+          series="s"
+          presence={{ a: 1, n: 1, b: 0.3, c: 1 }}
+        />
+      </ChartContainer3D>
+    )
+    expect(runsOf(view.host)).toEqual([
+      "x: a 1 A>A@1",
+      "y: n 1 N>N@1",
+      "x: b 0.3 C>B@0.3, c 1 C>C@1",
+    ])
+
+    // Dropped by the presence, it is forgotten; without series all the points are one line,
+    // that of the first key of the config, and a run that is all new stands in place.
+    await view.render(
+      <ChartContainer3D config={{ first: {} }}>
+        <Runs named={[point("a", "x"), point("n", "y")]} presence={{ a: 0.2, n: 0.2 }} />
+      </ChartContainer3D>
+    )
+    expect(runsOf(view.host)).toEqual(["first: a 0.2 A, n 0.2 N"])
+    await view.unmount()
   })
 })
 

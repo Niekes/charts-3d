@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { geoDistance, geoInterpolate, geoOrthographic, geoPath } from "d3-geo"
 import { lineStrips3D, sort, type Point2D, type Point3D } from "d3-3d"
 
@@ -9,9 +10,11 @@ import {
   colorOf,
   earth,
   faded,
+  finite,
   globe,
   orthographic,
-  stroke,
+  placeOf,
+  segment,
   useChart3D,
   usePoints,
   useRuns,
@@ -27,7 +30,7 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
    * ends before it and starts again after it.
    */
   data: T[]
-  /** The land under the routes: the regions of a GeoJSON `FeatureCollection`, such as the countries of the world. */
+  /** The land under the routes: the regions of a GeoJSON `FeatureCollection`. */
   land: GeoJSON.FeatureCollection
   /** The field of the longitude of a stop, in degrees east. */
   lon: keyof T & string
@@ -78,15 +81,14 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: RoutesChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  // A stop is a point without a height: the core reads it as one, its
-  // latitude standing in for the third field.
-  const { named, entries, presence, read } = usePoints(data, lon, lat, lat, id)
+  const stops = useStops(data, { lon, lat, id, series })
+  const { named, entries, presence, read } = usePoints(stops, "x", "y", "z", id && "name")
   // A stop that comes or goes travels the great circle from its neighbour.
   const runs = useRuns(
     named,
-    series,
+    series && "route",
     presence,
-    (name): Place => [read(name, "x"), read(name, "y")],
+    (name) => placeOf({ x: read(name, "x"), y: read(name, "y"), z: read(name, "z") }),
     (from, to, k) => geoInterpolate(from, to)(k)
   )
   const reading = { config, entries, fields: { lon, lat, id, series }, tooltip }
@@ -106,6 +108,35 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
 /** A place on the globe: its longitude and its latitude, in degrees. */
 type Place = [number, number]
 
+/** The fields of an entry the chart reads. */
+type Fields<T> = Pick<
+  RoutesChart3DProps<T & Record<string, unknown>>,
+  "lon" | "lat" | "id" | "series"
+>
+
+/**
+ * The entries as the core reads points: each with its name and its route,
+ * and, where it has a place, the point of the globe it lies on. A stop that
+ * moves glides as that point, through the globe, so it takes the shortest
+ * way to its new place, over the date line too. Built once per change of the
+ * data, not at every frame the camera turns.
+ */
+function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
+  const { lon, lat, id, series } = fields
+  return React.useMemo(
+    () =>
+      data.map((entry) => ({
+        entry,
+        name: id && String(entry[id]),
+        route: series && String(entry[series]),
+        ...(finite(entry[lon]) && finite(entry[lat])
+          ? globe(Number(entry[lon]), Number(entry[lat]))
+          : undefined),
+      })),
+    [data, lon, lat, id, series]
+  )
+}
+
 /** A stop of a route, where it is now, and how far it has come, from 0 to 1. */
 type Stop = { name: string; seen: number; at: Place }
 
@@ -115,8 +146,8 @@ type Piece = Point3D[] & { key: string; line: string; seen: number; names: strin
 /** What a tooltip is read from. */
 type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
   config: ChartConfig
-  entries: Map<string, T>
-  fields: Pick<RoutesChart3DProps<T>, "lon" | "lat" | "id" | "series">
+  entries: Map<string, { entry: T }>
+  fields: Fields<T>
 }
 
 /**
@@ -152,7 +183,7 @@ function pieces({ line, points }: { line: string; points: Stop[] }): Piece[] {
 
 /**
  * The mark of a piece, projected, in the color of its route, faded as far
- * as it is seen: a stroke as wide as a leg, or the circle of a stop, ringed
+ * as it is seen: a segment as wide as a leg, or the circle of a stop, ringed
  * by the background. Its group is the route, so hovering highlights the
  * whole route.
  */
@@ -168,7 +199,7 @@ function pieceMark(
   }
   const at = piece.map((p) => p.projected)
   return at.length > 1
-    ? { ...mark, points: stroke(at[0], at[1], WIDTH) }
+    ? { ...mark, points: segment(at[0], at[1], WIDTH) }
     : { ...mark, points: at, r: STOP, stroke: faded("var(--background)", piece.seen) }
 }
 
@@ -184,8 +215,8 @@ function routeTooltip<T extends Record<string, unknown>>(
   { config, entries, fields, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   const stops = names.flatMap((name) => {
-    const entry = entries.get(name)
-    return entry ? [entry] : []
+    const stop = entries.get(name)
+    return stop ? [stop.entry] : []
   })
   if (stops.length < names.length) return undefined
   const { lon, lat, id, series } = fields

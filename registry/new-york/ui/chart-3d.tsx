@@ -422,7 +422,7 @@ function ChartContainer3D({
   id,
   config,
   defaultView = { yaw: Math.PI / 6, tilt: Math.PI / 6 },
-  view: to,
+  view: heading,
   width = 640,
   height = 400,
   animationDuration: ms,
@@ -440,7 +440,7 @@ function ChartContainer3D({
   const drawing = useScene(requested, width, height, tooltip)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
-  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { to, ms })
+  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { heading, ms })
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
     () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration: ms }),
@@ -879,8 +879,8 @@ function between(from: View3D, to: View3D, k: number): View3D {
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one - but
  * under two fingers, where the tooltip would jump from one to the other, it
- * goes, as in a drag. The camera starts at the view of `heading`, over the
- * default view, and glides to a new one in its `ms`.
+ * goes, as in a drag. The camera starts at `heading`, over the default view,
+ * and glides to a new one in `ms`.
  */
 function useOrbit(
   defaultView: View3D,
@@ -888,10 +888,10 @@ function useOrbit(
   keys: Keymap,
   onDragStart: () => void,
   onHover: (e: React.PointerEvent<SVGSVGElement>) => void,
-  heading: { to?: View3D; ms?: number }
+  { heading, ms = DURATION }: { heading?: View3D; ms?: number }
 ) {
-  const { view, jump, glide } = useGlide({ ...defaultView, ...heading.to })
-  useHeading(heading.to, (to) => glide((from) => ({ ...from, ...to }), heading.ms ?? DURATION))
+  const { view, jump, glide } = useGlide({ ...defaultView, ...heading })
+  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms))
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -2499,6 +2499,18 @@ function globe(lon: number, lat: number, radius = 1): Point3D {
 }
 
 /**
+ * The longitude and latitude, in degrees, of the place a point lies over, as
+ * seen from the middle of the globe: `globe` read back, at any radius. A
+ * geo chart glides a place as a point through the globe - the chord between
+ * two places lies under their great circle, so the place takes the shortest
+ * way, over the date line too - and reads the place on the way back with it.
+ */
+function placeOf({ x, y, z }: Point3D): [number, number] {
+  const degrees = (radians: number) => (radians * 180) / Math.PI
+  return [degrees(Math.atan2(x, z)), degrees(Math.atan2(-y, Math.hypot(x, z)))]
+}
+
+/**
  * The view that looks at the place at `lon` and `lat`, in degrees: the
  * place lies in the middle of the globe. A page hands it to the `view` of
  * the container, so the camera turns to a place, since a chart may not do
@@ -2729,8 +2741,8 @@ function usePoints<T extends Record<string, unknown>>(
   }
 }
 
-/** What a chart of lines knows of a point: the config key of its line, and whether the line starts anew at it. */
-type Joint = { line: string; starts: boolean }
+/** What a chart of lines knows of an entry: the config key of its line, and whether it is a gap, an entry without a place, where the line breaks. */
+type Joint = { line: string; gap: boolean }
 
 /**
  * The runs of the lines of a chart that joins its entries in the order of
@@ -2739,9 +2751,9 @@ type Joint = { line: string; starts: boolean }
  * where an entry has no place, so a line stops before it and starts again
  * after it. `named` is every entry with its name and whether it is placed,
  * `presence` how far each point has come, from 0 to 1, the gone ones still
- * among them: a gone point keeps its line and its place after the point it
- * followed, since its entry has already left the data, and is forgotten when
- * the presence drops it. `at` gives the place of a point, and a point that
+ * among them: a gone point keeps its line and its place after the entry it
+ * followed - a gap too, so it stays in its run - since its own entry has
+ * already left the data, and is forgotten when the presence drops it. `at` gives the place of a point, and a point that
  * comes or goes unfolds from the point before it in its run - the one after
  * it, at the start - and folds back into it: `toward` is the place the share
  * `seen` of the way from that anchor to its own. A run that is all new
@@ -2772,20 +2784,18 @@ function useRuns<T extends Record<string, unknown>, P>(
   })
 }
 
-/** The joint of every placed entry, by name, in the order of the data: a line starts anew after an entry of its series that has no place. */
+/** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */
 function liveJoints<T extends Record<string, unknown>>(
   named: { d: T; name: string; placed: boolean }[],
   series: (keyof T & string) | undefined,
   fallback: string
 ) {
-  const live = new Map<string, Joint>()
-  const broken = new Set<string>()
-  for (const { d, name, placed } of named) {
-    const line = series ? String(d[series]) : fallback
-    if (placed) live.set(name, { line, starts: broken.delete(line) })
-    else broken.add(line)
-  }
-  return live
+  return new Map(
+    named.map(({ d, name, placed }): [string, Joint] => [
+      name,
+      { line: series ? String(d[series]) : fallback, gap: !placed },
+    ])
+  )
 }
 
 /**
@@ -2809,27 +2819,27 @@ function withGone(live: Map<string, Joint>, known: Map<string, Joint>, alive: ob
   ])
 }
 
-/** The names of the points of every run, in order: a run per line, and a new one where the line starts anew. */
+/** The names of the points of every run, in order: a run per line, and a new one after a gap in it. */
 function runsOf(joints: Map<string, Joint>) {
   const open = new Map<string, string[]>()
   const runs: { line: string; names: string[] }[] = []
-  for (const [name, { line, starts }] of joints) {
-    if (starts || !open.has(line)) {
-      open.set(line, [])
-      runs.push({ line, names: open.get(line)! })
+  for (const [name, { line, gap }] of joints) {
+    if (gap) open.delete(line)
+    else {
+      if (!open.has(line)) runs.push({ line, names: open.set(line, []).get(line)! })
+      open.get(line)!.push(name)
     }
-    open.get(line)!.push(name)
   }
   return runs
 }
 
 /**
- * The quad of a stroke from `a` to `b`, `width` wide, in the units of the
- * view box: a line of the same width on the screen from every side, as a
+ * The corners of the segment from `a` to `b`, `width` wide, in the units of
+ * the view box: a line of the same width on the screen from every side, as a
  * polygon every renderer draws. A segment without a length, as of a point
  * that has yet to unfold, has no side to turn to and stays a point.
  */
-function stroke(a: Point2D, b: Point2D, width: number): Point2D[] {
+function segment(a: Point2D, b: Point2D, width: number): Point2D[] {
   const half = width / 2 / (Math.hypot(b.x - a.x, b.y - a.y) || 1)
   const n = { x: (a.y - b.y) * half, y: (b.x - a.x) * half }
   return [
@@ -3078,6 +3088,7 @@ export {
   linear,
   worldBox,
   globe,
+  placeOf,
   facing,
   GLOBE_RADIUS,
   orthographic,
@@ -3091,7 +3102,7 @@ export {
   useSeries,
   usePoints,
   useRuns,
-  stroke,
+  segment,
   pointTooltip,
   cubeMarks,
   barCorners,

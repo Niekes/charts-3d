@@ -9,7 +9,7 @@ import {
   faded,
   intoWorld,
   pointTooltip,
-  stroke,
+  segment,
   useChart3D,
   usePoints,
   useRuns,
@@ -158,7 +158,7 @@ function elbowMarks(
     ...at.slice(1).map((b, i) => ({
       ...mark,
       key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
-      points: stroke(at[i], b, WIDTH),
+      points: segment(at[i], b, WIDTH),
     })),
     { ...mark, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
   ]

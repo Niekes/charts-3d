@@ -251,9 +251,12 @@ How the charts draw, so that a new one draws the same way:
   the glide is done. A mark that grows from its enter value fades in as it
   grows and out as it shrinks - its opacity a tween of its own, 1 with the
   enter value 0, handed to `faded` after `shade` - so a flat bar or a dot
-  never pops in or out at the end of a glide. A point of a line - the area
-  chart - unfolds from its neighbour instead, as far as its presence, and folds
-  back into it, so the line opens and closes without a notch. Build the axes from the data the chart glides into
+  never pops in or out at the end of a glide. A point of a line - the area,
+  the line and the routes chart - unfolds from its neighbour instead, as far as its presence, and folds
+  back into it, so the line opens and closes without a notch; the core's
+  `useRuns` orders the points and unfolds them. The leg of a route that
+  grows out of a stop that stands is whole from the start, a line that draws
+  itself, and fades only where both its stops do. Build the axes from the data the chart glides into
   and hand them to `useTweenAxes`, which glides their ends with the marks:
   axes rounded from the numbers on screen would jump from one round end to
   the next, and the box with them. The tick labels are keyed by value, so a

@@ -206,7 +206,7 @@ async function mount(element: ReactElement) {
 
 describe("RoutesChart3D hover", () => {
   const lit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
-  const trip: Stop[] = [
+  const route: Stop[] = [
     { id: "Lisbon", lon: -9, lat: 39, s: "b" },
     { id: "Recife", lon: -35, lat: -8, s: "b" },
     { id: "Accra", lon: 0, lat: 6, s: "a" },
@@ -214,7 +214,7 @@ describe("RoutesChart3D hover", () => {
   ]
 
   test("a leg says its two stops, a stop itself, each by its name with its latitude and longitude", async () => {
-    const view = await mount(chart(trip, { id: "id", series: "s" }))
+    const view = await mount(chart(route, { id: "id", series: "s" }))
     const { quads, stops } = marks(view.host)
     const leg = quads.filter((q) => q.el.getAttribute("fill") === "var(--color-b)")
     await view.point(middle(leg[Math.floor(leg.length / 2)].corners))
@@ -230,7 +230,7 @@ describe("RoutesChart3D hover", () => {
   })
 
   test("pointing at a route lights the whole route and no other; leaving clears it", async () => {
-    const view = await mount(chart(trip, { id: "id", series: "s" }))
+    const view = await mount(chart(route, { id: "id", series: "s" }))
     const before = marks(view.host)
     const ofB = before.fills.filter((f) => f === "var(--color-b)").length
     const ofA = before.fills.filter((f) => f === "var(--color-a)").length
@@ -245,7 +245,7 @@ describe("RoutesChart3D hover", () => {
   })
 
   test("without id a stop is named by the fields of its place, and without series a route has no title", async () => {
-    const view = await mount(chart(trip.slice(0, 1)))
+    const view = await mount(chart(route.slice(0, 1)))
     await view.point(marks(view.host).stops[0].at)
     expect(view.tip()).toBe("lat, lon39, -9")
     await view.unmount()
@@ -254,19 +254,19 @@ describe("RoutesChart3D hover", () => {
   test("tooltip makes what a route says from the default and the entries of its stops", async () => {
     const seen: Stop[][] = []
     const view = await mount(
-      chart(trip.slice(0, 2), {
+      chart(route.slice(0, 2), {
         id: "id",
         tooltip: (tip, { entries }) => {
           seen.push(entries)
-          return { ...tip, title: "Trip", items: tip.items.slice(0, 1) }
+          return { ...tip, title: "Route", items: tip.items.slice(0, 1) }
         },
       })
     )
     const { quads, stops } = marks(view.host)
     await view.point(middle(quads[Math.floor(quads.length / 2)].corners))
-    expect(seen).toEqual([trip.slice(0, 2)])
-    expect(view.tip()).toBe("TripLisbon39, -9")
-    await view.render(chart(trip.slice(0, 2), { tooltip: () => null }))
+    expect(seen).toEqual([route.slice(0, 2)])
+    expect(view.tip()).toBe("RouteLisbon39, -9")
+    await view.render(chart(route.slice(0, 2), { tooltip: () => null }))
     await view.point(stops[0].at)
     expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
     await view.unmount()
@@ -350,6 +350,35 @@ describe("RoutesChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("a stop that moves across the antimeridian takes the short way: it stays on the near side", async () => {
+    // The globe seen from the date line, at 180 degrees.
+    const pacific = (lon: number) => (
+      <ChartContainer3D config={config} defaultView={{ yaw: Math.PI, tilt: 0 }}>
+        <RoutesChart3D
+          data={[
+            { id: "west", lon: 150, lat: 0 },
+            { id: "ship", lon, lat: 0 },
+          ]}
+          land={land}
+          lon="lon"
+          lat="lat"
+          id="id"
+        />
+      </ChartContainer3D>
+    )
+    const view = await mount(pacific(170))
+    const from = xs(marks(view.host))
+    await view.render(pacific(-170))
+    await glide(300)
+    const mid = xs(marks(view.host))
+    // Twenty degrees over the date line, not three hundred and forty round the far side.
+    expect(mid).toHaveLength(2)
+    expect(mid[1]).toBeGreaterThan(from[1])
+    await glide(400)
+    expect(xs(marks(view.host))[1]).toBeGreaterThan(mid[1])
+    await view.unmount()
+  })
+
   test("a stop that moves glides to its new place, and a whole new route fades in where it lies", async () => {
     const view = await mount(chart([west, mid], { id: "id" }))
     const [first] = xs(marks(view.host))
@@ -393,7 +422,7 @@ describe("RoutesChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("the canvas paints the same routes, every mark of the svg once", async () => {
+  test("canvas and webgl paint the same routes on the canvas, every mark of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -407,7 +436,15 @@ describe("RoutesChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
+    // A canvas gives out one context only: another type on the same element is null.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
+      this: HTMLCanvasElement & { ctxType?: string },
+      type: string
+    ) {
+      if (this.ctxType && this.ctxType !== type) return null
+      this.ctxType = type
+      return (type === "2d" ? ctx : null) as never
+    })
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -435,6 +472,11 @@ describe("RoutesChart3D renderers", () => {
     expect(ctx.fill).toHaveBeenCalledTimes(all)
     // A circle per stop, the rest polygons: the ocean and the pieces of the legs.
     expect(ctx.arc).toHaveBeenCalledTimes(3)
+
+    ctx.fill.mockClear()
+    await view.render(scene("webgl"))
+    expect(view.host.querySelectorAll('[data-slot="chart-3d-marks"] > *')).toHaveLength(0)
+    expect(ctx.fill).toHaveBeenCalledTimes(all)
     await view.unmount()
   })
 })

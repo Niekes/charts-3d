@@ -8,21 +8,18 @@ import { placeRows } from "@/docs/examples/population"
 import { RendererSelect } from "@/docs/examples/renderer-select"
 import { chartView } from "@/docs/examples/routes-chart-3d-demo"
 
-// Every capital of the world, two hundred of them, on one route: from
-// Reykjavík, each time on to the nearest capital not yet visited.
-const capitals = placeRows().filter((place) => place.kind === "capital")
-const chartData = [capitals.find((place) => place.name === "Reykjavík")!]
-while (chartData.length < capitals.length) {
+// Every place of half a million people and more, a thousand of them, on one
+// route: from the westernmost, each time on to the nearest place not yet
+// visited. Deterministic, so the page looks the same on every load.
+const left = placeRows(5e5)
+const chartData = [left.shift()!]
+while (left.length) {
   const { lon, lat } = chartData.at(-1)!
-  const far = (place: (typeof capitals)[number]) => geoDistance([lon, lat], [place.lon, place.lat])
-  chartData.push(
-    capitals
-      .filter((place) => !chartData.includes(place))
-      .reduce((a, b) => (far(b) < far(a) ? b : a))
-  )
+  const far = left.map((place) => geoDistance([lon, lat], [place.lon, place.lat]))
+  chartData.push(...left.splice(far.indexOf(Math.min(...far)), 1))
 }
 
-const chartConfig = { route: { label: "Capitals", color: "var(--chart-1)" } } satisfies ChartConfig
+const chartConfig = { route: { label: "Places", color: "var(--chart-1)" } } satisfies ChartConfig
 
 export default function RoutesChart3DManyDemo() {
   const [renderer, setRenderer] = useState<Renderer3D>("canvas")

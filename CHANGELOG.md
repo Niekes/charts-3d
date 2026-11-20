@@ -29,9 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `view` on `ChartContainer3D`, a view the camera heads for: it starts
   there and glides there over the `animationDuration` when the view changes,
   moving only what the view names; the reader turns on from it (ADR-0010).
-  `facing(lon, lat)` is the view that looks at a place on the globe.
+  `facing(lon, lat)` is the view that looks at a place on the globe, and
+  `placeOf(point)` reads a place back from a point of it.
 - The core helpers the line and the routes chart share: `useRuns` and
-  `stroke`.
+  `segment`.
 
 ## [0.7.0] - 2026-11-15
 

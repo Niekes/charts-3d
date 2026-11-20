@@ -115,6 +115,18 @@ The axes in the lower left corner turn with the camera, so a turned chart still 
 
 The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hidden from screen readers. Each axis draws in `currentColor` and carries `data-axis`, so `className="[&_[data-axis=x]]:text-red-500"` on the container colors one axis.
 
+## View
+
+`defaultView` is where the camera starts and where a reset returns it. `view` is a heading the page gives the camera: it starts there, and when the view changes it glides there over the `animationDuration`, in step with the data - where the reader asks for reduced motion, it jumps. A view moves only what it names, so one of `yaw` and `tilt` keeps the zoom and the pan of the reader, and it is no lock: the reader turns the camera on from it, and the same view handed in again moves nothing.
+
+```tsx
+<ChartContainer3D config={chartConfig} view={facing(place.lon, place.lat)}>
+  <RoutesChart3D data={stops} land={land} lon="lon" lat="lat" />
+</ChartContainer3D>
+```
+
+`facing(lon, lat)` is the view that looks at a place on a globe. The [routes chart](/docs/components/routes-chart-3d#enter-and-leave) uses both for a tour that turns the globe to its next stop.
+
 ## Tooltip
 
 The tooltip of a mark follows the pointer, above and to its right. Where it would leave the chart it flips to the other side - on each axis alone, and only to a side with more room - and glides there; where the reader asks for reduced motion, it jumps. `tooltip` puts it in another corner of the pointer ([ADR-0005](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0005-tooltip-follows-pointer.md)).
@@ -177,7 +189,7 @@ The axes glide along (`useTweenAxes`): their ends ease instead of jumping from o
 
 From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D`. A change to any of them that breaks a project waits for a major version.
 
-What a chart is built from stays free to change in a minor version, with an entry in the changelog: `Axes3D`, `Marks3D`, `Labels3D`, `useChart3D`, `useTween`, `useTweenAxes`, `useSeries`, `Mark3D`, `Label3D`, `World`, `GeoProjectionLike` and the helpers `axis`, `pad`, `linear`, `worldBox`, `intoWorld`, `shade`, `faded`, `colorOf`, `finite`, `nonNegative`, `cubeMarks`, `barCorners`, `barMarks`, `floored`, `gridAxis`, `ramp`, `globe`, `GLOBE_RADIUS`, `orthographic` and `earth`. They are exported so a chart of your own can draw the way the charts here do; pin the version of the package, or own a copy through the registry, if you build on them.
+What a chart is built from stays free to change in a minor version, with an entry in the changelog: `Axes3D`, `Marks3D`, `Labels3D`, `useChart3D`, `useTween`, `useTweenAxes`, `useSeries`, `Mark3D`, `Label3D`, `World`, `GeoProjectionLike` and the helpers `axis`, `pad`, `linear`, `worldBox`, `intoWorld`, `shade`, `faded`, `colorOf`, `finite`, `nonNegative`, `cubeMarks`, `barCorners`, `barMarks`, `floored`, `gridAxis`, `ramp`, `globe`, `placeOf`, `facing`, `GLOBE_RADIUS`, `orthographic`, `earth`, `usePoints`, `pointTooltip`, `useRuns` and `segment`. They are exported so a chart of your own can draw the way the charts here do; pin the version of the package, or own a copy through the registry, if you build on them.
 
 ## API Reference
 
