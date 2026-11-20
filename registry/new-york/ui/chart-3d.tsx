@@ -364,6 +364,14 @@ export type ChartContainer3DProps = {
    */
   defaultView?: View3D
   /**
+   * The view the camera heads for: it starts there, and when the view
+   * changes it glides there over the `animationDuration`, as the data does.
+   * A view moves only what it names, so the zoom and the pan of the reader
+   * stay, and the reader turns the camera on from it.
+   * @defaultValue none: the camera starts at the default view
+   */
+  view?: View3D
+  /**
    * The width of the view box the chart is drawn in.
    * @defaultValue 640
    */
@@ -414,16 +422,16 @@ function ChartContainer3D({
   id,
   config,
   defaultView = { yaw: Math.PI / 6, tilt: Math.PI / 6 },
+  view: to,
   width = 640,
   height = 400,
-  animationDuration,
+  animationDuration: ms,
   legend = false,
   renderer: requested = "svg",
   shortcuts = true,
   keymap = {},
   gizmo = "bottom-left",
   tooltip = "top-right",
-  className,
   children,
   "aria-label": ariaLabel,
   ...props
@@ -432,19 +440,19 @@ function ChartContainer3D({
   const drawing = useScene(requested, width, height, tooltip)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
-  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover)
+  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { to, ms })
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
-    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration }),
-    [config, camera, renderer, place, repaint, focus, animationDuration]
+    () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration: ms }),
+    [config, camera, renderer, place, repaint, focus, ms]
   )
 
   return (
     <div
       data-slot="chart-3d"
       data-chart={chartId}
-      className={cn("relative w-full text-xs", className)}
       {...props}
+      className={cn("relative w-full text-xs", props.className)}
     >
       <ChartStyle id={chartId} config={config} />
       <div className="relative rounded-lg has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50">
@@ -651,6 +659,9 @@ function animates() {
   return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: no-preference)").matches)
 }
 
+// The time in ms a chart takes to glide into new data, unless its container says otherwise.
+const DURATION = 600
+
 /** One glide of numbers: from `from` into `to`, come the share `t` of the way. */
 type Tween = { key: string; from: Record<string, number>; to: Record<string, number>; t: number }
 
@@ -664,7 +675,7 @@ type Tween = { key: string; from: Record<string, number>; to: Record<string, num
  * no copy, so no frame rebuilds it: read it, never write to it.
  */
 function useTween(values: Record<string, number>, enter?: number): Record<string, number> {
-  const { animationDuration: duration = 600 } = useChart3D()
+  const { animationDuration: duration = DURATION } = useChart3D()
   // The content, not the record, keys the glide: a chart may build `values`
   // anew at any render. The same record as before is the same content, so a
   // chart that keeps its records while the camera turns compares nothing.
@@ -784,14 +795,14 @@ const GLIDE = 200
 
 /**
  * The view of the camera, `jump`, which moves it at once, and `glide`, which
- * moves it there in `GLIDE` milliseconds, easing out. A glide under way
+ * moves it there in `ms` milliseconds, `GLIDE` unless told, easing out. A glide under way
  * heads for the next view from where it is, so a held key turns the camera
  * smoothly; a jump stops it. Where the reader asks for reduced motion, or
  * the browser cannot say, a glide jumps.
  */
-function useGlide(defaultView: View3D) {
-  const [view, setView] = React.useState(defaultView)
-  const now = React.useRef(defaultView)
+function useGlide(start: View3D) {
+  const [view, setView] = React.useState(start)
+  const now = React.useRef(start)
   const run = React.useRef<{ to: View3D; frame: number } | null>(null)
   const show = React.useCallback((v: View3D) => setView((now.current = v)), [])
   const stop = React.useCallback(() => {
@@ -807,7 +818,7 @@ function useGlide(defaultView: View3D) {
   )
   React.useEffect(() => stop, [stop])
 
-  const glide = (to: (from: View3D) => View3D) => {
+  const glide = (to: (from: View3D) => View3D, ms = GLIDE) => {
     if (!animates()) return jump(to)
     const end = to(run.current?.to ?? now.current)
     // The yaw turns the short way round, to an angle that looks the same.
@@ -815,7 +826,7 @@ function useGlide(defaultView: View3D) {
     const start = performance.now()
     stop()
     const frame = (time: number) => {
-      const t = clamp(0, 1, (time - start) / GLIDE)
+      const t = clamp(0, 1, (time - start) / ms)
       show(t < 1 ? between(from, end, 1 - (1 - t) ** 3) : end)
       if (t < 1) run.current = { to: end, frame: requestAnimationFrame(frame) }
       else run.current = null
@@ -824,6 +835,21 @@ function useGlide(defaultView: View3D) {
   }
 
   return { view, jump, glide }
+}
+
+/**
+ * Heads the camera for `view` when it changes: `head` takes it there. The
+ * same view again, as a chart that renders anew hands in, moves nothing, so
+ * the reader keeps the view they turned to.
+ */
+function useHeading(view: View3D | undefined, head: (to: View3D) => void) {
+  const key = JSON.stringify(view)
+  const last = React.useRef(key)
+  React.useEffect(() => {
+    if (key === last.current) return
+    last.current = key
+    if (view) head(view)
+  })
 }
 
 /** The angle `a` in the turn from -π to π. */
@@ -853,16 +879,19 @@ function between(from: View3D, to: View3D, k: number): View3D {
  * `data-orbiting` among them is true while the camera turns. `onDragStart`
  * runs when a press becomes a drag, `onHover` on a move without one - but
  * under two fingers, where the tooltip would jump from one to the other, it
- * goes, as in a drag.
+ * goes, as in a drag. The camera starts at the view of `heading`, over the
+ * default view, and glides to a new one in its `ms`.
  */
 function useOrbit(
   defaultView: View3D,
   width: number,
   keys: Keymap,
   onDragStart: () => void,
-  onHover: (e: React.PointerEvent<SVGSVGElement>) => void
+  onHover: (e: React.PointerEvent<SVGSVGElement>) => void,
+  heading: { to?: View3D; ms?: number }
 ) {
-  const { view, jump, glide } = useGlide(defaultView)
+  const { view, jump, glide } = useGlide({ ...defaultView, ...heading.to })
+  useHeading(heading.to, (to) => glide((from) => ({ ...from, ...to }), heading.ms ?? DURATION))
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
@@ -2469,6 +2498,16 @@ function globe(lon: number, lat: number, radius = 1): Point3D {
   return { x: flat * Math.sin(theta), y: -radius * Math.sin(phi), z: flat * Math.cos(theta) }
 }
 
+/**
+ * The view that looks at the place at `lon` and `lat`, in degrees: the
+ * place lies in the middle of the globe. A page hands it to the `view` of
+ * the container, so the camera turns to a place, since a chart may not do
+ * trigonometry of its own, and neither should a page have to.
+ */
+function facing(lon: number, lat: number): View3D {
+  return { yaw: (-lon * Math.PI) / 180, tilt: (lat * Math.PI) / 180 }
+}
+
 /** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
 const GLOBE_RADIUS = 1.15
 
@@ -2688,6 +2727,117 @@ function usePoints<T extends Record<string, unknown>>(
     presence: useTween(points.present, 0),
     read: (name: string, a: keyof AxesSpec) => values[`${a}${name}`],
   }
+}
+
+/** What a chart of lines knows of a point: the config key of its line, and whether the line starts anew at it. */
+type Joint = { line: string; starts: boolean }
+
+/**
+ * The runs of the lines of a chart that joins its entries in the order of
+ * the data, as the line and the routes chart do: per line - the entries of
+ * one value of `series`, all of them without it - its points in order, cut
+ * where an entry has no place, so a line stops before it and starts again
+ * after it. `named` is every entry with its name and whether it is placed,
+ * `presence` how far each point has come, from 0 to 1, the gone ones still
+ * among them: a gone point keeps its line and its place after the point it
+ * followed, since its entry has already left the data, and is forgotten when
+ * the presence drops it. `at` gives the place of a point, and a point that
+ * comes or goes unfolds from the point before it in its run - the one after
+ * it, at the start - and folds back into it: `toward` is the place the share
+ * `seen` of the way from that anchor to its own. A run that is all new
+ * stands in place.
+ */
+function useRuns<T extends Record<string, unknown>, P>(
+  named: { d: T; name: string; placed: boolean }[],
+  series: (keyof T & string) | undefined,
+  presence: Record<string, number>,
+  at: (name: string) => P,
+  toward: (anchor: P, own: P, seen: number) => P
+) {
+  const { config } = useChart3D()
+  const fallback = Object.keys(config)[0]
+  const known = React.useRef(new Map<string, Joint>())
+  const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
+  known.current = withGone(live, known.current, presence)
+  return runsOf(known.current).map(({ line, names }) => {
+    const points = names.map((name) => ({ name, seen: presence[name], at: at(name) }))
+    let anchor = points.find((p) => p.seen === 1)
+    return {
+      line,
+      points: points.map((p) => {
+        if (p.seen === 1) anchor = p
+        return anchor ? { ...p, at: toward(anchor.at, p.at, p.seen) } : p
+      }),
+    }
+  })
+}
+
+/** The joint of every placed entry, by name, in the order of the data: a line starts anew after an entry of its series that has no place. */
+function liveJoints<T extends Record<string, unknown>>(
+  named: { d: T; name: string; placed: boolean }[],
+  series: (keyof T & string) | undefined,
+  fallback: string
+) {
+  const live = new Map<string, Joint>()
+  const broken = new Set<string>()
+  for (const { d, name, placed } of named) {
+    const line = series ? String(d[series]) : fallback
+    if (placed) live.set(name, { line, starts: broken.delete(line) })
+    else broken.add(line)
+  }
+  return live
+}
+
+/**
+ * The `live` joints with the gone ones of `known` that are still `alive`
+ * among them, each after the living one it followed - before the first, if
+ * it followed none.
+ */
+function withGone(live: Map<string, Joint>, known: Map<string, Joint>, alive: object) {
+  const gone = new Map<string | undefined, [string, Joint][]>([
+    [undefined, []],
+    ...[...live.keys()].map((name): [string, [string, Joint][]] => [name, []]),
+  ])
+  let last: string | undefined
+  for (const [name, joint] of known) {
+    if (live.has(name)) last = name
+    else if (name in alive) gone.get(last)!.push([name, joint])
+  }
+  return new Map([
+    ...gone.get(undefined)!,
+    ...[...live].flatMap((joint) => [joint, ...gone.get(joint[0])!]),
+  ])
+}
+
+/** The names of the points of every run, in order: a run per line, and a new one where the line starts anew. */
+function runsOf(joints: Map<string, Joint>) {
+  const open = new Map<string, string[]>()
+  const runs: { line: string; names: string[] }[] = []
+  for (const [name, { line, starts }] of joints) {
+    if (starts || !open.has(line)) {
+      open.set(line, [])
+      runs.push({ line, names: open.get(line)! })
+    }
+    open.get(line)!.push(name)
+  }
+  return runs
+}
+
+/**
+ * The quad of a stroke from `a` to `b`, `width` wide, in the units of the
+ * view box: a line of the same width on the screen from every side, as a
+ * polygon every renderer draws. A segment without a length, as of a point
+ * that has yet to unfold, has no side to turn to and stays a point.
+ */
+function stroke(a: Point2D, b: Point2D, width: number): Point2D[] {
+  const half = width / 2 / (Math.hypot(b.x - a.x, b.y - a.y) || 1)
+  const n = { x: (a.y - b.y) * half, y: (b.x - a.x) * half }
+  return [
+    { x: a.x + n.x, y: a.y + n.y },
+    { x: b.x + n.x, y: b.y + n.y },
+    { x: b.x - n.x, y: b.y - n.y },
+    { x: a.x - n.x, y: a.y - n.y },
+  ]
 }
 
 /**
@@ -2928,6 +3078,7 @@ export {
   linear,
   worldBox,
   globe,
+  facing,
   GLOBE_RADIUS,
   orthographic,
   earth,
@@ -2939,6 +3090,8 @@ export {
   nonNegative,
   useSeries,
   usePoints,
+  useRuns,
+  stroke,
   pointTooltip,
   cubeMarks,
   barCorners,

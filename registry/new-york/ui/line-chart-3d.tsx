@@ -1,6 +1,5 @@
 "use client"
 
-import * as React from "react"
 import { lineStrips3D, sort, type AxesSpec, type Point2D, type Point3D } from "d3-3d"
 
 import {
@@ -10,8 +9,10 @@ import {
   faded,
   intoWorld,
   pointTooltip,
+  stroke,
   useChart3D,
   usePoints,
+  useRuns,
   useTweenAxes,
   worldBox,
   type Mark3D,
@@ -80,12 +81,19 @@ export function LineChart3D<T extends Record<string, unknown>>({
 }: LineChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const { fields, named, entries, axes, presence, read } = usePoints(data, x, y, z, id)
-  const joints = useJoints(named, series, Object.keys(config)[0], presence)
+  // A point that comes or goes unfolds from its neighbour straight through the box.
+  const runs = useRuns(
+    named,
+    series,
+    presence,
+    (name) => ({ x: read(name, "x"), y: read(name, "y"), z: read(name, "z") }),
+    between
+  )
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
   const world = worldBox(spec)
   const marks = intoWorld(lineStrips3D<Point3D>().camera(camera), world)
-    .data(runs(joints, presence, read).flatMap(elbows))
+    .data(runs.flatMap(elbows))
     .sort(sort)
     .flatMap((elbow) =>
       elbowMarks(
@@ -107,105 +115,11 @@ export function LineChart3D<T extends Record<string, unknown>>({
   )
 }
 
-/** What the chart knows of a point: the config key of its line, and whether the line starts anew at it. */
-type Joint = { line: string; starts: boolean }
-
-/** A point of a line in the units of the data, with its name and how far it has come, from 0 to 1. */
-type LinePoint = Point3D & { name: string; seen: number }
+/** A point of a line in the units of the data. */
+type LinePoint = { name: string; seen: number; at: Point3D }
 
 /** The part of a line that belongs to one point: from halfway to it, through it at `own`, halfway on. */
 type Elbow = Point3D[] & { name: string; line: string; seen: number; own: number }
-
-/**
- * The joint of every point by name, in the order the lines run, the points
- * still folding away among them: a gone point keeps its line and its place
- * after the point it followed, since its entry has already left the data,
- * and is forgotten when `alive`, the presence of the points, drops it. A
- * line starts anew after an entry of its series that has no place.
- */
-function useJoints<T extends Record<string, unknown>>(
-  named: { d: T; name: string; placed: boolean }[],
-  series: (keyof T & string) | undefined,
-  fallback: string,
-  alive: Record<string, number>
-) {
-  const known = React.useRef(new Map<string, Joint>())
-  const live = React.useMemo(() => {
-    const live = new Map<string, Joint>()
-    const broken = new Set<string>()
-    for (const { d, name, placed } of named) {
-      const line = series ? String(d[series]) : fallback
-      if (placed) live.set(name, { line, starts: broken.delete(line) })
-      else broken.add(line)
-    }
-    return live
-  }, [named, series, fallback])
-  known.current = withGone(live, known.current, alive)
-  return known.current
-}
-
-/**
- * The `live` joints with the gone ones of `known` that are still `alive`
- * among them, each after the living one it followed - before the first, if
- * it followed none.
- */
-function withGone(live: Map<string, Joint>, known: Map<string, Joint>, alive: object) {
-  const gone = new Map<string | undefined, [string, Joint][]>([
-    [undefined, []],
-    ...[...live.keys()].map((name): [string, [string, Joint][]] => [name, []]),
-  ])
-  let last: string | undefined
-  for (const [name, joint] of known) {
-    if (live.has(name)) last = name
-    else if (name in alive) gone.get(last)!.push([name, joint])
-  }
-  return new Map([
-    ...gone.get(undefined)!,
-    ...[...live].flatMap((joint) => [joint, ...gone.get(joint[0])!]),
-  ])
-}
-
-/**
- * The runs of the lines: the points of each line in order, cut where it
- * starts anew. A point that comes or goes unfolds from the point before it
- * in its run - the one after it, at the start - and folds back into it, as
- * far as it is `seen`, so a line grows and shrinks at its end without a
- * step; a run that is all new stands in place and only fades in. Every joint
- * has a position: the positions glide at least as long as the presence does,
- * since names never change without them.
- */
-function runs(
-  joints: Map<string, Joint>,
-  presence: Record<string, number>,
-  read: (name: string, axis: keyof AxesSpec) => number
-) {
-  const open = new Map<string, LinePoint[]>()
-  const all: { line: string; points: LinePoint[] }[] = []
-  for (const [name, { line, starts }] of joints) {
-    if (starts || !open.has(line)) {
-      open.set(line, [])
-      all.push({ line, points: open.get(line)! })
-    }
-    open.get(line)!.push({
-      name,
-      seen: presence[name],
-      x: read(name, "x"),
-      y: read(name, "y"),
-      z: read(name, "z"),
-    })
-  }
-  return all.map(({ line, points }) => {
-    let anchor = points.find((p) => p.seen === 1)
-    const toward = (p: LinePoint, a: keyof AxesSpec) => anchor![a] + p.seen * (p[a] - anchor![a])
-    return {
-      line,
-      points: points.map((p) => {
-        if (p.seen === 1) anchor = p
-        return anchor ? { ...p, x: toward(p, "x"), y: toward(p, "y"), z: toward(p, "z") } : p
-      }),
-    }
-  })
-}
 
 /**
  * The elbows of a run, one per point: the point and the middle of the
@@ -214,21 +128,16 @@ function runs(
  * segment nearer a point speaks for that point on hover.
  */
 function elbows({ line, points }: { line: string; points: LinePoint[] }): Elbow[] {
-  const mid = (a: Point3D, b: Point3D) => ({
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-    z: (a.z + b.z) / 2,
+  return points.map(({ name, seen, at }, i) => {
+    const before = i > 0 ? [between(points[i - 1].at, at, 0.5)] : []
+    const after = i < points.length - 1 ? [between(at, points[i + 1].at, 0.5)] : []
+    return Object.assign([...before, at, ...after], { name, line, seen, own: before.length })
   })
-  return points.map((p, i) => {
-    const before = i > 0 ? [mid(points[i - 1], p)] : []
-    const after = i < points.length - 1 ? [mid(p, points[i + 1])] : []
-    return Object.assign([...before, { x: p.x, y: p.y, z: p.z }, ...after], {
-      name: p.name,
-      line,
-      seen: p.seen,
-      own: before.length,
-    })
-  })
+}
+
+/** The point the share `k` of the way from `a` to `b`, straight through the box. */
+function between(a: Point3D, b: Point3D, k: number): Point3D {
+  return { x: a.x + k * (b.x - a.x), y: a.y + k * (b.y - a.y), z: a.z + k * (b.z - a.z) }
 }
 
 /**
@@ -246,22 +155,11 @@ function elbowMarks(
   const mark = { fill: faded(colorOf(elbow.line), elbow.seen), groups: [elbow.line], tooltip }
   const at = elbow.map((p) => p.projected)
   return [
-    ...at.slice(1).map((b, i) => {
-      const a = at[i]
-      // A segment without a length, as of a point that has yet to unfold, has no side to turn to.
-      const half = WIDTH / 2 / (Math.hypot(b.x - a.x, b.y - a.y) || 1)
-      const n = { x: (a.y - b.y) * half, y: (b.x - a.x) * half }
-      return {
-        ...mark,
-        key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
-        points: [
-          { x: a.x + n.x, y: a.y + n.y },
-          { x: b.x + n.x, y: b.y + n.y },
-          { x: b.x - n.x, y: b.y - n.y },
-          { x: a.x - n.x, y: a.y - n.y },
-        ],
-      }
-    }),
+    ...at.slice(1).map((b, i) => ({
+      ...mark,
+      key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
+      points: stroke(at[i], b, WIDTH),
+    })),
     { ...mark, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
   ]
 }

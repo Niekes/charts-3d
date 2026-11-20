@@ -353,6 +353,12 @@ gesture is a new action, so the panel never misses one.
   there; a drag and the wheel follow the pointer at once and stop a glide.
   Where `animates()` is false, as in jsdom, a glide jumps, so the tests read
   the view right after a key.
+- **The page may head the camera for a view**
+  ([ADR-0010](docs/adr/0010-the-page-heads-the-camera.md)). `view` on the
+  container is a heading, not a lock: the camera starts there, glides there
+  over the `animationDuration` when it changes, moves only what the view
+  names, and the reader turns on from it. `facing(lon, lat)` is the view that
+  looks at a place on the globe. A chart never moves the camera itself.
 - **`orbiting` is true while the camera turns**, not while it pans or zooms.
   Nothing in the core reads it; `data-orbiting` on the svg is there to style.
 

@@ -22,6 +22,7 @@ import {
   finite,
   floored,
   gridAxis,
+  facing,
   globe,
   nonNegative,
   intoWorld,
@@ -57,11 +58,12 @@ async function mount(element: ReactElement) {
   const svg = host.querySelector("svg")!
   svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
   const send = (event: Event) => act(() => svg.dispatchEvent(event))
+  const render = (next: ReactElement) => act(async () => root.render(next))
   const unmount = async () => {
     await act(async () => root.unmount())
     host.remove()
   }
-  return { host, svg, send, unmount }
+  return { host, svg, send, render, unmount }
 }
 
 const key = (key: string, shiftKey = false) =>
@@ -1349,6 +1351,80 @@ describe("glide", () => {
     await chart.send(key("ArrowRight"))
     await chart.unmount()
     await frames(250)
+  })
+})
+
+describe("view", () => {
+  /** A browser that can tell whether the reader asks for reduced motion. */
+  const motion = (reduced: boolean) =>
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query.includes("no-preference") !== reduced }),
+    })
+  const frames = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+  /** The camera as the view names it: its yaw, its tilt and its scale. */
+  function Heading() {
+    const { camera } = useChart3D()
+    const at = { yaw: camera.rotateY(), tilt: -camera.rotateX(), scale: camera.scale() }
+    return <text>{JSON.stringify(at)}</text>
+  }
+  const chart = (at?: { yaw: number; tilt: number }, animationDuration?: number) => (
+    <ChartContainer3D
+      config={{}}
+      defaultView={{ yaw: 0, tilt: 0 }}
+      view={at}
+      animationDuration={animationDuration}
+    >
+      <Heading />
+    </ChartContainer3D>
+  )
+  afterEach(() => {
+    vi.useRealTimers()
+    Reflect.deleteProperty(window, "matchMedia")
+  })
+
+  test("the camera starts at the view, and a reset returns it to the default view", async () => {
+    const view3d = await mount(chart({ yaw: 1, tilt: 0.5 }))
+    expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5 })
+    await view3d.send(key("0"))
+    expect(view(view3d.host)).toMatchObject({ yaw: 0, tilt: 0 })
+    await view3d.unmount()
+  })
+
+  test("a new view turns the camera there over the animationDuration, and keeps the zoom of the reader", async () => {
+    motion(false)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const view3d = await mount(chart({ yaw: 0, tilt: 0 }, 1000))
+    await view3d.send(key("+"))
+    await frames(250)
+    const zoomed = view(view3d.host).scale
+
+    await view3d.render(chart({ yaw: 1, tilt: 0.5 }, 1000))
+    await frames(500)
+    const mid = view(view3d.host)
+    expect(mid.yaw).toBeGreaterThan(0)
+    expect(mid.yaw).toBeLessThan(1)
+    expect(mid.tilt).toBeGreaterThan(0)
+    expect(mid.tilt).toBeLessThan(0.5)
+    await frames(600)
+    expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5, scale: zoomed })
+    await view3d.unmount()
+  })
+
+  test("the reader turns on from the view, and the same view again does not take the camera back", async () => {
+    const view3d = await mount(chart({ yaw: 1, tilt: 0.5 }))
+    await view3d.send(key("ArrowRight"))
+    const turned = view(view3d.host).yaw
+    expect(turned).toBeGreaterThan(1)
+    await view3d.render(chart({ yaw: 1, tilt: 0.5 }))
+    expect(view(view3d.host).yaw).toBe(turned)
+    // Where the reader asks for reduced motion, or the browser cannot say, a new view jumps.
+    await view3d.render(chart({ yaw: 2, tilt: 0 }))
+    expect(view(view3d.host)).toMatchObject({ yaw: 2, tilt: 0 })
+    // Without a view the camera stays where it is.
+    await view3d.render(chart())
+    expect(view(view3d.host)).toMatchObject({ yaw: 2, tilt: 0 })
+    await view3d.unmount()
   })
 })
 
@@ -2980,6 +3056,28 @@ describe("useTween", () => {
 })
 
 describe("geo helpers", () => {
+  test("facing is the view that looks at a place: the place lies in the middle of the globe, on the near side", () => {
+    for (const [lon, lat] of [
+      [0, 0],
+      [-35, -8],
+      [139.7, 35.7],
+      [170, -80],
+    ]) {
+      const at = facing(lon, lat)
+      const camera = camera3D()
+        .origin({ x: 320, y: 200 })
+        .scale(120)
+        .rotateY(at.yaw)
+        .rotateX(-at.tilt)
+      const [seen] = points3D()
+        .camera(camera)
+        .data([globe(lon, lat)])
+      expect(seen.projected.x).toBeCloseTo(320)
+      expect(seen.projected.y).toBeCloseTo(200)
+      expect(seen.rotated.z).toBeGreaterThan(0)
+    }
+  })
+
   test("orthographic copies the camera without its perspective", () => {
     const camera = camera3D()
       .origin({ x: 10, y: 20 })
