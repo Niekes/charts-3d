@@ -12,11 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LineChart3D`, lines through the chart box: the entries of `data` at their
   fields `x`, `y` and `z`, joined in the order of the data - a trajectory, a
   spiral, a walk - one line per value of `series`. A line is as wide on the
-  screen from every side, pointing at it lights the whole line and the
-  tooltip reads the point nearest the pointer. An entry without a finite x,
+  screen from every side, pointing at it lights the point nearest the
+  pointer, with a dot on it, and the tooltip reads that point. `colors`
+  ramps each point's part of a line by its height between two config
+  colors. An entry without a finite x,
   y or z breaks its line instead of being bridged. With `id`, a new point
   unfolds from the point before it and a gone one folds back, so a line
   grows at its end and shrinks from its start.
+- `whenLit` on `Mark3D`: a mark drawn only while its groups are in focus,
+  on every renderer, such as the dot on the point of a line.
 - The core helpers the scatter and the line chart share: `usePoints` and
   `pointTooltip`.
 - `RoutesChart3D`, routes over a globe: the entries of `data` are stops at
@@ -67,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The focus stays within the `Marks3D` of the hovered mark: two charts in
+  one container whose `groups` share a name, such as the point names of a
+  line and a scatter chart, no longer light each other.
 - `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are
   points of their own, told apart by the order of the data, where they
   shared one point before.

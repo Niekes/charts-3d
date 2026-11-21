@@ -174,6 +174,18 @@ describe("LineChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
+  test("colors ramps each point's part of every line by its height, in place of the series colors", () => {
+    const ramp = (t: number) => `color-mix(in oklch, var(--color-b) ${t}%, var(--color-a))`
+    const { fills } = serverMarks(chart(helix, { series: "s", colors: ["a", "b"] }))
+    // Heights 0, 2, 4 on a, 8, 6 on b, on a ramp from 0 to 8: the halves and the joint of a point.
+    expect(fills).toHaveLength(6 + 5)
+    expect(fills.filter((f) => f === ramp(0))).toHaveLength(2)
+    expect(fills.filter((f) => f === ramp(25))).toHaveLength(3)
+    expect(fills.filter((f) => f === ramp(50))).toHaveLength(2)
+    expect(fills.filter((f) => f === ramp(100))).toHaveLength(2)
+    expect(fills.filter((f) => f === ramp(75))).toHaveLength(2)
+  })
+
   test("no data draws nothing", () => {
     expect(serverMarks(chart([])).all).toHaveLength(0)
   })
@@ -216,20 +228,35 @@ describe("LineChart3D hover", () => {
     await view.unmount()
   })
 
-  test("pointing at a line lights the whole line and no other; leaving clears it", async () => {
+  test("pointing at a line lights the point nearest the pointer, its half and its joint, and no other; leaving clears it", async () => {
     const view = await mount(chart(two, { series: "s" }))
     const before = marks(view.host)
-    const ofB = before.fills.filter((f) => f === "var(--color-b)").length
-    expect(ofB).toBe(4)
+    // The first point of b: one half segment and its joint.
     const quad = before.quads.find((q) => q.el.getAttribute("fill") === "var(--color-b)")!
     await view.point(middle(quad.corners))
-    const fills = marks(view.host).fills
-    expect(fills.filter(lit)).toHaveLength(ofB)
-    expect(fills.filter((f) => f === "var(--color-a)")).toHaveLength(4)
-    expect(fills.filter(lit).every((f) => f.includes("var(--color-b)"))).toBe(true)
+    const after = marks(view.host)
+    const on = after.all.filter((m) => lit(m.getAttribute("fill")!))
+    expect(on.filter((m) => m.tagName === "path")).toHaveLength(1)
+    expect(on.filter((m) => m.tagName === "circle" && m.getAttribute("r") === "1")).toHaveLength(1)
+    expect(after.fills.filter((f) => f === "var(--color-b)")).toHaveLength(2)
+    expect(after.fills.filter((f) => f === "var(--color-a)")).toHaveLength(4)
+    expect(on.every((m) => m.getAttribute("fill")!.includes("var(--color-b)"))).toBe(true)
     await view.leave()
     expect(marks(view.host).fills.filter(lit)).toHaveLength(0)
     expect(view.tip()).toBe("")
+    await view.unmount()
+  })
+
+  test("a dot twice as wide as the line marks the point in focus, and only while it is", async () => {
+    const view = await mount(chart(two, { series: "s" }))
+    const wide = () => marks(view.host).dots.filter((d) => d.el.getAttribute("r") === "2")
+    expect(wide()).toHaveLength(0)
+    const joint = marks(view.host).dots[0]
+    await view.point(joint.at)
+    expect(wide().map((d) => d.at)).toEqual([joint.at])
+    expect(lit(wide()[0].el.getAttribute("fill")!)).toBe(true)
+    await view.leave()
+    expect(wide()).toHaveLength(0)
     await view.unmount()
   })
 

@@ -93,7 +93,8 @@ The points of one series joined in the order of the data, as wide on the
 screen from every side - the mark of the line chart. A point that comes
 unfolds from its neighbour on the line as it fades in, and a gone one folds
 back into it; an entry without a place breaks the line. Pointing at a line
-lights the whole of it, and it answers with the point nearest the pointer.
+lights the point nearest the pointer - the halves of the segments at it,
+with a dot on it - and the line answers with that point.
 _Avoid_: path, trajectory, curve, polyline, stroke
 
 **Segment**:
@@ -248,7 +249,7 @@ _Avoid_: alignment, anchor, position
 The element under the pointer, lit: its fill in its own color lightened - or
 in the focus color, where one is set; a stroke of its own stays. Every
 chart's marks carry their `groups`, naming the marks lit together: one bar,
-one point, one cell.
+one point, one cell, the point of a line.
 _Avoid_: selection, active state, fade, edge
 
 ## Navigation

@@ -1,5 +1,6 @@
 "use client"
 
+import { extent } from "d3-array"
 import { lineStrips3D, sort, type AxesSpec, type Point2D, type Point3D } from "d3-3d"
 
 import {
@@ -9,6 +10,7 @@ import {
   faded,
   intoWorld,
   pointTooltip,
+  ramp,
   segment,
   useChart3D,
   usePoints,
@@ -46,6 +48,13 @@ export type LineChart3DProps<T extends Record<string, unknown> = Record<string, 
    * @defaultValue the first key of the chart config, one line of all the entries
    */
   series?: keyof T & string
+  /**
+   * The config keys of the colors at the lowest and at the highest height:
+   * each point's part of a line takes the color of its height on the ramp
+   * between them, in place of the color of its series.
+   * @defaultValue none, every line in the color of its series
+   */
+  colors?: [string, string]
   /** Formats the tick labels of each axis. */
   format?: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>
   /** The titles of the axes. */
@@ -76,6 +85,7 @@ export function LineChart3D<T extends Record<string, unknown>>({
   z,
   id,
   series,
+  colors,
   format,
   titles,
   tooltip,
@@ -87,12 +97,19 @@ export function LineChart3D<T extends Record<string, unknown>>({
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
   const world = worldBox(spec)
+  const [lo = 0, hi = 0] = colors
+    ? extent(
+        runs.flatMap((run) => run.points),
+        (p) => p.at.y
+      )
+    : []
   const marks = intoWorld(lineStrips3D<Point3D>().camera(camera), world)
     .data(runs.flatMap(elbows))
     .sort(sort)
     .flatMap((elbow) =>
       elbowMarks(
         elbow,
+        colors ? ramp(elbow[elbow.own].y, [lo, hi], colors) : colorOf(elbow.line),
         pointTooltip(
           entries.get(elbow.name),
           series ? (config[elbow.line]?.label ?? elbow.line) : undefined,
@@ -126,7 +143,12 @@ function elbows({ line, points }: { line: string; points: LinePoint[] }): Elbow[
   return points.map(({ name, seen, at }, i) => {
     const before = i > 0 ? [between(points[i - 1].at, at, 0.5)] : []
     const after = i < points.length - 1 ? [between(at, points[i + 1].at, 0.5)] : []
-    return Object.assign([...before, at, ...after], { name, line, seen, own: before.length })
+    return Object.assign([...before, at, ...after], {
+      name,
+      line,
+      seen,
+      own: before.length,
+    })
   })
 }
 
@@ -136,18 +158,19 @@ function between(a: Point3D, b: Point3D, k: number): Point3D {
 }
 
 /**
- * The marks of an elbow, projected, in the color of its line: a quad as wide
+ * The marks of an elbow, projected, in `color`: a quad as wide
  * as the line per half segment - a stroke of the same width on the screen
  * from every side - and a circle on the point that rounds the joint; alone,
  * it is all there is of a point without neighbours. They fade with the point as
- * it comes and goes. Their group is the line, so hovering highlights the
- * whole line, and the tooltip is that of the point.
+ * it comes and goes. Their group is the point, so hovering lights it, with a
+ * dot twice as wide as the line on it, and the tooltip is that of the point.
  */
 function elbowMarks(
-  elbow: { projected: Point2D }[] & Pick<Elbow, "name" | "line" | "seen" | "own">,
+  elbow: { projected: Point2D }[] & Pick<Elbow, "name" | "seen" | "own">,
+  color: string,
   tooltip: Mark3D["tooltip"]
 ): Mark3D[] {
-  const mark = { fill: faded(colorOf(elbow.line), elbow.seen), groups: [elbow.line], tooltip }
+  const mark = { fill: faded(color, elbow.seen), groups: [elbow.name], tooltip }
   const at = elbow.map((p) => p.projected)
   return [
     ...at.slice(1).map((b, i) => ({
@@ -156,5 +179,13 @@ function elbowMarks(
       points: segment(at[i], b, WIDTH),
     })),
     { ...mark, shape: "circle" as const, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
+    {
+      ...mark,
+      shape: "circle" as const,
+      key: `${elbow.name}-dot`,
+      points: [at[elbow.own]],
+      r: WIDTH,
+      whenLit: true,
+    },
   ]
 }

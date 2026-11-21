@@ -20,8 +20,8 @@ import LineChart3DDemo from "@/docs/examples/line-chart-3d-demo"
 
 The entries of `data` are points in space, joined in the order of the data:
 a trajectory, a spiral, a walk. `series` names the field that tells the lines
-apart. Pointing at a line lights the whole line, and the tooltip reads the
-point nearest the pointer. For entries along x with a value per series - the
+apart. Pointing at a line lights the point nearest the pointer, with a dot
+on it, and the tooltip reads that point. For entries along x with a value per series - the
 line chart of a spreadsheet - see the [area chart](/docs/components/area-chart-3d).
 
 ## Installation
@@ -111,7 +111,9 @@ The same chart on every renderer, side by side. The marks are data the chart han
 The Lorenz attractor, three thousand points of it - and the chart stays
 interactive. The scene is one list of marks, so the demo starts on
 `"canvas"`, the renderer for many marks, and the select shows the same scene
-on SVG.
+on SVG. `colors` names two config keys, and each point's part of the line
+takes the color of its height on the ramp between them, in place of the
+color of its series.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

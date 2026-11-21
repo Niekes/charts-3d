@@ -15,7 +15,10 @@ const chartData = Array.from({ length: 3000 }, () => {
   return { x, y: z, z: y }
 })
 
-const chartConfig = { path: { label: "Lorenz", color: "var(--chart-1)" } } satisfies ChartConfig
+const chartConfig = {
+  low: { label: "Lorenz", color: "var(--chart-1)" },
+  high: { label: "Lorenz", color: "var(--chart-4)" },
+} satisfies ChartConfig
 
 export default function LineChart3DManyDemo() {
   const [renderer, setRenderer] = useState<Renderer3D>("canvas")
@@ -23,7 +26,7 @@ export default function LineChart3DManyDemo() {
   return (
     <div className="flex flex-col gap-2">
       <ChartContainer3D config={chartConfig} renderer={renderer}>
-        <LineChart3D data={chartData} x="x" y="y" z="z" />
+        <LineChart3D data={chartData} x="x" y="y" z="z" colors={["low", "high"]} />
       </ChartContainer3D>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>

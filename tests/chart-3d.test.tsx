@@ -2971,6 +2971,57 @@ describe("focus", () => {
     await chart.unmount()
   })
 
+  test("a mark whenLit is drawn only while its groups are in focus, so it neither paints nor hits unlit", async () => {
+    let scene: { current: { key: string }[] } = { current: [] }
+    function Scene() {
+      scene = useChart3D().scene
+      return null
+    }
+    // A dot over b, larger than b, drawn only while b is lit.
+    const dot = {
+      key: "dot",
+      shape: "circle" as const,
+      points: [{ x: 125, y: 125 }],
+      r: 40,
+      fill: "red",
+      groups: ["b"],
+      whenLit: true as const,
+    }
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[...squares, dot]} />
+        <Scene />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.querySelector("circle")).toBeNull()
+    expect(scene.current.map((mark) => mark.key)).not.toContain("dot")
+    // Within the unlit dot but off the squares: nothing is hit.
+    await chart.send(move(125, 90))
+    expect(chart.host.textContent).not.toContain("tip-")
+
+    await chart.send(move(125, 125))
+    expect(chart.svg.querySelector("circle")?.getAttribute("fill")).toBe(lit)
+    expect(scene.current.map((mark) => mark.key)).toContain("dot")
+
+    await chart.send(move(25, 125))
+    expect(chart.svg.querySelector("circle")).toBeNull()
+    await chart.unmount()
+  })
+
+  test("the focus stays within its own marks: two charts in one container that share a group name light apart", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[square("one", 0, ["0"])]} />
+        <Marks3D marks={[square("two", 100, ["0"])]} />
+      </ChartContainer3D>
+    )
+    await chart.send(move(25, 125))
+    expect(fills(chart.svg)).toEqual([lit, "red"])
+    await chart.send(move(125, 125))
+    expect(fills(chart.svg)).toEqual(["red", lit])
+    await chart.unmount()
+  })
+
   test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
