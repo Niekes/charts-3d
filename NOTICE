@@ -67,7 +67,8 @@ SOFTWARE.
 
 charts-3d includes the keyboard icon of Lucide (https://lucide.dev), the
 KeyboardIcon3D component in registry/new-york/ui/chart-3d.tsx, which is the
-button of the shortcut panel.
+button of the shortcut panel. The docs include its plane and its ship, the
+symbols in docs/examples/routes-chart-3d-demo.tsx.
 
 Lucide is licensed under the ISC License:
 
