@@ -553,6 +553,39 @@ describe("shortcuts", () => {
     await chart.unmount()
   })
 
+  test("Shift counts beside Space, and a field of keymap left undefined keeps its default", async () => {
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: 0, tilt: 0 }}
+        keymap={{
+          zoomIn: ["Space"],
+          zoomOut: ["Shift+Space"],
+          rotateLeft: { keys: undefined, label: "Left" },
+          help: { label: undefined },
+        }}
+      >
+        <Camera />
+      </ChartContainer3D>
+    )
+    const read = () => view(chart.host)
+
+    await chart.send(key(" "))
+    expect(read().scale).toBeCloseTo(144)
+    await chart.send(key(" ", true))
+    expect(read().scale).toBeCloseTo(120)
+    expect(chart.svg.getAttribute("aria-keyshortcuts")!.split(" ")).toContain("Shift+Space")
+
+    // A condition that leaves the keys or the label undefined takes nothing away.
+    await chart.send(key("ArrowLeft"))
+    expect(read().yaw).toBeCloseTo(-Math.PI / 36)
+    expect(chart.host.querySelector("button")!.getAttribute("aria-label")).toBe(
+      "Keyboard shortcuts"
+    )
+
+    await chart.unmount()
+  })
+
   test("two fingers dragged turn the camera, and one finger is left to the page", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
@@ -996,6 +1029,31 @@ describe("pointer", () => {
     await chart.send(finger("pointerdown", 100))
     await chart.send(finger("pointermove", 140))
     expect(hint()).toBe("Two-finger dragSpin")
+
+    await chart.unmount()
+  })
+
+  test("a hint that is open closes when the keymap changes under it", async () => {
+    vi.useFakeTimers()
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const hint = () => chart.host.querySelector('[data-slot="chart-3d-hint"]')!
+    await chart.send(pointer("pointerdown", 100, 100, undefined, { button: 0 }))
+    await chart.send(pointer("pointermove", 140, 100))
+    await chart.send(pointer("pointerup", 140, 100))
+    expect(hint().getAttribute("data-state")).toBe("open")
+
+    // The new keymap takes the timer that would close it away with the old listeners.
+    await chart.render(
+      <ChartContainer3D config={{}} keymap={{ dragPan: false }}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    await act(() => vi.advanceTimersByTime(2000))
+    expect(hint().getAttribute("data-state")).toBe("closed")
 
     await chart.unmount()
   })
@@ -1811,6 +1869,22 @@ describe("renderer", () => {
 
     await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 150, clientY: 150 }))
     expect(chart.host.textContent).toContain("Square")
+
+    await chart.unmount()
+  })
+
+  test("the hover reads the pointer the way the wheel does, in an svg that CSS made taller", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    // Twice as tall as its view box: the browser centres the picture, 200 pixels down.
+    chart.svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 640, height: 800 }) as DOMRect
+
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 400, clientY: 300 }))
+    expect(chart.host.textContent).toContain("Dot")
 
     await chart.unmount()
   })
@@ -2656,6 +2730,23 @@ describe("Axes3D", () => {
     await chart.unmount()
   })
 
+  test("writes the box, its labels and the gizmo with two decimals, as the marks", () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
+    const html = renderToString(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0.3, tilt: 0.4 }}>
+        <Axes3D spec={spec} world={worldBox(spec)} titles={{ y: "Height" }} />
+        <Labels3D labels={[{ key: "a", at: { x: 1 / 3, y: 2 / 3 }, text: "A" }]} />
+      </ChartContainer3D>
+    )
+    // The server and the browser differ in the last bits of a sine: more decimals would not hydrate.
+    const numbers = [...html.matchAll(/ (?:x|y|x1|y1|x2|y2|cx|cy|d)="([^"]*)"/g)].flatMap(
+      ([, value]) => value.match(/-?\d+(?:\.\d+)?/g) ?? []
+    )
+    expect(numbers.length).toBeGreaterThan(100)
+    expect(numbers.filter((n) => /\.\d{3,}/.test(n))).toEqual([])
+    expect(html).not.toMatch(/translate:[^;"]*\.\d{3,}px/)
+  })
+
   test("marks every tick of the chosen edge out of the box, and thins the marks with the labels", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100, 2), z: axis(0, 10) }
     // From above, the y axis thins to its first label; its marks thin with it.
@@ -2682,7 +2773,8 @@ describe("Axes3D", () => {
     expect(shown()).toHaveLength(13)
     for (const mark of shown()) {
       expect(mark.getAttribute("class")).toContain("stroke-foreground/60")
-      expect(dist(of(mark).from, of(mark).to)).toBeCloseTo(6, 5)
+      // The HTML holds two decimals, so the length is 6 to about a hundredth.
+      expect(dist(of(mark).from, of(mark).to)).toBeCloseTo(6, 1)
     }
 
     // The marks point out of the box, and every label stands clear of them,
@@ -3243,6 +3335,21 @@ describe("useTween", () => {
       await chart.unmount()
     }
   )
+
+  test("a duration that changes during a glide goes on from where the glide is", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 0 })
+    await chart.render({ a: 600 })
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = shown(chart.host).a
+
+    await chart.render({ a: 600 }, undefined, 1200)
+    await act(() => vi.advanceTimersToNextFrame())
+    expect(shown(chart.host).a).toBeGreaterThanOrEqual(mid)
+
+    await chart.unmount()
+  })
 
   test("a new key starts at enter, and a gone one glides back to it before it leaves", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })

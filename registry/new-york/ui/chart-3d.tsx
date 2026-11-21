@@ -301,7 +301,9 @@ const split = (keys: string) => keys.split(/\+(?!$)/)
 function combo(keys: string) {
   const parts = split(keys)
   const key = NAMED[parts.at(-1)!] ?? parts.at(-1)!
-  const mods = MODIFIERS.filter((m) => parts.includes(m) && (m !== "Shift" || key.length > 1))
+  // Space is named, " " only in this form: Shift counts beside it.
+  const typed = key.length === 1 && key !== " "
+  const mods = MODIFIERS.filter((m) => parts.includes(m) && (m !== "Shift" || !typed))
   return [...mods, key].join("+")
 }
 
@@ -326,9 +328,11 @@ function aria(keys: string) {
 function shortcutsOf(keymap: Keymap3D | false) {
   return (Object.keys(SHORTCUTS) as Action3D[]).map((action) => {
     const own: Keymap3D[KeyAction3D] = keymap && keymap[action]
+    // A field left undefined, as from a condition, keeps its default.
+    const set = Object.entries(Array.isArray(own) ? { keys: own } : own || {})
     const { keys = [], ...shortcut } = {
       ...SHORTCUTS[action],
-      ...(Array.isArray(own) ? { keys: own } : own || {}),
+      ...Object.fromEntries(set.filter(([, v]) => v !== undefined)),
     }
     const on = own !== false && (shortcut.gesture !== undefined || keys.length > 0)
     return { ...shortcut, action, on, keys: keys.map(combo) }
@@ -771,7 +775,8 @@ function useTween(
     let start: number | null = null
     let frame = 0
     const step = (now: number) => {
-      start ??= now
+      // A duration that changes during the glide goes on from the share covered.
+      start ??= now - tween.t * duration
       // A duration that turned 0 during the glide: 0 / 0 is NaN, so it jumps to the end.
       const t = duration > 0 ? Math.min(1, (now - start) / duration) : 1
       // A frame may run after new data has started the next glide and before
@@ -1179,6 +1184,8 @@ function useMissedDrag(keys: Keymap) {
         svg.addEventListener(type, f as EventListener)
       return () => {
         clearTimeout(timer)
+        // The timer that would close an open hint goes with these listeners.
+        setOpen(false)
         for (const [type, f] of Object.entries(listeners))
           svg.removeEventListener(type, f as EventListener)
       }
@@ -1348,7 +1355,9 @@ function useHover(
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       tip.follow({ x, y, width: rect.width, height: rect.height })
-      show(hit(scene.current, { x: (x / rect.width) * width, y: (y / rect.height) * height }))
+      // The pointer in the view box the way the wheel and the pinch read it.
+      const at = inViewBox(e.currentTarget, width, e.clientX, e.clientY)
+      show(hit(scene.current, { x: at.x + width / 2, y: at.y + height / 2 }))
     },
     hide: () => {
       hovered.current = undefined
@@ -1589,6 +1598,12 @@ function wayOf(from: Point2D, to: Point2D) {
 }
 
 /**
+ * `n` to two decimals, for every number written into the HTML: the server
+ * and the browser, whose last bits of a sine differ, then write the same.
+ */
+const fixed = (n: number) => +n.toFixed(2)
+
+/**
  * How a symbol lies on its disc: how far it is scaled from its box, how far
  * it is turned, in degrees clockwise - to the way it comes, where it names
  * the way it points and comes from another point, and else not at all - and
@@ -1601,8 +1616,8 @@ function lieOf({ points: [at], r, symbol, from }: MarkOf<"symbol">) {
   const [way, points] = [from && wayOf(from, at), symbol.points]
   return {
     scale: +scale.toFixed(4),
-    turn: points === undefined || way === undefined ? 0 : +(way - points).toFixed(2),
-    ring: +((symbol.fill ? 0 : SYMBOL_LINE) + (2 * SYMBOL_RING) / scale).toFixed(2),
+    turn: points === undefined || way === undefined ? 0 : fixed(way - points),
+    ring: fixed((symbol.fill ? 0 : SYMBOL_LINE) + (2 * SYMBOL_RING) / scale),
   }
 }
 
@@ -1725,15 +1740,15 @@ function ChartGizmo3D({
           <line
             x1={24}
             y1={24}
-            x2={24 + (p.x - 24) * 0.6}
-            y2={24 + (p.y - 24) * 0.6}
+            x2={fixed(24 + (p.x - 24) * 0.6)}
+            y2={fixed(24 + (p.y - 24) * 0.6)}
             stroke="currentColor"
             strokeWidth={1.5}
             strokeLinecap="round"
           />
           <text
-            x={p.x}
-            y={p.y}
+            x={fixed(p.x)}
+            y={fixed(p.y)}
             textAnchor="middle"
             dominantBaseline="central"
             fill="currentColor"
@@ -1823,9 +1838,9 @@ function markElement(mark: Mark3D): React.ReactElement {
         // bits of a sine differ, write the same HTML.
         <circle
           key={key}
-          cx={+points[0].x.toFixed(2)}
-          cy={+points[0].y.toFixed(2)}
-          r={+mark.r.toFixed(2)}
+          cx={fixed(points[0].x)}
+          cy={fixed(points[0].y)}
+          r={fixed(mark.r)}
           fill={fill}
           stroke={stroke}
           strokeWidth={stroke ? 1 : undefined}
@@ -1836,7 +1851,7 @@ function markElement(mark: Mark3D): React.ReactElement {
       return (
         <path
           key={key}
-          d={`M${points.map((p) => `${+p.x.toFixed(2)},${+p.y.toFixed(2)}`).join("L")}Z`}
+          d={`M${points.map((p) => `${fixed(p.x)},${fixed(p.y)}`).join("L")}Z`}
           fill={fill}
           stroke={stroke ?? fill}
           strokeWidth={0.5}
@@ -1853,7 +1868,7 @@ function markElement(mark: Mark3D): React.ReactElement {
 function SymbolMark3D({ mark }: { mark: MarkOf<"symbol"> }) {
   const { points, symbol, fill, stroke } = mark
   const { scale, turn, ring } = lieOf(mark)
-  const at = `${+points[0].x.toFixed(2)} ${+points[0].y.toFixed(2)}`
+  const at = `${fixed(points[0].x)} ${fixed(points[0].y)}`
   const line = { d: symbol.path, strokeLinecap: "round", strokeLinejoin: "round" } as const
   const look = symbol.fill ? { fill } : { fill: "none", stroke: fill, strokeWidth: SYMBOL_LINE }
   return (
@@ -1895,8 +1910,8 @@ function Labels3D({ labels }: { labels: Label3D[] }) {
         return (
           <text
             key={label.key}
-            x={x}
-            y={y}
+            x={fixed(x)}
+            y={fixed(y)}
             textAnchor={label.toward ? "middle" : label.anchor}
             dominantBaseline="central"
             paintOrder="stroke"
@@ -2225,10 +2240,10 @@ function Axes3D({
               return (
                 <line
                   key={key}
-                  x1={from.projected.x}
-                  y1={from.projected.y}
-                  x2={to.projected.x}
-                  y2={to.projected.y}
+                  x1={fixed(from.projected.x)}
+                  y1={fixed(from.projected.y)}
+                  x2={fixed(to.projected.x)}
+                  y2={fixed(to.projected.y)}
                   style={{ opacity: leaving.has(key) ? 0 : 1 }}
                   className="stroke-border transition-opacity duration-300 ease-out motion-reduce:transition-none"
                   strokeWidth={0.75}
@@ -2264,7 +2279,7 @@ const LIFT = 3 * GAP
 
 /** The closed quad of a wall; its gridlines are their own lines, so a new one fades in. */
 function quad(wall: AxisWall) {
-  return `M${wall.map(({ projected }) => `${projected.x},${projected.y}`).join("L")}Z`
+  return `M${wall.map(({ projected }) => `${fixed(projected.x)},${fixed(projected.y)}`).join("L")}Z`
 }
 
 /**
@@ -2648,10 +2663,10 @@ function AxisLine3D({
 }) {
   return (
     <line
-      x1={from.x}
-      y1={from.y}
-      x2={to.x}
-      y2={to.y}
+      x1={fixed(from.x)}
+      y1={fixed(from.y)}
+      x2={fixed(to.x)}
+      y2={fixed(to.y)}
       strokeWidth={width}
       style={{ opacity: Math.round(opacity * 100) / 100 }}
       className={cn("transition-opacity duration-300 ease-out motion-reduce:transition-none", ink)}
@@ -2672,11 +2687,14 @@ function AxisLabel3D({
   const x = at.x + (anchor === "start" ? -w / 2 : anchor === "end" ? w / 2 : 0)
   return (
     <text
-      x={x}
-      y={at.y}
+      x={fixed(x)}
+      y={fixed(at.y)}
       textAnchor={anchor ?? "middle"}
       dominantBaseline="central"
-      style={{ opacity: Math.round(opacity * 100) / 100, translate: `${shift.x}px ${shift.y}px` }}
+      style={{
+        opacity: Math.round(opacity * 100) / 100,
+        translate: `${fixed(shift.x)}px ${fixed(shift.y)}px`,
+      }}
       className={cn(
         "transition-[opacity,translate] duration-300 ease-out motion-reduce:transition-none",
         title ? "fill-foreground font-medium" : "fill-muted-foreground text-[10px]"
