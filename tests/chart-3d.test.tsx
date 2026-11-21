@@ -204,6 +204,8 @@ describe("ChartContainer3D", () => {
     )
     expect(html).toContain("Apples")
     expect(html).toContain('data-slot="chart-3d-legend"')
+    // In the scope of the chart alone, so a color set on the chart in CSS reaches the legend.
+    expect(html.match(/data-chart="/g)).toHaveLength(1)
   })
 
   test("useChart3D outside a container throws", () => {
@@ -2434,6 +2436,14 @@ describe("ChartLegend3D", () => {
     expect(html).toContain("background:var(--color-b)")
     // A key without a label shows the key.
     expect(html).toContain(">c<")
+  })
+
+  test("on its own, beside a chart, it scopes the colors of its config itself", () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    host.innerHTML = renderToString(<ChartLegend3D config={{ b: { color: "red" } }} />)
+    const swatch = host.querySelector('[data-slot="chart-3d-legend"] span')!
+    expect(getComputedStyle(swatch).getPropertyValue("--color-b")).toBe("red")
+    host.remove()
   })
 })
 

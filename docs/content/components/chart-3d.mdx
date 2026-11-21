@@ -187,6 +187,22 @@ A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that e
 
 The axes glide along (`useTweenAxes`): their ends ease instead of jumping from one round number to the next, a tick that stays glides as the same label, an entering one fades in, and a dropped one fades out - in place, or as the gliding end sweeps past it - while the line of the axis grows to a new outermost tick and shrinks from a dropped one. The [bar chart's Update and Enter-and-leave demos](/docs/components/bar-chart-3d#update) show all of it; a chart of your own gets the same behaviour by tweening its numbers with `useTween` and its axes with `useTweenAxes` before it projects.
 
+## Legend
+
+`legend` shows the label and the color of every config key below the chart. `ChartLegend3D` is the same legend on its own, for anywhere else on the page, such as one legend for two charts that share a config. It scopes the colors of its config itself, so its swatches match the charts.
+
+```tsx
+<div className="flex flex-col gap-2">
+  <ChartLegend3D config={chartConfig} />
+  <ChartContainer3D config={chartConfig}>
+    <BarChart3D data={thisYear} index="month" />
+  </ChartContainer3D>
+  <ChartContainer3D config={chartConfig}>
+    <BarChart3D data={lastYear} index="month" />
+  </ChartContainer3D>
+</div>
+```
+
 ## Stability
 
 From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `Symbol3D`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D`. A change to any of them that breaks a project waits for a major version.

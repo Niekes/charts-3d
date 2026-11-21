@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the line jumped to its places before - a new point starts on its
   neighbour wherever that has come to, and a gone one heads for the nearest
   that stays.
+- `ChartLegend3D` on its own, outside a container, shows the colors of its
+  config, where its swatches were empty: it scopes the `--color-*` of its
+  config itself.
 
 ## [0.7.0] - 2026-11-15
 
