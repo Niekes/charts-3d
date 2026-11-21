@@ -24,7 +24,7 @@
 <p align="center">
   <a href="https://niekes.github.io/charts-3d/docs">Docs</a> ·
   <a href="https://niekes.github.io/charts-3d/docs/installation">Installation</a> ·
-  <a href="https://niekes.github.io/charts-3d/docs/components/bar-chart-3d">Components</a> ·
+  <a href="https://niekes.github.io/charts-3d/docs/components">Components</a> ·
   <a href="https://niekes.github.io/charts-3d/docs/theming">Theming</a> ·
   <a href="https://niekes.github.io/charts-3d/docs/how-it-works">How it works</a>
 </p>
@@ -80,7 +80,7 @@ npx shadcn@latest add niekes/charts-3d/bar-chart-3d   # the code, in your projec
 npm install @niekes/charts-3d                          # the same components, from npm
 ```
 
-Everything else lives in the [documentation](https://niekes.github.io/charts-3d/docs): [installation](https://niekes.github.io/charts-3d/docs/installation), the [components](https://niekes.github.io/charts-3d/docs/components/bar-chart-3d), [theming](https://niekes.github.io/charts-3d/docs/theming) and [how it works](https://niekes.github.io/charts-3d/docs/how-it-works).
+Everything else lives in the [documentation](https://niekes.github.io/charts-3d/docs): [installation](https://niekes.github.io/charts-3d/docs/installation), the [components](https://niekes.github.io/charts-3d/docs/components), [theming](https://niekes.github.io/charts-3d/docs/theming) and [how it works](https://niekes.github.io/charts-3d/docs/how-it-works). For an AI assistant, [llms.txt](https://niekes.github.io/charts-3d/llms.txt) lists every page and [llms-full.txt](https://niekes.github.io/charts-3d/llms-full.txt) holds them all.
 
 charts-3d is not affiliated with shadcn/ui.
 
