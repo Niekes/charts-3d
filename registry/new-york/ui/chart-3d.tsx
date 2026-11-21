@@ -113,6 +113,11 @@ export type Mark3D = {
    * leaves the mark; a stroke of their own stays.
    */
   groups?: string[]
+  /**
+   * Drawn only while its groups are in focus, such as the dot on the point of
+   * a line: unlit, it is out of the scene, so it neither paints nor hits.
+   */
+  whenLit?: true
 } & (
   | { shape?: "polygon"; r?: never }
   | { shape: "circle"; r: number }
@@ -1776,8 +1781,11 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   const lit = useLit(marks)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
-  // inner faces their seams. The order, and with it the depth, stays as painted.
-  const drawn = marks.map((mark) => (lit(mark) ? { ...mark, fill: focusOf(mark.fill) } : mark))
+  // inner faces their seams. The order, and with it the depth, stays as painted. A mark
+  // whenLit is left out unlit (ADR-0002).
+  const drawn = marks.flatMap((mark) =>
+    lit(mark) ? [{ ...mark, fill: focusOf(mark.fill) }] : mark.whenLit ? [] : [mark]
+  )
   React.useLayoutEffect(() => {
     // The group is in the tree once the layout effects run.
     place(id, { marks: drawn, node: node.current! })

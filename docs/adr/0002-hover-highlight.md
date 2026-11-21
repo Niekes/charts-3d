@@ -35,3 +35,11 @@ the core still resolves the color for the canvas and webgl, so every renderer
 follows the theme as before. Webgl, which drew fans only, now draws a stroke
 as a line loop over the outline, so the edge shows on every renderer; only
 its width may differ, where the platform caps the width of a line.
+
+Amended 2026-11-21: the element of a line is its point, not the line. A line
+lit as a whole read as the series, not the point the tooltip names, against
+the single element above; the point's halves of the segments at it and its
+joint are its marks. A mark may be drawn only while it is lit (`whenLit`): the
+dot on the point of a line. The core leaves it out of the scene while unlit,
+so it draws and hit-tests alike on every renderer, and a chart still lights
+nothing itself.

@@ -231,7 +231,9 @@ How the charts draw, so that a new one draws the same way:
   core fills exactly those with the focus color - `--chart-3d-focus`, or their
   own fill lightened - until the pointer leaves the mark; a stroke of their
   own stays and nothing else changes, with every renderer, and a chart never
-  highlights anything itself.
+  highlights anything itself. A mark `whenLit` - the dot on the point of a
+  line - is drawn only while its groups are in focus; the core leaves it out
+  of the scene otherwise, so it neither paints nor hits.
 - **Axis labels.** `Axes3D` lays out the labels of all four edges of every
   axis from `axes3D().edges(spec)` and shows those of the `chosen` edge, so an
   axis fades from one edge to the next. `fit` gives the tick labels of an
