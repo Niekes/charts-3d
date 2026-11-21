@@ -81,9 +81,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 Drive the chart the way a user does: render it, send pointer and keyboard
 events, read what it draws. Copy `mount` and `stubCanvas` from
 `tests/chart-3d.test.tsx` (jsdom has no layout and no canvas). Cover at
-least: the marks draw as SVG and on the canvas (`renderer="canvas"`, and
-`"webgl"`, which draws on the canvas too); hovering a mark shows its tooltip and
-fades the groups it does not share, and moving off the mark or leaving the
+least: the marks draw as SVG and on the canvas (`renderer="canvas"`);
+hovering a mark shows its tooltip and fades the groups it does not share, and moving off the mark or leaving the
 chart clears both; new data glides in (`useTween`); the axes follow, where the
 chart has axes - the globe has none (ADR-0007). New code
 comes with its tests - the coverage gate is 98% in each metric.

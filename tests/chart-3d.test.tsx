@@ -2005,43 +2005,11 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  test("webgl draws as SVG where the browser has neither webgl nor a canvas", async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null)
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(chart.host.querySelector("canvas")).toBeNull()
-    expect(chart.svg.querySelector("path")).not.toBeNull()
-
-    await chart.unmount()
-  })
-
-  test("webgl draws on the canvas, as canvas does, and asks the browser for no webgl context", async () => {
-    const ctx = stubCanvas()
-    const contexts = vi
-      .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockImplementation((type: string) => (type === "2d" ? ctx : null) as never)
-    const chart = await mount(
-      <ChartContainer3D config={{}} renderer="webgl">
-        <Marks3D marks={marks} />
-      </ChartContainer3D>
-    )
-    expect(chart.host.querySelector("canvas")).not.toBeNull()
-    expect(chart.svg.querySelector("path, circle")).toBeNull()
-    expect(ctx.fill).toHaveBeenCalled()
-    expect(contexts.mock.calls.map(([type]) => type)).not.toContain("webgl")
-
-    await chart.unmount()
-  })
-
   // One scene with every mark shape: the shared square and dot, and the plane, each its own group.
   const scene = [...marks, plane].map((mark) => ({ ...mark, groups: [mark.key] }))
 
-  test("one scene draws every mark and hovers the same on svg, canvas and webgl", async () => {
-    for (const renderer of ["svg", "canvas", "webgl"] as const) {
-      // "webgl" draws on the canvas, as "canvas" does.
+  test("one scene draws every mark and hovers the same on svg and canvas", async () => {
+    for (const renderer of ["svg", "canvas"] as const) {
       const ctx = renderer === "svg" ? null : stubCanvas()
       // jsdom has no Path2D: the outline of a symbol is its path data.
       vi.stubGlobal("Path2D", String)

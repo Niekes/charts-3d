@@ -639,7 +639,7 @@ describe("GlobeChart3D transitions", () => {
 })
 
 describe("GlobeChart3D renderer switch", () => {
-  test("svg to canvas to webgl, which draws on the canvas, and back repaints each time, without error", async () => {
+  test("svg to canvas and back repaints each time, without error", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -653,15 +653,7 @@ describe("GlobeChart3D renderer switch", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    // A canvas gives out one context only: another type on the same element is null.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
-      this: HTMLCanvasElement & { ctxType?: string },
-      type: string
-    ) {
-      if (this.ctxType && this.ctxType !== type) return null
-      this.ctxType = type
-      return (type === "2d" ? ctx : null) as never
-    })
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -696,11 +688,6 @@ describe("GlobeChart3D renderer switch", () => {
     expect(host.querySelector("canvas")).not.toBeNull()
     expect(host.querySelector('svg path[fill^="color-mix"]')).toBeNull()
     expect(ctx.fill).toHaveBeenCalled()
-
-    const fills = ctx.fill.mock.calls.length
-    await render("webgl")
-    // "webgl" draws on the same canvas as "canvas".
-    expect(ctx.fill.mock.calls.length).toBeGreaterThan(fills)
 
     await render("svg")
     expect(host.querySelector("canvas")).toBeNull()

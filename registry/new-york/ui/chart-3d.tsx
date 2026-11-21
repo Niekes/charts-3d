@@ -53,10 +53,9 @@ export type View3D = {
 
 /**
  * How the marks of a chart are drawn. The box, its labels, the tooltip and the
- * legend are always SVG and HTML. "webgl" draws as "canvas", as it drew no
- * faster, and goes in 1.0.0.
+ * legend are always SVG and HTML.
  */
-export type Renderer3D = "svg" | "canvas" | "webgl"
+export type Renderer3D = "svg" | "canvas"
 
 /** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
 export type World = Record<keyof AxesSpec, (value: number) => number>
@@ -429,8 +428,7 @@ export type ChartContainer3DProps = {
   /**
    * How the marks of the chart are drawn: "canvas" suits many marks. The chart
    * draws as SVG until the browser shows it has a canvas, and where it has
-   * none, as SVG. "webgl" draws as "canvas", as it drew no faster; it is
-   * deprecated and goes in 1.0.0.
+   * none, as SVG.
    * @defaultValue "svg"
    */
   renderer?: Renderer3D
@@ -1432,11 +1430,10 @@ function inside(polygon: Point2D[], at: Point2D) {
 
 /**
  * The renderer the chart draws with: SVG on the server and in the first
- * render on the client, then a canvas if the browser has one, for "canvas"
- * and "webgl" alike.
+ * render on the client, then a canvas if the browser has one.
  */
 function useRenderer(requested: Renderer3D) {
-  const [renderer, setRenderer] = React.useState<"svg" | "canvas">("svg")
+  const [renderer, setRenderer] = React.useState<Renderer3D>("svg")
   React.useEffect(() => {
     const canvas = requested !== "svg" && document.createElement("canvas").getContext("2d")
     setRenderer(canvas ? "canvas" : "svg")
@@ -1659,7 +1656,7 @@ function ChartCanvas3D({
   width,
   height,
 }: {
-  renderer: "svg" | "canvas"
+  renderer: Renderer3D
   canvas: React.Ref<HTMLCanvasElement>
   width: number
   height: number

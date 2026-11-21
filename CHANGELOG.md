@@ -58,6 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switch on every renderer. A chart of your own that hands `Marks3D` a
   circle adds `shape: "circle"` beside its `r`; a polygon stays as it is.
 
+### Removed
+
+- **Breaking:** `renderer="webgl"`, deprecated in 0.7.0: use `"canvas"`,
+  which it drew as. It goes before 1.0.0, not with it as announced, so that
+  1.0.0 does not keep it until 2.0.0. Only the type drops it: a caller that
+  still passes it draws on the canvas.
+
 ### Fixed
 
 - `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are

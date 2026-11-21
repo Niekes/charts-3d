@@ -530,7 +530,7 @@ describe("AreaChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same ribbons on the canvas, every face of the svg once", async () => {
+  test("canvas paints the ribbons, every face of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -544,15 +544,7 @@ describe("AreaChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    // A canvas gives out one context only: another type on the same element is null.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
-      this: HTMLCanvasElement & { ctxType?: string },
-      type: string
-    ) {
-      if (this.ctxType && this.ctxType !== type) return null
-      this.ctxType = type
-      return (type === "2d" ? ctx : null) as never
-    })
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -574,10 +566,6 @@ describe("AreaChart3D renderers", () => {
     expect(marks(view.host)).toHaveLength(0)
     expect(ctx.fill).toHaveBeenCalledTimes(svg)
 
-    ctx.fill.mockClear()
-    await view.render(scene("webgl"))
-    expect(marks(view.host)).toHaveLength(0)
-    expect(ctx.fill).toHaveBeenCalledTimes(svg)
     await view.unmount()
   })
 })
