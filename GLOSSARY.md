@@ -114,6 +114,22 @@ One on the far side of the globe is hidden by it. Pointing at a stop lights
 that stop alone.
 _Avoid_: waypoint, node, marker, dot
 
+**Tip**:
+The last stop of a route, where the route stands now: drawn as its symbol in
+place of the circle, where it has one. As a stop joins the route, the tip
+travels its leg to it; a tip that leaves the data keeps its symbol while its
+leg draws back, and the stop before it is the tip once it is gone.
+_Avoid_: head (too near heading, the camera's), end, cursor, vehicle
+
+**Symbol**:
+The picture the tip of a route is drawn as, such as a plane or a ship: the
+outline of an icon, in the color of the tip, outlined as its icon set draws
+it or filled, and ringed by the background. What colors the tip gives it its
+symbol: its leg, or else its route. It is flat to the reader and as large on
+the screen from every side. One that names the way it points turns to its
+bearing; one that names none, as a car seen from the side, stays upright.
+_Avoid_: icon (the picture of a legend entry), marker, glyph, pin, sprite
+
 **Leg**:
 The part of a route between two stops next to each other, along the great
 circle, the shortest way over the surface. It ends at the horizon. Pointing
@@ -121,6 +137,18 @@ at a leg lights that leg alone, and it names its two stops. A leg has the
 color of its route, or one of its own, which the stop it arrives at names
 and shares.
 _Avoid_: arc, link, edge, segment
+
+**Bearing**:
+The way a symbol that turns points, the way its tip comes: along the leg
+that arrives at the tip, where the leg meets it, as the camera shows it. A
+tip without a leg points the way it moves, and where it stands it keeps the
+bearing it came with, as one whose leg has drawn back into it. A tip that
+never came from anywhere has none: its symbol shows as its icon set draws it.
+A bearing never jumps: where the tip passes from one stop to another, takes
+its first leg or sets out another way, the symbol turns the shorter way as
+it sets out - clockwise where it flies back the way it came - and has
+turned when about a quarter of its leg is flown.
+_Avoid_: heading (the camera's), direction, rotation, angle
 
 **Ocean**:
 The disc of the globe the land lies on, in the color of a wall unless the
@@ -163,7 +191,8 @@ starts.
 _Avoid_: degradation, downgrade, polyfill
 
 **Mark shape**:
-The form of a mark: a polygon, or a circle around its one point. The shapes
+The form of a mark: a polygon, a circle around its one point, or a symbol at
+its one point. The shapes
 are a closed vocabulary: a new one joins every renderer and the parity test
 before a chart may use it.
 _Avoid_: mark kind, mark type

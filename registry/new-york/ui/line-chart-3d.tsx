@@ -155,6 +155,6 @@ function elbowMarks(
       key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
       points: segment(at[i], b, WIDTH),
     })),
-    { ...mark, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
+    { ...mark, shape: "circle" as const, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
   ]
 }
