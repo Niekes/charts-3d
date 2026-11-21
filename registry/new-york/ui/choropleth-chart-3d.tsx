@@ -40,7 +40,7 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
    */
   series?: keyof T & string
   /**
-   * The field that titles the tooltip of an entry, the tooltip of its region.
+   * The field that titles the tooltip of the region of an entry.
    * @defaultValue the label of the series
    */
   label?: keyof T & string

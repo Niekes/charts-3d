@@ -458,7 +458,9 @@ the client. The npm dependencies stay external.
 
 ### Adding a chart
 
-1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template above.
+1. Create `registry/new-york/ui/<name>-chart-3d.tsx` following the template above,
+   naming its props as the Props section of the `chart-3d` docs page does
+   ([ADR-0012](docs/adr/0012-a-prop-name-means-one-thing.md)).
 2. Add its item to `registry.json`, with `niekes/charts-3d/chart-3d` as its
    only registry dependency.
 3. Add `tests/<name>-chart-3d.test.tsx`, the five demos in `docs/examples/`

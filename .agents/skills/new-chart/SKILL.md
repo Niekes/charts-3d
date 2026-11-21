@@ -14,7 +14,8 @@ reference. Terms are in `GLOSSARY.md` (mark, scene, renderer, hover, focus).
 
 - Starts with `"use client"`, has no default export, exports
   `export function <Name>Chart3D` and the type `<Name>Chart3DProps`, with a
-  comment (and `@defaultValue` where one exists) on every prop.
+  comment (and `@defaultValue` where one exists) on every prop, named as
+  the Props section of the `chart-3d` docs page names it (ADR-0012).
 - Imports only React, the npm packages `chart-3d` declares in
   `registry.json`, and the core as `@/registry/new-york/ui/chart-3d`.
 - Renders no SVG or HTML of its own: it draws through `Axes3D`, `Marks3D`

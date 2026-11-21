@@ -10,15 +10,15 @@ chart reads an idea through the name the others give it.
 
 - **`id` identifies an entry**: what its marks follow through new data. In
   the choropleth an entry's identity is its region, so joining on `id` is
-  the same idea. Where a chart has no `label`, `id` titles the tooltip too,
-  as in the places and the routes chart.
+  the same idea. In the places and the routes chart `id` names the entry in
+  the tooltip too.
 - **`label` titles the tooltip of an entry**, and nothing else: the globe
   and the choropleth.
 - **`index` is the category along x of a wide table** - an entry per row of
-  bars, a column per series - and so its identity and its title as well:
-  the bar and the area chart. Not `x`: in the scatter and the line chart `x`
-  is a number in a long table, and the bar chart would read like the scatter
-  without working like it.
+  bars, a column per series - and so its identity and its name in the
+  tooltip as well: the bar and the area chart. Not `x`: in the scatter and
+  the line chart `x` is a number in a long table, and the bar chart would
+  read like the scatter without working like it.
 - **`keys` lists the columns that each hold a series** (wide data);
   **`series` names the one field whose value picks the series** (long data).
 - **`x` and `z` are the position along their axis**: a field of the entry in

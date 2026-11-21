@@ -47,9 +47,9 @@ export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   series?: keyof T & string
   /**
-   * The field that identifies an entry through updates, so a new dot grows, a
-   * gone one shrinks away and one that moves glides, and titles its tooltip.
-   * The names should be unique.
+   * The field that identifies an entry and titles its tooltip: through
+   * updates a new dot grows, a gone one shrinks away and one that moves
+   * glides. The names should be unique.
    * @defaultValue the place of the entry
    */
   id?: keyof T & string

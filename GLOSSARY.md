@@ -7,7 +7,7 @@ sees, not how the code draws it.
 ## The data
 
 **Entry**:
-One item of the data a chart is given: a row of bars, a point, a stop, a
+What the data of a chart lists, one by one: a row of bars, a point, a stop, a
 place, the value of a region. Its identity - a name of its own, the region
 it colors, or else its place in the data - is what its marks follow through
 new data.
