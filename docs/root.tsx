@@ -3,6 +3,8 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 
 import NotFound from "./routes/not-found"
 import type { Route } from "./+types/root"
+import "@fontsource-variable/geist"
+import "@fontsource-variable/geist-mono"
 import "./app.css"
 
 export function Layout({ children }: { children: React.ReactNode }) {

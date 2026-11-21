@@ -5,6 +5,8 @@
   // imports it, so its packages stay devDependencies while the dependencies
   // name what the registry items need at runtime.
   "ignoreDependencies": [
+    "@fontsource-variable/geist",
+    "@fontsource-variable/geist-mono",
     "fumadocs-core",
     "fumadocs-mdx",
     "fumadocs-ui",

@@ -1,3 +1,5 @@
 {
-  "pages": ["index", "installation", "theming", "how-it-works", "components"]
+  "title": "charts-3d",
+  "description": "3D charts for shadcn/ui, built on d3-3d.",
+  "pages": ["(guide)", "components"]
 }

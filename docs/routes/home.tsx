@@ -1,3 +1,11 @@
+import {
+  CodeBlock,
+  CodeBlockTab,
+  CodeBlockTabs,
+  CodeBlockTabsList,
+  CodeBlockTabsTrigger,
+  Pre,
+} from "fumadocs-ui/components/codeblock"
 import { HomeLayout } from "fumadocs-ui/layouts/home"
 import { Link } from "react-router"
 
@@ -11,6 +19,40 @@ export function meta() {
   ]
 }
 
+const add = "shadcn@latest add niekes/charts-3d/bar-chart-3d"
+const commands = {
+  npm: `npx ${add}`,
+  pnpm: `pnpm dlx ${add}`,
+  yarn: `yarn dlx ${add}`,
+  bun: `bun x ${add}`,
+}
+
+function InstallBar() {
+  return (
+    <CodeBlockTabs defaultValue="npm" className="mb-8 text-left">
+      <CodeBlockTabsList>
+        {Object.keys(commands).map((name) => (
+          <CodeBlockTabsTrigger key={name} value={name}>
+            {name}
+          </CodeBlockTabsTrigger>
+        ))}
+      </CodeBlockTabsList>
+      {Object.entries(commands).map(([name, command]) => (
+        <CodeBlockTab key={name} value={name}>
+          <CodeBlock>
+            <Pre>
+              {/* The code block pads the lines that a highlighter puts out. */}
+              <code>
+                <span className="line">{command}</span>
+              </code>
+            </Pre>
+          </CodeBlock>
+        </CodeBlockTab>
+      ))}
+    </CodeBlockTabs>
+  )
+}
+
 export default function Home() {
   return (
     <HomeLayout {...baseOptions()}>
@@ -18,7 +60,7 @@ export default function Home() {
         <div aria-hidden="true" className="absolute inset-0">
           <Scanner />
         </div>
-        <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-fd-foreground/10 bg-fd-background/40 px-8 py-12 shadow-2xl shadow-black/10 backdrop-blur-xl sm:px-12 dark:shadow-black/60">
+        <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-fd-foreground/10 bg-fd-background/40 px-8 py-12 shadow-2xl shadow-black/10 backdrop-blur-xl sm:px-12 dark:shadow-black/60">
           <div
             aria-hidden="true"
             className="absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-fd-foreground/40 to-transparent"
@@ -27,18 +69,27 @@ export default function Home() {
             charts-3d
           </h1>
           <p className="mb-8 text-fd-muted-foreground">3D charts for shadcn/ui, built on d3-3d.</p>
-          <Link
-            className="group inline-flex items-center gap-2 rounded-full bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground shadow-lg transition hover:shadow-xl motion-safe:hover:scale-105"
-            to="/docs"
-          >
-            Get started
-            <span
-              aria-hidden="true"
-              className="transition-transform motion-safe:group-hover:translate-x-0.5"
+          <InstallBar />
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link
+              className="group inline-flex items-center gap-2 rounded-full bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground shadow-lg transition hover:shadow-xl motion-safe:hover:scale-105"
+              to="/docs"
             >
-              →
-            </span>
-          </Link>
+              Get started
+              <span
+                aria-hidden="true"
+                className="transition-transform motion-safe:group-hover:translate-x-0.5"
+              >
+                →
+              </span>
+            </Link>
+            <Link
+              className="inline-flex items-center rounded-full border border-fd-foreground/15 px-5 py-2.5 text-sm font-medium transition hover:bg-fd-accent"
+              to="/docs/components"
+            >
+              Browse charts
+            </Link>
+          </div>
         </div>
       </div>
     </HomeLayout>

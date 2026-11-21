@@ -1,6 +1,8 @@
 {
   "title": "Components",
+  "root": true,
   "pages": [
+    "index",
     "chart-3d",
     "area-chart-3d",
     "bar-chart-3d",
