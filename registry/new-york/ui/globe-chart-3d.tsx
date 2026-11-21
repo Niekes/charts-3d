@@ -92,8 +92,11 @@ type Fields<T> = {
   label?: keyof T & string
 }
 
-/** A tile with an entry: its id - center and config key - its value, its entries and, if the chart names entries, its name. */
-/** A tile: its height, from 0, and the value of its data, undefined where it has none. */
+/**
+ * A tile with an entry: its id - center and config key - its height, from 0,
+ * the value of its data, undefined where it has none, its entries and, if the
+ * chart names entries, its name.
+ */
 type Tile<T> = { id: string; value: number; read?: number; entries: T[]; name?: string }
 
 /** What the tooltip of a tile reads: the config, the fields, the format and what the reader makes of it. */

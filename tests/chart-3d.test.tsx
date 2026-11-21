@@ -36,6 +36,7 @@ import {
   ramp,
   segment,
   shade,
+  uniqueIds,
   useChart3D,
   useConfigKeys,
   useSeries,
@@ -1873,7 +1874,7 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  test("the hover reads the pointer the way the wheel does, in an svg that CSS made taller", async () => {
+  test("the hover reads the pointer the way the wheel does, in an svg that CSS made taller or wider", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>
         <Marks3D marks={marks} />
@@ -1884,6 +1885,14 @@ describe("renderer", () => {
       ({ left: 0, top: 0, width: 640, height: 800 }) as DOMRect
 
     await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 400, clientY: 300 }))
+    expect(chart.host.textContent).toContain("Dot")
+
+    // Twice as wide: the picture keeps its scale, centred 320 pixels in.
+    chart.svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 1280, height: 400 }) as DOMRect
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 470, clientY: 150 }))
+    expect(chart.host.textContent).toContain("Square")
+    await chart.send(new MouseEvent("pointermove", { bubbles: true, clientX: 720, clientY: 100 }))
     expect(chart.host.textContent).toContain("Dot")
 
     await chart.unmount()
@@ -2442,6 +2451,13 @@ describe("helpers", () => {
     expect(at(30, [10, 20])).toBe("100")
     // A flat span has no share to take: the low end, no NaN.
     expect(at(5, [5, 5])).toBe("0")
+  })
+
+  test("uniqueIds keeps a name the first time and counts it when it comes again", () => {
+    const ids = uniqueIds(["Jan", "Feb", "Jan", "Jan"])
+    expect(new Set(ids).size).toBe(4)
+    expect(ids.slice(0, 2)).toEqual(["Jan", "Feb"])
+    expect(ids[2].startsWith("Jan")).toBe(true)
   })
 
   test("gridAxis stands a grid's columns at their values, a cell of the smallest gap, half of it to the walls", () => {

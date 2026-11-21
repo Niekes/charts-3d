@@ -1000,7 +1000,7 @@ function useOrbit(
   const [orbiting, setOrbiting] = React.useState(false)
   const held = useModsHeld()
   const drag = React.useRef<(Point2D & { moved: boolean; rotate: boolean }) | null>(null)
-  const { ref, touching, hint } = useGestures(jump, keys, width, setOrbiting)
+  const { ref, touching, hint } = useGestures(jump, keys, setOrbiting)
   const move = (step: Move) => jump((v) => moved(v, step, defaultView))
   const step = (step: Move) => glide((v) => moved(v, step, defaultView))
   const keyHandlers = useKeys(keys, step, setOrbiting)
@@ -1033,7 +1033,7 @@ function useOrbit(
         onDragStart()
       }
       drag.current = { x: e.clientX, y: e.clientY, moved: true, rotate: d.rotate }
-      const k = width / e.currentTarget.getBoundingClientRect().width
+      const k = unitsPerPixel(e.currentTarget)
       setOrbiting(d.rotate)
       move(d.rotate ? { yaw: dx * DRAG, tilt: dy * DRAG } : { pan: { x: dx * k, y: dy * k } })
     },
@@ -1109,11 +1109,10 @@ function useKeys(
 function useGestures(
   jump: (to: (from: View3D) => View3D) => void,
   keys: Keymap,
-  width: number,
   setOrbiting: (orbiting: boolean) => void
 ) {
-  const wheel = useWheelZoom(jump, keys.on("wheelZoom"), width)
-  const touch = useTouch(jump, keys, width, setOrbiting)
+  const wheel = useWheelZoom(jump, keys.on("wheelZoom"))
+  const touch = useTouch(jump, keys, setOrbiting)
   const missed = useMissedDrag(keys)
   const ref = React.useCallback(
     (svg: SVGSVGElement | null) => {
@@ -1186,6 +1185,7 @@ function useMissedDrag(keys: Keymap) {
         clearTimeout(timer)
         // The timer that would close an open hint goes with these listeners.
         setOpen(false)
+        setMissed(undefined)
         for (const [type, f] of Object.entries(listeners))
           svg.removeEventListener(type, f as EventListener)
       }
@@ -1195,10 +1195,18 @@ function useMissedDrag(keys: Keymap) {
   return { ref, hint: { shown: missed && keys.hint(missed), open } }
 }
 
-/** The point (`x`, `y`) of the client in the units of the view box of `svg`, `width` wide, from its middle. */
-function inViewBox(svg: SVGSVGElement, width: number, x: number, y: number) {
+/** The units of the view box of `svg` in a pixel of the client. */
+function unitsPerPixel(svg: SVGSVGElement) {
+  const [, , width, height] = svg.getAttribute("viewBox")!.split(" ").map(Number)
   const box = svg.getBoundingClientRect()
-  const k = width / box.width
+  // The browser fits the view box into the svg, centred, at the smaller of its two scales.
+  return Math.max(width / box.width, height / box.height)
+}
+
+/** The point (`x`, `y`) of the client in the units of the view box of `svg`, from its middle. */
+function inViewBox(svg: SVGSVGElement, x: number, y: number) {
+  const box = svg.getBoundingClientRect()
+  const k = unitsPerPixel(svg)
   return { x: (x - box.left - box.width / 2) * k, y: (y - box.top - box.height / 2) * k }
 }
 
@@ -1234,7 +1242,6 @@ function pinchStep(last: Pinch, now: Pinch, orbit: boolean, zoom: boolean): Move
 function useTouch(
   jump: (to: (from: View3D) => View3D) => void,
   keys: Keymap,
-  width: number,
   setOrbiting: (orbiting: boolean) => void
 ) {
   const orbit = keys.on("touchOrbit")
@@ -1259,7 +1266,7 @@ function useTouch(
         if (last) {
           const step = {
             ...pinchStep(last, now, orbit, zoom),
-            at: inViewBox(svg, width, now.x, now.y),
+            at: inViewBox(svg, now.x, now.y),
           }
           jump((v) => moved(v, step, v))
           setOrbiting(Boolean(step.yaw || step.tilt))
@@ -1271,7 +1278,7 @@ function useTouch(
         svg.addEventListener(type, onTouch as EventListener, { passive: false })
       return () => events.forEach((type) => svg.removeEventListener(type, onTouch as EventListener))
     },
-    [jump, orbit, zoom, width, setOrbiting]
+    [jump, orbit, zoom, setOrbiting]
   )
   return { ref, touching }
 }
@@ -1284,7 +1291,7 @@ function useTouch(
  * `data-zoom` - `"in"` or `"out"`, the direction of its cursor - until
  * `ZOOM_CURSOR` after the last tick.
  */
-function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean, width: number) {
+function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean) {
   // React listens to the wheel passively, and only a listener that is not
   // passive can keep the browser from zooming the page.
   return React.useCallback(
@@ -1294,7 +1301,7 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean,
       const onWheel = (e: WheelEvent) => {
         if (!platformMod(e) && !e.ctrlKey) return
         e.preventDefault()
-        const at = inViewBox(svg, width, e.clientX, e.clientY)
+        const at = inViewBox(svg, e.clientX, e.clientY)
         jump((v) => moved(v, { zoom: 2 ** (-e.deltaY / 200), at }, v))
         svg.dataset.zoom = e.deltaY < 0 ? "in" : "out"
         clearTimeout(timer)
@@ -1306,7 +1313,7 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean,
         svg.removeEventListener("wheel", onWheel)
       }
     },
-    [jump, on, width]
+    [jump, on]
   )
 }
 
@@ -1356,7 +1363,7 @@ function useHover(
       const y = e.clientY - rect.top
       tip.follow({ x, y, width: rect.width, height: rect.height })
       // The pointer in the view box the way the wheel and the pinch read it.
-      const at = inViewBox(e.currentTarget, width, e.clientX, e.clientY)
+      const at = inViewBox(e.currentTarget, e.clientX, e.clientY)
       show(hit(scene.current, { x: at.x + width / 2, y: at.y + height / 2 }))
     },
     hide: () => {

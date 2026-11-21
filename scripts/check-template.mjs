@@ -153,7 +153,7 @@ const packageDependencies = JSON.parse(read("package.json")).dependencies
 for (const item of registry.items) {
   for (const dependency of item.dependencies ?? []) {
     const [, name, range] = dependency.match(/^(@?[^@]+)(?:@(.+))?$/) ?? []
-    if (range !== packageDependencies[name]) {
+    if (packageDependencies[name] === undefined || range !== packageDependencies[name]) {
       fail(
         `registry.json: '${item.name}' installs '${dependency}', package.json '${name}@${packageDependencies[name]}'`
       )

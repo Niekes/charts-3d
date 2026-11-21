@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent } from "d3-array"
+import { extent, max } from "d3-array"
 import {
   gridPlanes3D,
   sort,
@@ -254,7 +254,7 @@ function useGrid(
   return React.useMemo(() => {
     // Named places span the box exactly; the indices keep half a cell of room.
     const sides = {
-      x: gridAxis(Math.max(0, ...raw.map((row) => row.length)), {
+      x: gridAxis(max(raw, (row) => row.length) ?? 0, {
         at: x,
         ends: domain.x,
         padded: !(x || domain.x),
