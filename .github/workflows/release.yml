@@ -15,13 +15,21 @@ on:
   # Retries a release whose publish failed.
   workflow_dispatch:
 
+# One release at a time: a second merge waits for the first to tag its version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Stage on npm
+    # A release is cut from `master` alone, a manual retry too.
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
+      actions: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -36,9 +44,12 @@ jobs:
         id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if npm view "@niekes/charts-3d@$VERSION" version >/dev/null 2>&1; then
+          # A staged version waits for its approval and may not show on npm
+          # yet: its tag, pushed right after the staging, says it is out.
+          if npm view "@niekes/charts-3d@$VERSION" version >/dev/null 2>&1 ||
+              git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null; then
               echo "new=false" >> "$GITHUB_OUTPUT"
-              echo "@niekes/charts-3d@$VERSION is already on npm, skipping the publish."
+              echo "@niekes/charts-3d@$VERSION is already staged or on npm, skipping the publish."
           else
               echo "new=true" >> "$GITHUB_OUTPUT"
               echo "Publishing @niekes/charts-3d@$VERSION."
@@ -72,6 +83,9 @@ jobs:
           if ! git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null; then
               # Pin every dependency on this registry to the release, and check the pin.
               sed -i "s|\"niekes/charts-3d/\([a-z0-9-]*\)\"|\"niekes/charts-3d/\1#v$VERSION\"|g" registry.json
+              # The docs of the release install the release: every unpinned command is pinned.
+              find docs/content docs/routes -name '*.mdx' -o -name '*.tsx' | xargs sed -i -E \
+                "s~(add niekes/charts-3d/[a-z0-9-]+)(\$|[^a-z0-9#-])~\1#v$VERSION\2~g"
               npm run lint:template
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -82,5 +96,11 @@ jobs:
               git push origin "v$VERSION"
           fi
           gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Deploy the docs of the release
+        # The docs follow the release, not `master`: built from its tag, they
+        # show its API and install it.
+        run: gh workflow run docs.yml --ref "v$(node -p "require('./package.json').version")"
         env:
           GH_TOKEN: ${{ github.token }}

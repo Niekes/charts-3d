@@ -62,10 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means
   one thing in every chart that takes it, listed under Props on the
   `chart-3d` page (ADR-0012).
-- `Mark3D` names its shape: a mark is a polygon unless `shape` says
-  `"circle"` or `"symbol"`, and the core draws each through an exhaustive
-  switch on every renderer. A chart of your own that hands `Marks3D` a
-  circle adds `shape: "circle"` beside its `r`; a polygon stays as it is.
+- **Breaking:** `Mark3D` names its shape: a mark is a polygon unless `shape`
+  says `"circle"` or `"symbol"`, and the core draws each through an
+  exhaustive switch on every renderer. A chart of your own that hands
+  `Marks3D` a circle adds `shape: "circle"` beside its `r`; without it the
+  circle draws and hits nothing. A polygon stays as it is.
 
 ### Removed
 
@@ -126,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   between them, while one finger scrolls the page and a tap inspects:
   `touchOrbit` and `pinchZoom` in the shortcut panel and in `keymap`
   (ADR-0001).
-- `numeric` and `finite`, the core helpers the charts read numbers with:
+- `finite`, the core helper the charts read numbers with:
   `null` and `""` are missing, not 0, and an infinite value stands as 0.
 - `tooltip` on every chart: a function of what the mark would say, a title
   and its items, and of the data behind the mark - the entry and series key
