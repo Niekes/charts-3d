@@ -5,7 +5,7 @@ import { PlacesChart3D } from "@/components/ui/places-chart-3d"
 import { land } from "@/docs/examples/land"
 import { chartData } from "@/docs/examples/places-chart-3d-demo"
 import { compact, placeConfig } from "@/docs/examples/population"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same places, read two ways: a dot is as large as the people of its
 // metro area or of its city proper, and glides from the one to the other.
@@ -24,16 +24,12 @@ export default function PlacesChart3DUpdateDemo() {
           value={value}
           series="kind"
           id="name"
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setValue(value === "metro" ? "city" : "metro")}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
+      <Button onClick={() => setValue(value === "metro" ? "city" : "metro")}>
         {value === "metro" ? "Show the cities proper" : "Show the metro areas"}
-      </button>
+      </Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

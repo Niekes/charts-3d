@@ -23,7 +23,7 @@ export default function PlacesChart3DManyDemo() {
           value="metro"
           series="kind"
           id="name"
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
       <RendererSelect renderer={renderer} onChange={setRenderer} />

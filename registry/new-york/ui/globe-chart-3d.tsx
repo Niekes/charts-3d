@@ -52,8 +52,8 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   series?: keyof T & string
   /**
-   * The field that names an entry: the name of the last entry on a tile is
-   * the title of its tooltip.
+   * The field that titles the tooltip of an entry: the last entry on a tile
+   * titles the tooltip of the tile.
    * @defaultValue the label of the series
    */
   label?: keyof T & string
@@ -64,7 +64,7 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
    */
   step?: number
   /** Formats the value in the tooltip. */
-  format?: (value: number) => React.ReactNode
+  format?: { value?: (value: number) => React.ReactNode }
   /**
    * What a tile says on hover: `tooltip` is what it would say, its name or
    * its series, its value and its center, `data` the entries on the tile;
@@ -218,12 +218,18 @@ function useTileTooltips<T extends Record<string, unknown>>(
   tiles: Map<string, Tile<T>>,
   { config, fields, format, tooltip }: Reading<T>
 ) {
-  // The fields one by one: the record of them is new at every render.
+  // The fields and the formats one by one: their records are new at every render.
   const { lon, lat, value, series, label } = fields
+  const formatValue = format?.value
   return React.useMemo(() => {
-    const reading = { config, fields: { lon, lat, value, series, label }, format, tooltip }
+    const reading = {
+      config,
+      fields: { lon, lat, value, series, label },
+      format: { value: formatValue },
+      tooltip,
+    }
     return new Map([...tiles].map(([id, t]) => [id, tileTooltip(t, reading)]))
-  }, [tiles, config, lon, lat, value, series, label, format, tooltip])
+  }, [tiles, config, lon, lat, value, series, label, formatValue, tooltip])
 }
 
 /**
@@ -344,7 +350,7 @@ function tileTooltip<T extends Record<string, unknown>>(
       {
         title: name ?? config[key]?.label ?? key,
         items: [
-          { label: fields.value, value: format?.(value) ?? value, color: colorOf(key) },
+          { label: fields.value, value: format?.value?.(value) ?? value, color: colorOf(key) },
           { label: fields.lat, value: lat },
           { label: fields.lon, value: lon },
         ],

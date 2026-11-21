@@ -25,7 +25,7 @@ export default function GlobeChart3DManyDemo() {
           series="class"
           label="place"
           step={step}
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
       <RendererSelect renderer={renderer} onChange={setRenderer} />

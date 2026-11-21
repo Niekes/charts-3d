@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { LineChart3D } from "@/components/ui/line-chart-3d"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 /** A walk of forty steps through space: every step turns `turn(i)` of a full step along each axis. */
 function walk(turn: (i: number) => number) {
@@ -28,13 +28,7 @@ export default function LineChart3DUpdateDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer}>
         <LineChart3D data={data} x="x" y="y" z="z" />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setData(walk(() => 2 * Math.random() - 1))}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        Update
-      </button>
+      <Button onClick={() => setData(walk(() => 2 * Math.random() - 1))}>Update</Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

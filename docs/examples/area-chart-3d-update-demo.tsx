@@ -3,7 +3,7 @@ import { useState } from "react"
 import { ChartContainer3D, type Renderer3D } from "@/components/ui/chart-3d"
 import { AreaChart3D } from "@/components/ui/area-chart-3d"
 import { chartConfig, chartData } from "@/docs/examples/area-chart-3d-demo"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 /** A random walk of share prices, one per year, that stays between 2 and 58. */
 function walk() {
@@ -20,18 +20,16 @@ export default function AreaChart3DUpdateDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer}>
         <AreaChart3D data={data} index="year" titles={{ y: "Share price" }} />
       </ChartContainer3D>
-      <button
-        type="button"
+      <Button
         onClick={() => {
           const [acme, competitor] = [walk(), walk()]
           setData(
             chartData.map(({ year }, i) => ({ year, acme: acme[i], competitor: competitor[i] }))
           )
         }}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         Update
-      </button>
+      </Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

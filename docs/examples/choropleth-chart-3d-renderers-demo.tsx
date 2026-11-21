@@ -16,7 +16,7 @@ export default function ChoroplethChart3DRenderersDemo() {
         value="population"
         series="class"
         label="name"
-        format={compact}
+        format={{ value: compact }}
       />
     </RendererGrid>
   )

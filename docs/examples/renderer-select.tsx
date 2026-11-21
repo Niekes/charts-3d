@@ -26,6 +26,17 @@ export function RendererGrid({
   )
 }
 
+/** A button below a demo, such as the one that hands the chart new data. */
+export function Button(props: Omit<ComponentProps<"button">, "type" | "className">) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      {...props}
+    />
+  )
+}
+
 /** A labelled select below a demo, over the options of a demo's knob. */
 export function Select<T extends string>({
   label,

@@ -35,7 +35,7 @@ export type LineChart3DProps<T extends Record<string, unknown> = Record<string, 
   /** The field of the position along z. */
   z: keyof T & string
   /**
-   * The field that names an entry, so a point follows its name through
+   * The field that identifies an entry, so a point follows its name through
    * updates: a new one unfolds from the point before it, a gone one folds
    * back into it, one that moves glides. A name that repeats is, in the
    * order of the data, a point of its own.

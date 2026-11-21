@@ -179,7 +179,7 @@ describe("ChoroplethChart3D hover", () => {
           land={land}
           id="code"
           value="n"
-          format={(v) => `${v} people`}
+          format={{ value: (v) => `${v} people` }}
         />
       </ChartContainer3D>
     )
