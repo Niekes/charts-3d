@@ -3008,6 +3008,20 @@ describe("focus", () => {
     await chart.unmount()
   })
 
+  test("the focus stays within its own marks: two charts in one container that share a group name light apart", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[square("one", 0, ["0"])]} />
+        <Marks3D marks={[square("two", 100, ["0"])]} />
+      </ChartContainer3D>
+    )
+    await chart.send(move(25, 125))
+    expect(fills(chart.svg)).toEqual([lit, "red"])
+    await chart.send(move(125, 125))
+    expect(fills(chart.svg)).toEqual(["red", lit])
+    await chart.unmount()
+  })
+
   test("a drag that turns the chart drops the tooltip and keeps the focus", async () => {
     const chart = await mount(
       <ChartContainer3D config={{}}>

@@ -107,8 +107,8 @@ export type Mark3D = {
    */
   tooltip?: Tooltip3D | (() => Tooltip3D | null)
   /**
-   * The marks of the same element as this one: the faces of a bar, the
-   * segments of a flow. Pointing at a mark fills them with the focus color -
+   * The marks of the same element as this one, within its `Marks3D`: the
+   * faces of a bar, the segments of a flow. Pointing at a mark fills them with the focus color -
    * `--chart-3d-focus`, or their own fill lightened - until the pointer
    * leaves the mark; a stroke of their own stays.
    */
@@ -1393,12 +1393,12 @@ function useFocus(): Focus3D {
   return focus
 }
 
-/** Whether an item shares a group with the focus: the hover lights those items. */
-function useLit(items: { groups?: string[] }[]) {
+/** Whether an item shares a group, as `own` names it, with the focus: the hover lights those items. */
+function useLit(own: (group: string) => string) {
   const { focus } = useChart3D()
   const groups = React.useSyncExternalStore(focus.subscribe, focus.get, focus.get)
   return (item: { groups?: string[] }) =>
-    item.groups !== undefined && (groups?.some((group) => item.groups!.includes(group)) ?? false)
+    item.groups?.some((group) => groups?.includes(own(group))) ?? false
 }
 
 /** The topmost mark under `at`: the last one painted that holds it. */
@@ -1778,14 +1778,17 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   const id = React.useId()
   // Drawn on every renderer, empty off SVG, so the scene orders the sets as SVG does.
   const node = React.useRef<SVGGElement>(null)
-  const lit = useLit(marks)
+  // The groups of a set are its own, so two charts in one container never light each other.
+  const own = (group: string) => `${id} ${group}`
+  const lit = useLit(own)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
   // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
   // inner faces their seams. The order, and with it the depth, stays as painted. A mark
   // whenLit is left out unlit (ADR-0002).
-  const drawn = marks.flatMap((mark) =>
-    lit(mark) ? [{ ...mark, fill: focusOf(mark.fill) }] : mark.whenLit ? [] : [mark]
-  )
+  const drawn = marks.flatMap((mark) => {
+    const placed = { ...mark, groups: mark.groups?.map(own) }
+    return lit(mark) ? [{ ...placed, fill: focusOf(mark.fill) }] : mark.whenLit ? [] : [placed]
+  })
   React.useLayoutEffect(() => {
     // The group is in the tree once the layout effects run.
     place(id, { marks: drawn, node: node.current! })

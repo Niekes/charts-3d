@@ -71,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The focus stays within the `Marks3D` of the hovered mark: two charts in
+  one container whose `groups` share a name, such as the point names of a
+  line and a scatter chart, no longer light each other.
 - `ScatterChart3D` and `LineChart3D` with `id`: entries of the same name are
   points of their own, told apart by the order of the data, where they
   shared one point before.
