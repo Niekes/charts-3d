@@ -7,6 +7,7 @@ import {
   Marks3D,
   earth,
   faded,
+  finite,
   useChart3D,
   useTween,
   colorOf,
@@ -32,7 +33,10 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
    * the ISO 3166-1 numeric code, `"276"` for Germany.
    */
   id: keyof T & string
-  /** The field of the value of an entry, shown in the tooltip of its region. */
+  /**
+   * The field of the value of an entry, shown in the tooltip of its region;
+   * one that is not a finite number is missing, and the tooltip leaves it out.
+   */
   value: keyof T & string
   /**
    * The field whose value is the config key of the color of a region.
@@ -55,7 +59,7 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
 }
 
 /** A region with an entry: its id in the land, the config key of its color, its value, the entry and, if the chart names entries, its name. */
-type Region<T> = { rid: string; key: string; value: number; entry: T; name?: string }
+type Region<T> = { rid: string; key: string; value?: number; entry: T; name?: string }
 
 /** The fields of an entry: its region, its value and, if the chart has them, its series and its name. */
 type Fields<T> = {
@@ -162,7 +166,11 @@ function regionTooltip<T extends Record<string, unknown>>(
     tooltip(
       {
         title: name ?? config[key]?.label ?? key,
-        items: [{ label: field, value: format?.value?.(value) ?? value, color: colorOf(key) }],
+        // A missing value is no measured 0: the tooltip leaves it out.
+        items:
+          value === undefined
+            ? []
+            : [{ label: field, value: format?.value?.(value) ?? value, color: colorOf(key) }],
       },
       { entry }
     )
@@ -204,7 +212,7 @@ function regionValues<T extends Record<string, unknown>>(
     regions.set(rid, {
       rid,
       key: fields.series ? String(d[fields.series]) : fallback,
-      value: Number(d[fields.value]) || 0,
+      value: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entry: d,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
