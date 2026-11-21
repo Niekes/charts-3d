@@ -13,6 +13,8 @@ import {
   Labels3D,
   Marks3D,
   axis,
+  azimuth,
+  azimuthAt,
   barCorners,
   barMarks,
   colorOf,
@@ -30,6 +32,7 @@ import {
   orthographic,
   placeOf,
   pad,
+  placeAt,
   ramp,
   segment,
   shade,
@@ -87,6 +90,7 @@ const marks = [
   },
   {
     key: "dot",
+    shape: "circle" as const,
     points: [{ x: 400, y: 100 }],
     r: 10,
     fill: "blue",
@@ -94,6 +98,19 @@ const marks = [
     tooltip: { items: [{ label: "Dot", value: 2 }] },
   },
 ]
+
+/** A line as a symbol that points up and to the right as drawn, on a disc of radius 12, coming from below. */
+const plane = {
+  key: "plane",
+  shape: "symbol" as const,
+  points: [{ x: 300, y: 200 }],
+  r: 12,
+  symbol: { path: "M2 12h20", points: 45 },
+  from: { x: 300, y: 300 },
+  fill: "green",
+  stroke: "white",
+  tooltip: { items: [{ label: "Plane", value: 3 }] },
+}
 
 const point = (x: number, y: number, z: number) => ({
   x,
@@ -307,6 +324,11 @@ function stubCanvas() {
       "fill",
       "stroke",
       "fillRect",
+      "save",
+      "restore",
+      "translate",
+      "rotate",
+      "scale",
     ].map((m) => [m, vi.fn()])
   )
   // The pixel a color resolves to: half-transparent, as a faded mark is.
@@ -1449,7 +1471,9 @@ describe("Marks3D", () => {
   test("a circle without a stroke has no outline", () => {
     const html = renderToString(
       <ChartContainer3D config={{}}>
-        <Marks3D marks={[{ key: "c", points: [{ x: 1, y: 2 }], r: 3, fill: "red" }]} />
+        <Marks3D
+          marks={[{ key: "c", shape: "circle", points: [{ x: 1, y: 2 }], r: 3, fill: "red" }]}
+        />
       </ChartContainer3D>
     )
     expect(html).toContain('<circle cx="1" cy="2" r="3" fill="red">')
@@ -1954,7 +1978,13 @@ describe("renderer", () => {
 
   test("canvas outlines a circle only with a stroke, and paints again when the theme changes", async () => {
     const ctx = stubCanvas()
-    const bare = { key: "bare", points: [{ x: 300, y: 300 }], r: 5, fill: "green" }
+    const bare = {
+      key: "bare",
+      shape: "circle" as const,
+      points: [{ x: 300, y: 300 }],
+      r: 5,
+      fill: "green",
+    }
     const chart = await mount(
       <ChartContainer3D config={{}} renderer="canvas">
         <Marks3D marks={[bare]} />
@@ -2006,13 +2036,15 @@ describe("renderer", () => {
     await chart.unmount()
   })
 
-  // One scene with every mark shape: the shared square and dot, each its own group.
-  const scene = marks.map((mark) => ({ ...mark, groups: [mark.key] }))
+  // One scene with every mark shape: the shared square and dot, and the plane, each its own group.
+  const scene = [...marks, plane].map((mark) => ({ ...mark, groups: [mark.key] }))
 
   test("one scene draws every mark and hovers the same on svg, canvas and webgl", async () => {
     for (const renderer of ["svg", "canvas", "webgl"] as const) {
       // "webgl" draws on the canvas, as "canvas" does.
       const ctx = renderer === "svg" ? null : stubCanvas()
+      // jsdom has no Path2D: the outline of a symbol is its path data.
+      vi.stubGlobal("Path2D", String)
       let read: { current: { fill: string; stroke?: string }[] } = { current: [] }
       function Scene() {
         read = useChart3D().scene
@@ -2029,9 +2061,13 @@ describe("renderer", () => {
       if (ctx) {
         expect(ctx.lineTo).toHaveBeenCalledWith(100, 100)
         expect(ctx.arc).toHaveBeenCalledWith(400, 100, 10, 0, 2 * Math.PI)
+        expect(ctx.stroke.mock.calls.map(([outline]) => outline && `${outline}`)).toContain(
+          "M2 12h20"
+        )
       } else {
         expect(chart.svg.querySelector('path[fill="red"]')).not.toBeNull()
         expect(chart.svg.querySelector('circle[fill="blue"]')).not.toBeNull()
+        expect(chart.svg.querySelector('g > path[stroke="green"]')).not.toBeNull()
       }
 
       // The pointer on the square: the same tooltip, and the same lit fill in
@@ -2042,6 +2078,7 @@ describe("renderer", () => {
       expect(read.current.map((mark) => mark.fill)).toEqual([
         "var(--chart-3d-focus, color-mix(in oklch, red 60%, white))",
         "blue",
+        "green",
       ])
       // The hover reaches the reader: a canvas repaints, the SVG fills the square lit.
       if (ctx) expect(ctx.fill.mock.calls.length).toBeGreaterThan(painted)
@@ -2054,8 +2091,18 @@ describe("renderer", () => {
 
       // Off the marks, tooltip and focus clear the same everywhere.
       await chart.send(pointer("pointermove", 300, 300))
-      expect(chart.host.textContent).not.toMatch(/Square|Dot/)
-      expect(read.current.map((mark) => mark.fill)).toEqual(["red", "blue"])
+      expect(chart.host.textContent).not.toMatch(/Square|Dot|Plane/)
+      expect(read.current.map((mark) => mark.fill)).toEqual(["red", "blue", "green"])
+
+      // The pointer on the plane: its tooltip and its lit fill, on every renderer.
+      await chart.send(pointer("pointermove", 300, 205))
+      expect(chart.host.textContent).toContain("Plane")
+      expect(read.current.map((mark) => mark.fill)).toEqual([
+        "red",
+        "blue",
+        "var(--chart-3d-focus, color-mix(in oklch, green 60%, white))",
+      ])
+      await chart.send(pointer("pointerleave", 300, 205))
 
       await chart.unmount()
       vi.restoreAllMocks()
@@ -2064,7 +2111,186 @@ describe("renderer", () => {
   })
 })
 
+describe("symbol marks", () => {
+  /** The symbols the marks draw: the transform of each group and its paths, the ring first. */
+  const symbols = (svg: Element) =>
+    [...svg.querySelectorAll('[data-slot="chart-3d-marks"] > g')].map((g) => ({
+      transform: g.getAttribute("transform"),
+      paths: [...g.querySelectorAll("path")].map((p) =>
+        Object.fromEntries(
+          ["d", "fill", "stroke", "stroke-width"].map((a) => [a, p.getAttribute(a)])
+        )
+      ),
+    }))
+
+  test("a symbol is its path, as large as its disc, outlined in its fill over a ring, and turned to the way it comes", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[plane]} />
+      </ChartContainer3D>
+    )
+    // A box of 24 on a disc of radius 12 is drawn as it is. It comes from below, so it
+    // heads up, and drawn it points 45 degrees to the right of up: it turns 45 back.
+    expect(symbols(chart.svg)).toEqual([
+      {
+        transform: "translate(300 200) rotate(-45) scale(1) translate(-12 -12)",
+        paths: [
+          { d: "M2 12h20", fill: "none", stroke: "white", "stroke-width": "4" },
+          { d: "M2 12h20", fill: "none", stroke: "green", "stroke-width": "2" },
+        ],
+      },
+    ])
+    await chart.unmount()
+  })
+
+  test("a filled symbol is filled over its ring, and one without a ring draws its outline alone", () => {
+    const solid = { ...plane, r: 6, symbol: { path: "M2 12h20", fill: true } }
+    const host = document.createElement("div")
+    host.innerHTML = renderToString(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[solid, { ...solid, key: "bare", stroke: undefined }]} />
+      </ChartContainer3D>
+    )
+    // Half the size of its box, so a ring of 1 is 2 wide in the box, on each side of the outline.
+    const [ringed, bare] = symbols(host)
+    expect(ringed.transform).toBe("translate(300 200) rotate(0) scale(0.5) translate(-12 -12)")
+    expect(ringed.paths).toEqual([
+      { d: "M2 12h20", fill: "none", stroke: "white", "stroke-width": "4" },
+      { d: "M2 12h20", fill: "green", stroke: null, "stroke-width": null },
+    ])
+    expect(bare.paths).toEqual([
+      { d: "M2 12h20", fill: "green", stroke: null, "stroke-width": null },
+    ])
+  })
+
+  test("a symbol turns only where it names the way it points and comes from another point", async () => {
+    const turn = async (mark: Mark3D) => {
+      const chart = await mount(
+        <ChartContainer3D config={{}}>
+          <Marks3D marks={[mark]} />
+        </ChartContainer3D>
+      )
+      const turned = symbols(chart.svg)[0].transform!.match(/rotate\((-?[\d.]+)\)/)![1]
+      await chart.unmount()
+      return Number(turned)
+    }
+    const up = { path: "M2 12h20", points: 0 }
+    // From the left it heads right, a quarter turn; from the right, a quarter turn back;
+    // from above, half a turn; from below and to the left, up and to the right.
+    expect(await turn({ ...plane, symbol: up, from: { x: 200, y: 200 } })).toBe(90)
+    expect(await turn({ ...plane, symbol: up, from: { x: 400, y: 200 } })).toBe(-90)
+    expect(await turn({ ...plane, symbol: up, from: { x: 300, y: 100 } })).toBe(180)
+    expect(await turn({ ...plane, symbol: up, from: { x: 200, y: 300 } })).toBe(45)
+    // Upright: a symbol that names no way, one that comes from nowhere, and one that stands on the point it comes from.
+    expect(await turn({ ...plane, symbol: { path: "M2 12h20" } })).toBe(0)
+    expect(await turn({ ...plane, from: undefined })).toBe(0)
+    expect(await turn({ ...plane, from: plane.points[0] })).toBe(0)
+  })
+
+  test("the pointer hits the disc of a symbol: it says its tooltip and lights its fill there, and nothing beyond", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={[{ ...plane, groups: ["plane"] }]} />
+      </ChartContainer3D>
+    )
+    // In the corner of the box of the symbol, off its disc of radius 12.
+    await chart.send(pointer("pointermove", 310, 210))
+    expect(chart.host.textContent).not.toContain("Plane")
+    await chart.send(pointer("pointermove", 308, 200))
+    expect(chart.host.textContent).toContain("Plane")
+    expect(symbols(chart.svg)[0].paths.map((p) => p.stroke)).toEqual([
+      "white",
+      "var(--chart-3d-focus, color-mix(in oklch, green 60%, white))",
+    ])
+    await chart.unmount()
+  })
+
+  test("a canvas paints a symbol as the svg draws it: its outline laid on its disc, the ring under the line", async () => {
+    const ctx = stubCanvas()
+    // jsdom has no Path2D: the outline of a symbol is its path data.
+    vi.stubGlobal("Path2D", String)
+    const solid = { ...plane, key: "solid", symbol: { ...plane.symbol, fill: true } }
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[plane, solid]} />
+      </ChartContainer3D>
+    )
+    expect(chart.svg.querySelector('[data-slot="chart-3d-marks"] > *')).toBeNull()
+    expect(ctx.translate.mock.calls.slice(0, 2)).toEqual([
+      [300, 200],
+      [-12, -12],
+    ])
+    expect(ctx.rotate.mock.calls[0][0]).toBeCloseTo(-Math.PI / 4)
+    expect(ctx.scale).toHaveBeenCalledWith(1, 1)
+    // The outlined one strokes its ring and its line, the filled one its ring, and fills.
+    expect(ctx.stroke).toHaveBeenCalledTimes(3)
+    expect(ctx.fill).toHaveBeenCalledTimes(1)
+    expect(ctx.save.mock.calls.length).toBe(ctx.restore.mock.calls.length)
+    expect(ctx.fill.mock.calls[0].map(String)).toEqual(["M2 12h20"])
+
+    // Without a ring, a symbol is its line alone.
+    ctx.stroke.mockClear()
+    await chart.render(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={[{ ...plane, stroke: undefined }]} />
+      </ChartContainer3D>
+    )
+    expect(ctx.stroke).toHaveBeenCalledTimes(1)
+
+    await chart.unmount()
+    vi.unstubAllGlobals()
+  })
+})
+
 describe("helpers", () => {
+  test("azimuth is the way one place sets out for another, clockwise from north, and placeAt the place that way", () => {
+    // From the middle of the map: east a quarter turn, west one back, south half a turn.
+    expect(azimuth([0, 0], [10, 0])).toBeCloseTo(90)
+    expect(azimuth([0, 0], [0, 10])).toBeCloseTo(0)
+    expect(azimuth([0, 0], [-10, 0])).toBeCloseTo(-90)
+    expect(Math.abs(azimuth([0, 0], [0, -10]))).toBeCloseTo(180)
+    // A great circle that sets out due east at 60 degrees north meets the equator a quarter of the globe on.
+    expect(azimuth([0, 60], [90, 0])).toBeCloseTo(90)
+    expect(placeAt([0, 60], 90, Math.PI / 2)[0]).toBeCloseTo(90)
+    expect(placeAt([0, 60], 90, Math.PI / 2)[1]).toBeCloseTo(0)
+    // North from the equator the latitude is the way gone; over the pole it comes down the far meridian.
+    expect(placeAt([20, 0], 0, Math.PI / 4)).toEqual([20, expect.closeTo(45)])
+    const over = placeAt([20, 60], 0, Math.PI / 2)
+    expect(Math.abs(over[0])).toBeCloseTo(160)
+    expect(over[1]).toBeCloseTo(30)
+  })
+
+  test("azimuthAt is the way over the globe of a way on the screen, as the camera shows it at a place", () => {
+    const over = (place: [number, number], way: number, view = { yaw: 0, tilt: 0 }) => {
+      let found = NaN
+      function Over() {
+        found = azimuthAt(useChart3D().camera, place, way)
+        return null
+      }
+      renderToString(
+        <ChartContainer3D config={{}} defaultView={view}>
+          <Over />
+        </ChartContainer3D>
+      )
+      return found
+    }
+    // Seen level, in the middle of the globe up is north and right is east.
+    expect(over([0, 0], 0)).toBeCloseTo(0, 1)
+    expect(over([0, 0], 90)).toBeCloseTo(90, 1)
+    expect(over([0, 0], -135)).toBeCloseTo(-135, 1)
+    // At 60 degrees north and east a place lies cos 60 x sin 60 right and sin 60 up. A step
+    // north moves it sin 60 x sin 60 left and cos 60 up: 3 left to 2 up, 56.31 degrees left of
+    // up. A step east, which is two steps of longitude that far north, moves it cos 60 right.
+    // So up on the screen is 2 parts north to 3 east: 56.31 degrees east of north.
+    expect(over([60, 60], -56.31)).toBeCloseTo(0, 1)
+    expect(over([60, 60], 90)).toBeCloseTo(90, 1)
+    expect(over([60, 60], 0)).toBeCloseTo(56.31, 1)
+    // The camera that faces the place sees north up there.
+    expect(over([60, 60], 30, facing(60, 60))).toBeCloseTo(30, 1)
+    // Behind the globe east lies to the left: the way to the right of the screen heads west.
+    expect(over([180, 0], 90)).toBeCloseTo(-90, 1)
+  })
+
   test("axis ends on nice ticks and widens an empty extent", () => {
     expect(axis(3, 97)).toEqual({ domain: [0, 100], ticks: [0, 20, 40, 60, 80, 100] })
     expect(axis(5, 5).domain[1]).toBeGreaterThan(5)
@@ -3297,7 +3523,15 @@ describe("marks", () => {
     const html = renderToString(
       <ChartContainer3D config={{}}>
         <Marks3D
-          marks={[{ key: "c", points: [{ x: 100.123456, y: 50.987654 }], r: 4.56789, fill: "red" }]}
+          marks={[
+            {
+              key: "c",
+              shape: "circle",
+              points: [{ x: 100.123456, y: 50.987654 }],
+              r: 4.56789,
+              fill: "red",
+            },
+          ]}
         />
       </ChartContainer3D>
     )
