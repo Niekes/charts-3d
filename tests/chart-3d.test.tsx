@@ -2448,6 +2448,8 @@ describe("helpers", () => {
     // By default at their indices, with half a cell of room and the ticks within.
     expect(gridAxis(16)).toMatchObject({ cell: 1, spec: { domain: [-0.5, 15.5] } })
     expect(gridAxis(16).spec.ticks.at(-1)).toBe(14)
+    // More gaps than a call takes arguments still have a smallest one.
+    expect(gridAxis(150_000).cell).toBeCloseTo(1)
     // Evenly over ends; at any values, in any order - one without a finite value has no place.
     expect(gridAxis(3, { ends: [0, 10] }).places).toEqual({ 0: 0, 1: 5, 2: 10 })
     const uneven = gridAxis(4, { at: [10, 0, NaN, 1] })

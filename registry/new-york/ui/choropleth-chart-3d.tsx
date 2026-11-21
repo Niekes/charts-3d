@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { group } from "d3-array"
 import { geoArea, geoOrthographic, geoPath } from "d3-geo"
 
 import {
@@ -112,23 +113,26 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
     geoOrthographic(),
     geoPath
   )
-  // A feature without an id is never colored.
-  const features = new Map(
-    land.features.filter((f) => f.id !== undefined).map((f) => [String(f.id), f])
+  // A feature without an id is never colored; a region may be several, as a
+  // mainland and its islands.
+  const features = group(
+    land.features.filter((f) => f.id !== undefined),
+    (f) => String(f.id)
   )
   const painted = Object.entries(presence).sort(([a], [b]) => largerFirst(a, b))
   const overlays = painted.flatMap(([pid, opacity]) => {
     const [rid, key] = JSON.parse(pid) as [string, string]
-    const feature = features.get(rid)
     // An entry naming a region the land has not draws nothing.
-    if (!feature) return []
+    const parts = features.get(rid) ?? []
     // A region still fading out has no entry, so it says nothing.
     const region = regions.get(rid)
     const says = region?.key === key ? regionTooltip(region, reading) : undefined
     // Its group is the region alone, so hovering highlights every ring of it.
-    return sink
-      .marks(() => path(feature), `region-${rid}-${key}`, faded(colorOf(key), opacity))
-      .map((mark) => ({ ...mark, groups: [rid], tooltip: says }))
+    return parts.flatMap((part, i) =>
+      sink
+        .marks(() => path(part), `region-${rid}-${key}-${i}`, faded(colorOf(key), opacity))
+        .map((mark) => ({ ...mark, groups: [rid], tooltip: says }))
+    )
   })
 
   return <Marks3D marks={[...scenery, ...overlays]} />
@@ -140,10 +144,13 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
  * the pointer finds it.
  */
 function useLargerFirst(land: GeoJSON.FeatureCollection) {
-  const areas = React.useMemo(
-    () => new Map(land.features.map((f) => [String(f.id), geoArea(f)])),
-    [land]
-  )
+  const areas = React.useMemo(() => {
+    // A region of several features is as large as all of them.
+    const areas = new Map<string, number>()
+    for (const f of land.features)
+      areas.set(String(f.id), (areas.get(String(f.id)) ?? 0) + geoArea(f))
+    return areas
+  }, [land])
   const size = (pid: string) => areas.get((JSON.parse(pid) as [string])[0]) ?? 0
   return (a: string, b: string) => size(b) - size(a)
 }

@@ -59,7 +59,7 @@ export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string,
   label?: keyof T & string
   /**
    * The width of a tile in degrees, a divisor of 180; one that is not
-   * above 0 and up to 180 draws the default.
+   * draws the default.
    * @defaultValue 5
    */
   step?: number
@@ -93,7 +93,8 @@ type Fields<T> = {
 }
 
 /** A tile with an entry: its id - center and config key - its value, its entries and, if the chart names entries, its name. */
-type Tile<T> = { id: string; value: number; entries: T[]; name?: string }
+/** A tile: its height, from 0, and the value of its data, undefined where it has none. */
+type Tile<T> = { id: string; value: number; read?: number; entries: T[]; name?: string }
 
 /** What the tooltip of a tile reads: the config, the fields, the format and what the reader makes of it. */
 type Reading<T extends Record<string, unknown>> = {
@@ -119,8 +120,11 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: GlobeChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  // A step of 0 or below, NaN, Infinity or one wider than half the globe makes no tiles at all.
-  const step = requested > 0 && requested <= 180 ? requested : STEP
+  // A step that does not divide 180 - 0 or below, NaN, Infinity, 7 - makes
+  // tiles past the poles and tiles that overlap, or none at all.
+  const rows = 180 / requested
+  const step =
+    requested > 0 && rows >= 1 && Math.abs(rows - Math.round(rows)) < 1e-9 ? requested : STEP
   const fields = { lon, lat, value, series, label }
   const { tiles, target, present } = useTiles(data, fields, step, Object.keys(config)[0])
   // A tile grows from the globe as it fades in and shrinks back as it fades
@@ -274,6 +278,7 @@ function tileValues<T extends Record<string, unknown>>(
     tiles.set(center, {
       id: `${center},${key}`,
       value: nonNegative(d[fields.value]),
+      read: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entries,
       name: fields.label ? String(d[fields.label]) : undefined,
     })
@@ -341,7 +346,7 @@ function corners(lon: number, lat: number, step: number, radius: number): Point3
  * nothing.
  */
 function tileTooltip<T extends Record<string, unknown>>(
-  { id, value, name, entries }: Tile<T>,
+  { id, read, name, entries }: Tile<T>,
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   return () => {
@@ -350,7 +355,10 @@ function tileTooltip<T extends Record<string, unknown>>(
       {
         title: name ?? config[key]?.label ?? key,
         items: [
-          { label: fields.value, value: format?.value?.(value) ?? value, color: colorOf(key) },
+          // A missing value is no measured 0, and a negative one stands as it is.
+          ...(read === undefined
+            ? []
+            : [{ label: fields.value, value: format?.value?.(read) ?? read, color: colorOf(key) }]),
           { label: fields.lat, value: lat },
           { label: fields.lon, value: lon },
         ],

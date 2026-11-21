@@ -369,6 +369,8 @@ describe("SurfaceChart3D tooltip", () => {
     await act(() => vi.advanceTimersByTime(300))
     const fading = quads().filter((p) => p.getAttribute("fill")!.includes("transparent"))
     expect(fading).toHaveLength(1)
+    // It fades as every mark does, through the core's faded.
+    expect(fading[0].getAttribute("fill")).toMatch(/^color-mix\(in oklab, /)
     await hover(fading[0])
     expect(tip()).toBe("")
     await hover(quads().find((p) => !fading.includes(p))!)

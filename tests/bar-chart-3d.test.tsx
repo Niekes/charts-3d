@@ -132,6 +132,17 @@ describe("BarChart3D", () => {
     await view.unmount()
   })
 
+  test("a missing value stands as a flat bar, and its tooltip leaves it out instead of saying 0", async () => {
+    const view = await mount(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={[{ name: "x", a: null }]} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    await view.send("pointermove", lastFace(view.host))
+    expect(tip(view.host)).toBe("x")
+    await view.unmount()
+  })
+
   test("a tooltip of null shows none", async () => {
     const view = await mount(
       <ChartContainer3D config={config}>

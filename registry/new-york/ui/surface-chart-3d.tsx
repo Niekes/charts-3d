@@ -17,6 +17,7 @@ import {
   axis,
   gridAxis,
   intoWorld,
+  faded,
   shade,
   useChart3D,
   useTween,
@@ -227,8 +228,7 @@ function quadMark(quad: GridPlane<GridPoint>, fade: Record<string, number>): Mar
   return {
     key,
     points: quad.map((p) => p.projected),
-    fill:
-      seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
+    fill: faded(shaded, seen),
     // Its group is the cell, so hovering it lights the cell alone.
     groups: [key],
     tooltip,

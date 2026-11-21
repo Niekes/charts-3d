@@ -23,6 +23,10 @@ back into a ribbon: the entries run along x, one ribbon per series along z.
 Pointing at a face highlights that face alone; a face of the top tells the values
 at its two ends.
 
+The area is the measure, so the chart is for values of 0 and up. A value below
+0 drops the floor of the box to it, and every area then reads from there, not
+from 0; a bar chart grows from 0 either way.
+
 ## Installation
 
 <Tabs items={["CLI", "npm", "Manual"]}>

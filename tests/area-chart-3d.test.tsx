@@ -122,6 +122,17 @@ describe("AreaChart3D", () => {
     expect(html).toMatch(/>b<\/text>/)
   })
 
+  test("draws more values than a call takes arguments", () => {
+    // A spread of 150,000 values into Math.max overflows the stack.
+    const data = Array.from({ length: 150_000 }, (_, i) => ({ name: String(i), a: i % 7 }))
+    const html = renderToString(
+      <ChartContainer3D config={{ a: { color: "red" } }}>
+        <AreaChart3D data={data} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    expect(html).toContain(">6</text>")
+  })
+
   test("x ticks about ten entries, not every one", () => {
     const rows = Array.from({ length: 40 }, (_, i) => ({ name: `e${i}`, a: i }))
     const html = renderToString(chart(rows, { keys: ["a"] }, { yaw: 0, tilt: Math.PI / 6 }))
@@ -216,6 +227,17 @@ describe("AreaChart3D focus", () => {
     }
     // From one side the first segment, from the other the last; either end names the series alone.
     expect(seen).toEqual(["Ap10q11", "A", "Ar10.5s11", "A"])
+  })
+
+  test("a missing value dips to 0, and the segment leaves it out of its tooltip instead of saying 0", async () => {
+    const holed = flat.map((d) => (d.name === "q" ? { name: "q", a: null } : d))
+    const view = await mount(chart(holed, { keys: ["a"] }, { yaw: Math.PI / 6, tilt: Math.PI / 6 }))
+    const drawn = marks(view.host)
+    const front = drawn.findIndex((m) => m.corners.length === holed.length + 2)
+    await view.point(middle(drawn[front - 1].corners))
+    // The segment from q to r: q has no value, so r alone is told.
+    expect(view.host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent).toBe("Ar10.5")
+    await view.unmount()
   })
 })
 

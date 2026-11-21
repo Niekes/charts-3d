@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exhaustive switch on every renderer. A chart of your own that hands
   `Marks3D` a circle adds `shape: "circle"` beside its `r`; without it the
   circle draws and hits nothing. A polygon stays as it is.
+- `facing` is on the semver side of the Stability list: a page hands it to
+  `view`. `uniqueIds` joins the core helpers.
+- The docs follow the release: the release workflow deploys them from its
+  tag, and its commit pins their install commands to it.
 
 ### Removed
 
@@ -76,6 +80,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still passes it draws on the canvas.
 
 ### Fixed
+
+- `BarChart3D`, `AreaChart3D` and `GlobeChart3D`: a missing value stands as
+  0 but says no value in its tooltip, where it said 0, as the choropleth;
+  the globe tells a negative value as it is, where it said 0.
+- `BarChart3D`, `AreaChart3D` and `PlacesChart3D` draw more than about
+  120,000 values, where the chart threw "Maximum call stack size exceeded".
+- `ChoroplethChart3D`: a region of several features of one `id`, as a
+  mainland and its islands, colors every one of them, where only the last
+  was colored and the others showed as ocean.
+- `PlacesChart3D`: a dot that moves glides there, as `id` promises, the
+  short way over the antimeridian, where it jumped; and a name or a place
+  that repeats is a dot of its own, where the last one hid the others.
+- `GlobeChart3D`: a `step` that does not divide 180, such as 7, draws the
+  tiles of the default, where it drew tiles past the poles or overlapping.
+- `SurfaceChart3D` fades a cell as every mark fades, in oklab.
+- The hover finds the mark under the pointer in an svg that CSS made
+  taller than its view box, as the wheel and the pinch do.
+- A glide whose `animationDuration` changes on its way goes on from where
+  it is, where it started over.
+- `keymap`: `Shift+Space` is a binding of its own, where it fired on Space;
+  a field left undefined keeps its default keys or label, where it took
+  the action off or the button lost its name; and a hint that shows when
+  the keymap changes closes, where it stayed.
+- The box, its labels and the gizmo write their numbers with two decimals,
+  as the marks, so the HTML the server writes is the HTML the browser
+  hydrates.
 
 - `BarChart3D`, `AreaChart3D`, `BarFieldChart3D`, `ScatterChart3D`,
   `PlacesChart3D` and `GlobeChart3D`: a mark on its way out while new data comes no longer paints black or

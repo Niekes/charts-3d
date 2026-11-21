@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent, nice, ticks } from "d3-array"
+import { extent, max, min, nice, ticks } from "d3-array"
 import {
   axes3D,
   box,
@@ -2432,8 +2432,8 @@ function edgeLabels(
     ticks.filter((t) => t.opacity > 0),
     domain
   )
-  // How far a row of labels reaches out from the edge.
-  const depth = Math.max(0, ...ranged.map((t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h))
+  // How far a row of labels reaches out from the edge; max, as a spread of thousands overflows the stack.
+  const depth = max(ranged, (t) => Math.abs(n.x) * t.w + Math.abs(n.y) * t.h) ?? 0
   const row = { x: n.x * (depth + PAD), y: n.y * (depth + PAD) }
   const rows = fit(ranged, n, row)
   // The line of the axis runs the gliding span of its ticks, within the
@@ -3455,7 +3455,7 @@ function gridAxis(
   )
   const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
   const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
-  const cell = gaps.length ? Math.min(...gaps) : 1
+  const cell = min(gaps) ?? 1
   const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
   // A single place has no span of its own: it keeps its padding either way.
   const spec = pad({ domain: [lo, hi], ticks: ticks(lo, hi, 5) }, padded || lo === hi ? cell : 0)
@@ -3506,6 +3506,7 @@ export {
   floored,
   gridAxis,
   ramp,
+  uniqueIds,
   useTween,
   useTweenAxes,
 }

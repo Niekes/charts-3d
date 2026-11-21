@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, facing, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
 import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -248,6 +248,43 @@ describe("PlacesChart3D hover", () => {
 })
 
 describe("PlacesChart3D labels", () => {
+  test("a name that repeats, or a place without id, is a dot of its own, titled by its name", async () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <PlacesChart3D
+          data={[
+            { lon: 15, lat: 15 },
+            { lon: 15, lat: 15 },
+          ]}
+          land={none}
+          lon="lon"
+          lat="lat"
+        />
+      </ChartContainer3D>
+    )
+    expect(html.match(/<circle/g)).toHaveLength(2)
+
+    const twice = [
+      { lon: 15, lat: 15, name: "Rome" },
+      { lon: -15, lat: 15, name: "Rome" },
+    ]
+    const chart = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <PlacesChart3D data={twice} land={none} lon="lon" lat="lat" id="name" />
+      </ChartContainer3D>
+    )
+    const circles = chart.svg.querySelectorAll("circle")
+    expect(circles).toHaveLength(2)
+    const second = circles[circles.length - 1]
+    await chart.send("pointermove", {
+      clientX: Number(second.getAttribute("cx")),
+      clientY: Number(second.getAttribute("cy")),
+    })
+    expect(chart.host.textContent).toContain("Rome")
+    expect(chart.host.textContent).not.toMatch(/Rome\W2/)
+    await chart.unmount()
+  })
+
   test("a series without a config entry is named by its key", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
@@ -315,6 +352,42 @@ describe("PlacesChart3D transitions", () => {
     expect(dots()).toHaveLength(1)
     expect(transparent()).toHaveLength(0)
     expect(r()).toBe(6)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a dot that moves glides there, the short way over the antimeridian", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (lon: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={facing(180, 0)}>
+            <PlacesChart3D
+              data={[{ lon, lat: 0, name: "Suva" }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const cx = () =>
+      Number(host.querySelector('[data-slot="chart-3d-marks"] circle')?.getAttribute("cx"))
+
+    await render(170)
+    const from = cx()
+    await render(-170)
+    // The first render with the new place still shows the old one.
+    expect(cx()).toBe(from)
+    await act(() => vi.advanceTimersByTime(300))
+    const mid = cx()
+    await act(() => vi.advanceTimersByTime(500))
+    const to = cx()
+    // Halfway the dot is on the antimeridian, in front, between its two places.
+    expect(Math.min(from, to) < mid && mid < Math.max(from, to)).toBe(true)
 
     await act(async () => root.unmount())
     host.remove()
