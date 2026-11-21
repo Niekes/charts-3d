@@ -131,7 +131,8 @@ describe("AreaChart3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain(">6</text>")
-  })
+    // 150,000 points take seconds on a CI runner under coverage.
+  }, 30_000)
 
   test("x ticks about ten entries, not every one", () => {
     const rows = Array.from({ length: 40 }, (_, i) => ({ name: `e${i}`, a: i }))
