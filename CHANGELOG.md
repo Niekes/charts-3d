@@ -76,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `BarChart3D`, `AreaChart3D`, `BarFieldChart3D`, `ScatterChart3D`,
+  `PlacesChart3D` and `GlobeChart3D`: a mark on its way out while new data comes no longer paints black or
+  vanishes - its fade could end before its glide, as when rows with
+  names like years reorder, and it drew with no opacity at all.
 - `ChoroplethChart3D`: a region whose value is missing - `null`, `""`, not
   a number - says no value in its tooltip, where it said 0.
 - The focus stays within the `Marks3D` of the hovered mark: two charts in

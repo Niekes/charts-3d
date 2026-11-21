@@ -324,6 +324,19 @@ describe("AreaChart3D transitions", () => {
     return Math.abs(twice / 2)
   }
 
+  test("rows reordered while one leaves: the ribbon stays drawn", async () => {
+    const [a, b, c] = [2019, 2020, 2021].map((y, i) => ({ name: String(y), a: i + 1 }))
+    const view = await mount(chart([a, b, c], { keys: ["a"] }))
+    await view.render(chart([b, c], { keys: ["a"] }))
+    await act(() => vi.advanceTimersByTime(300))
+    // Integer-like names keep their order in the presence, so it does not restart with the rows.
+    await view.render(chart([c, b], { keys: ["a"] }))
+    await act(() => vi.advanceTimersByTime(400))
+    expect(shapes(view.host).join()).not.toContain("NaN")
+    expect(shapes(view.host).length).toBeGreaterThan(0)
+    await view.unmount()
+  })
+
   test("new data glides in, the y axis with it, and settles on the data", async () => {
     const higher = flat.map((d, i) => ({ ...d, a: i === 1 ? 30 : d.a }))
     const label = (text: string) =>

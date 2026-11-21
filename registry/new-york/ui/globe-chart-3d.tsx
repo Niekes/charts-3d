@@ -150,7 +150,7 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
     // first and a side of a far tile turned to the camera would show through.
     .filter((face) => face.ccw && face.centroid.z > 0)
     .map((face) =>
-      prismMark(face, shapes.get(face.id)!.key, presence[face.id], tooltips.get(face.id))
+      prismMark(face, shapes.get(face.id)!.key, presence[face.id] ?? 0, tooltips.get(face.id))
     )
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks

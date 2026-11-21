@@ -394,6 +394,36 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("rows reordered while one leaves: the leaving bar fades out, never black", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: { year: string; a: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="year" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    const fills = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] path')].map((p) =>
+        p.getAttribute("fill")
+      )
+    const [a, b, c] = [2019, 2020, 2021].map((y, i) => ({ year: String(y), a: i + 1 }))
+
+    await render([a, b, c])
+    await render([b, c])
+    await act(() => vi.advanceTimersByTime(300))
+    // Integer-like names keep their order in the presence, so it does not restart with the rows.
+    await render([c, b])
+    await act(() => vi.advanceTimersByTime(400))
+    expect(fills().join()).not.toContain("NaN")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a gone row shrinks away while the rows around it glide to their new cells", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))
