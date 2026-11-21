@@ -138,7 +138,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
         place(p.name),
         sizes[p.name] / (peak || 1),
         behind.get(p.name),
-        opacity[p.name],
+        opacity[p.name] ?? 0,
         reading
       )
     )

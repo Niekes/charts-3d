@@ -109,11 +109,11 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       shape: "circle" as const,
       points: [p.projected],
       r: radii[p.name],
-      fill: faded(colorOf(key(p.name)), opacity[p.name]),
+      fill: faded(colorOf(key(p.name)), opacity[p.name] ?? 0),
       // Its group is the point alone, so hovering highlights that point only.
       groups: [p.name],
       // Ringed by the background, so that points in front stand out.
-      stroke: faded("var(--background)", opacity[p.name]),
+      stroke: faded("var(--background)", opacity[p.name] ?? 0),
       tooltip: pointTooltip(
         entries.get(p.name),
         series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,

@@ -320,6 +320,32 @@ describe("PlacesChart3D transitions", () => {
     host.remove()
   })
 
+  test("a new value while a dot leaves: it fades out, never black", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, unknown>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <PlacesChart3D data={data} land={none} lon="lon" lat="lat" value="people" id="name" />
+          </ChartContainer3D>
+        )
+      )
+    const rome = { lon: 15, lat: 15, people: 100, name: "Rome" }
+
+    await render([rome, { lon: 15, lat: 45, people: 100, name: "Oslo" }])
+    await render([rome])
+    await act(() => vi.advanceTimersByTime(300))
+    // A new value restarts the glide of the sizes, not of the presence.
+    await render([{ ...rome, people: 50 }])
+    await act(() => vi.advanceTimersByTime(400))
+    const fills = [...host.querySelectorAll("circle")].map((c) => c.getAttribute("fill"))
+    expect(fills.join()).not.toContain("NaN")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("mid-glide a dot tells the value of the data, not the gliding size, and a dot on its way out says nothing", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)

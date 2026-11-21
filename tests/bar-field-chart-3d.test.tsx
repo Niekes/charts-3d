@@ -387,6 +387,18 @@ describe("BarFieldChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("new values while a bar leaves: it fades out, never black", async () => {
+    const view = await mount(chart([[5, 3]]))
+    await view.render(chart([[NaN, 3]]))
+    await act(() => vi.advanceTimersByTime(300))
+    // New values restart the glide of the values, not of the presence.
+    await view.render(chart([[NaN, 4]]))
+    await act(() => vi.advanceTimersByTime(400))
+    const fills = view.bars().map((p) => p.getAttribute("fill"))
+    expect(fills.join()).not.toContain("NaN")
+    await view.unmount()
+  })
+
   test("new data while a column leaves: it never draws without a place or at full opacity", async () => {
     const view = await mount(chart([[1, 2, 3]]))
     await view.render(chart([[1, 2]]))

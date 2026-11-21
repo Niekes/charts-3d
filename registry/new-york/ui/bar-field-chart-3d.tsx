@@ -126,7 +126,7 @@ export function BarFieldChart3D({
       faces: bar.faces,
       color: ramp(bar.value, [span.lo, span.hi], [low, high]),
       tooltip: fieldTooltip(bar, field, { format, titles, tooltip }),
-      opacity: presence[bar.key],
+      opacity: presence[bar.key] ?? 0,
     })
   )
 
@@ -190,10 +190,12 @@ function fieldCorners(
   at: Place,
   size: { width: number; depth: number }
 ) {
-  return Object.entries(values).map(([key, value]) => {
+  return Object.entries(values).flatMap(([key, value]) => {
     const [row, column] = key.split("-").map(Number)
+    // A bar whose column or row is gone has no place, and NaN corners would upset the sort.
+    if (!(column in at.x && row in at.z)) return []
     const corners = barCorners(world, at.x[column], at.z[row], value, size)
-    return Object.assign(corners, { key, row, column, value })
+    return [Object.assign(corners, { key, row, column, value })]
   })
 }
 

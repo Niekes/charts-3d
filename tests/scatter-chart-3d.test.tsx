@@ -232,6 +232,37 @@ describe("ScatterChart3D transitions", () => {
     host.remove()
   })
 
+  test("a new radius while a point leaves: it fades out, never black", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { id: string; x: number; y: number; z: number }[], r: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} id="id" x="x" y="y" z="z" radius={r} />
+          </ChartContainer3D>
+        )
+      )
+    const p = { id: "p", x: 0, y: 0, z: 0 }
+    const q = { id: "q", x: 10, y: 10, z: 10 }
+
+    await render([p, q], 4)
+    await render([p], 4)
+    await act(() => vi.advanceTimersByTime(300))
+    // A new radius restarts the glide of the radii, not of the presence.
+    await render([p], 6)
+    await act(() => vi.advanceTimersByTime(400))
+    const paints = [...host.querySelectorAll("circle")].flatMap((c) => [
+      c.getAttribute("fill"),
+      c.getAttribute("stroke"),
+    ])
+    expect(paints.join()).not.toContain("NaN")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("keyed by id, a new point grows from nothing and a gone one shrinks away", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))

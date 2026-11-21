@@ -102,7 +102,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
               target,
               { config, format, tooltip }
             ),
-            opacity: presence[bar.name],
+            opacity: presence[bar.name] ?? 0,
           })
         )}
       />

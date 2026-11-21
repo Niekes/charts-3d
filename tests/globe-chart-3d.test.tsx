@@ -533,6 +533,41 @@ describe("GlobeChart3D transitions", () => {
     host.remove()
   })
 
+  test("a new value while a tile leaves: it fades out, never black", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, number>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="population"
+              step={30}
+            />
+          </ChartContainer3D>
+        )
+      )
+    const stays = { lon: 15, lat: 45, population: 10 }
+
+    await render([stays, { lon: 45, lat: 45, population: 10 }])
+    await render([stays])
+    await act(() => vi.advanceTimersByTime(300))
+    // A new value restarts the glide of the heights, not of the presence.
+    await render([{ ...stays, population: 5 }])
+    await act(() => vi.advanceTimersByTime(400))
+    const fills = [...host.querySelectorAll('[data-slot="chart-3d-marks"] path')].map((p) =>
+      p.getAttribute("fill")
+    )
+    expect(fills.join()).not.toContain("NaN")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("the ceiling glides with the data: a tile that keeps its value sinks as a taller one enters", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)

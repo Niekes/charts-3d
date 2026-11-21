@@ -147,7 +147,7 @@ function linePoints(
     .sort(([, a], [, b]) => a - b)
     .flatMap(([name, x]) => {
       const value = values[`${name}-${key}`]
-      return value === undefined ? [] : [{ name, x, value, seen: presence[name] }]
+      return value === undefined ? [] : [{ name, x, value, seen: presence[name] ?? 0 }]
     })
   let anchor = own.find((p) => p.seen === 1)
   return own
