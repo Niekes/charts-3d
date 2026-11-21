@@ -514,7 +514,7 @@ function ChartContainer3D({
         <ChartHint3D {...hint} />
       </div>
       <ChartShortcuts3D {...keys} />
-      {legend && <ChartLegend3D config={config} />}
+      {legend && <ChartLegendBody3D config={config} />}
     </div>
   )
 }
@@ -2149,12 +2149,26 @@ function ChartShortcutList3D({ id, rows }: { id: string; rows: Keymap["rows"] })
   )
 }
 
+/**
+ * The legend on its own, beside a chart or anywhere on the page: outside a
+ * container no `--color-*` reaches it, so it scopes the colors of its config itself.
+ */
 function ChartLegend3D({ config }: { config: ChartConfig }) {
+  return <ChartLegendBody3D config={config} chartId={chartIdOf(undefined, React.useId())} />
+}
+
+/**
+ * The label and the swatch or icon of every config key. The container draws
+ * it in its own scope, so a color set on the chart in CSS reaches the legend too.
+ */
+function ChartLegendBody3D({ config, chartId }: { config: ChartConfig; chartId?: string }) {
   return (
     <div
       data-slot="chart-3d-legend"
+      data-chart={chartId}
       className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3"
     >
+      {chartId && <ChartStyle id={chartId} config={config} />}
       {Object.entries(config).map(([key, item]) => (
         <div key={key} className="flex items-center gap-1.5">
           {item.icon ? (

@@ -19,9 +19,9 @@ const chartConfig = {
 } satisfies ChartConfig
 ```
 
-The container turns every key into a CSS variable, `--color-desktop` and `--color-mobile`, scoped to the chart. A key may hold any text: a character a CSS identifier cannot hold, such as the space of `Net sales`, is escaped, and a chart of your own reads the variable of a key with `colorOf(key)`. `color` is used in both themes, `theme` sets one color per theme.
+The container turns every key into a CSS variable, `--color-desktop` and `--color-mobile`, scoped to the chart; a `ChartLegend3D` placed on its own scopes them itself. A key may hold any text: a character a CSS identifier cannot hold, such as the space of `Net sales`, is escaped, and a chart of your own reads the variable of a key with `colorOf(key)`. `color` is used in both themes, `theme` sets one color per theme.
 
-The container writes its `id`, the keys and the colors into a `<style>` element and keeps them from closing it, but it does not check that they are CSS: validate any of them that comes from your users.
+The container writes its `id`, the keys and the colors into a `<style>` element, and a legend on its own its keys and colors. Both keep them from closing it but do not check that they are CSS: validate any of them that comes from your users.
 
 ## The chart tokens
 
@@ -59,7 +59,7 @@ stylesheet: restyle it, move it, hide it, without touching the component.
 | `chart-3d-tooltip`           | the tooltip (a `tooltip` prop sets its corner, `data-placement` names the one it took) |
 | `chart-3d-hint`              | the veil of the hint of a drag that missed (`data-state` is `"open"` or `"closed"`)    |
 | `chart-3d-hint-box`          | the box of the hint, in the middle of the veil                                         |
-| `chart-3d-legend`            | the legend below the chart                                                             |
+| `chart-3d-legend`            | the legend, below the chart or on its own                                              |
 | `chart-3d-gizmo`             | the orientation gizmo (a `gizmo` prop sets its corner)                                 |
 | `chart-3d-shortcuts`         | the corner that holds the keyboard button and its panel                                |
 | `chart-3d-shortcuts-trigger` | the keyboard button (a `shortcuts` prop hides it)                                      |
