@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { BarChart3D } from "@/components/ui/bar-chart-3d"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same months every time, so the bars glide in place when the data updates.
 const months = ["January", "February", "March", "April", "May", "June"]
@@ -24,8 +24,7 @@ export default function BarChart3DUpdateDemo() {
       <ChartContainer3D config={chartConfig} renderer={renderer}>
         <BarChart3D data={data} index="month" titles={{ y: "Sessions" }} />
       </ChartContainer3D>
-      <button
-        type="button"
+      <Button
         onClick={() =>
           setData(
             months.map((month) => ({
@@ -35,10 +34,9 @@ export default function BarChart3DUpdateDemo() {
             }))
           )
         }
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         Update
-      </button>
+      </Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

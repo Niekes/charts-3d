@@ -43,7 +43,8 @@ export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string
   /** The field of the latitude of a stop, in degrees north. */
   lat: keyof T & string
   /**
-   * The field that names a stop, in the tooltip and through updates: a new
+   * The field that identifies a stop through updates, and names it in the
+   * tooltip: a new
    * stop at the end of its route grows its leg from the stop before it, a
    * gone one draws its leg back. A name that repeats, as of a route that
    * comes back to a stop, is, in the order of the data, a stop of its own.

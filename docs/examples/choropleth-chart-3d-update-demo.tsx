@@ -5,7 +5,7 @@ import { ChoroplethChart3D } from "@/components/ui/choropleth-chart-3d"
 import { land } from "@/docs/examples/land"
 import { compact } from "@/docs/examples/population"
 import { regionConfig, regionRows } from "@/docs/examples/regions"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same countries in the fifths of their people or of their GDP: a
 // country that changes its fifth fades from the one color to the other.
@@ -23,16 +23,12 @@ export default function ChoroplethChart3DUpdateDemo() {
           value={value}
           series="class"
           label="name"
-          format={(v) => (value === "population" ? compact(v) : `$${compact(v * 1e6)}`)}
+          format={{ value: (v) => (value === "population" ? compact(v) : `$${compact(v * 1e6)}`) }}
         />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setValue(value === "population" ? "gdp" : "population")}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
+      <Button onClick={() => setValue(value === "population" ? "gdp" : "population")}>
         {value === "population" ? "Show the GDP" : "Show the people"}
-      </button>
+      </Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

@@ -25,7 +25,7 @@ export default function ChoroplethChart3DManyDemo() {
           value="population"
           series="class"
           label="name"
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
       <RendererSelect renderer={renderer} onChange={setRenderer} />

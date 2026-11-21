@@ -27,7 +27,7 @@ export default function GlobeChart3DEnterDemo() {
           series="class"
           label="place"
           step={step}
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
       <PlaceSelect min={min} onChange={setMin} />

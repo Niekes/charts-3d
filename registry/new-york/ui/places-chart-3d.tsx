@@ -47,9 +47,9 @@ export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   series?: keyof T & string
   /**
-   * The field that names an entry: the title of its tooltip, and its identity
-   * through updates, so a new dot grows, a gone one shrinks away and one that
-   * moves glides. The names should be unique.
+   * The field that identifies an entry through updates, so a new dot grows, a
+   * gone one shrinks away and one that moves glides, and titles its tooltip.
+   * The names should be unique.
    * @defaultValue the place of the entry
    */
   id?: keyof T & string
@@ -60,7 +60,7 @@ export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string
    */
   radius?: number
   /** Formats the value in the tooltip. */
-  format?: (value: number) => React.ReactNode
+  format?: { value?: (value: number) => React.ReactNode }
   /**
    * What a dot says on hover: `tooltip` is what it would say, its name or
    * its series, its value and its place, `data` the entry behind it; `null`
@@ -221,7 +221,7 @@ function dotTooltip<T extends Record<string, unknown>>(
             ? [
                 {
                   label: fields.value,
-                  value: format?.(value) ?? value,
+                  value: format?.value?.(value) ?? value,
                   color: colorOf(key),
                 },
               ]

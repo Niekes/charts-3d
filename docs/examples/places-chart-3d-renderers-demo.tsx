@@ -16,7 +16,7 @@ export default function PlacesChart3DRenderersDemo() {
         value="metro"
         series="kind"
         id="name"
-        format={compact}
+        format={{ value: compact }}
       />
     </RendererGrid>
   )

@@ -5,7 +5,7 @@ import { GlobeChart3D } from "@/components/ui/globe-chart-3d"
 import { chartData, step } from "@/docs/examples/globe-chart-3d-demo"
 import { land } from "@/docs/examples/land"
 import { compact, populationConfig } from "@/docs/examples/population"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same tiles, read two ways: a tile rises to the people of its metro
 // areas or of its cities proper, and glides from the one to the other. Its
@@ -26,16 +26,12 @@ export default function GlobeChart3DUpdateDemo() {
           series="class"
           label="place"
           step={step}
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setValue(value === "metro" ? "city" : "metro")}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
+      <Button onClick={() => setValue(value === "metro" ? "city" : "metro")}>
         {value === "metro" ? "Show the cities proper" : "Show the metro areas"}
-      </button>
+      </Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

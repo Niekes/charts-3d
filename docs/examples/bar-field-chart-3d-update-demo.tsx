@@ -9,7 +9,7 @@ import {
   format,
   landscape,
 } from "@/docs/examples/bar-field-chart-3d-demo"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // The same hills, moved across the field and grown or sunk.
 const moved = () =>
@@ -38,13 +38,7 @@ export default function BarFieldChart3DUpdateDemo() {
       >
         <BarFieldChart3D data={data} domain={{ x: [-1, 1], z: [-1, 1] }} format={format} />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setData(moved())}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        Update
-      </button>
+      <Button onClick={() => setData(moved())}>Update</Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

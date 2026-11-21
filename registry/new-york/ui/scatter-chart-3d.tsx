@@ -29,7 +29,7 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
   /** The field of the position along z. */
   z: keyof T & string
   /**
-   * The field that names an entry, so a point follows its name through
+   * The field that identifies an entry, so a point follows its name through
    * updates: a new one grows, a gone one shrinks away, one that moves glides.
    * A name that repeats is, in the order of the data, a point of its own.
    * @defaultValue the position of the entry

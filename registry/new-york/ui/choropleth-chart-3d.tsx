@@ -27,9 +27,9 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
    */
   land: GeoJSON.FeatureCollection
   /**
-   * The field whose value, as a string, is the `id` of the region of the land
-   * the entry colors: for world-atlas the ISO 3166-1 numeric code, `"276"`
-   * for Germany.
+   * The field that identifies an entry by its region: its value, as a string,
+   * is the `id` of the region of the land the entry colors - for world-atlas
+   * the ISO 3166-1 numeric code, `"276"` for Germany.
    */
   id: keyof T & string
   /** The field of the value of an entry, shown in the tooltip of its region. */
@@ -40,12 +40,12 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
    */
   series?: keyof T & string
   /**
-   * The field that names an entry: the title of the tooltip of its region.
+   * The field that titles the tooltip of an entry, the tooltip of its region.
    * @defaultValue the label of the series
    */
   label?: keyof T & string
   /** Formats the value in the tooltip. */
-  format?: (value: number) => React.ReactNode
+  format?: { value?: (value: number) => React.ReactNode }
   /**
    * What a region says on hover: `tooltip` is what it would say, its name or
    * its series and its value, `data` the entry behind it; `null` shows none.
@@ -162,7 +162,7 @@ function regionTooltip<T extends Record<string, unknown>>(
     tooltip(
       {
         title: name ?? config[key]?.label ?? key,
-        items: [{ label: field, value: format?.(value) ?? value, color: colorOf(key) }],
+        items: [{ label: field, value: format?.value?.(value) ?? value, color: colorOf(key) }],
       },
       { entry }
     )

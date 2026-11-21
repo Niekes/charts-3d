@@ -26,7 +26,7 @@ import {
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   /** One entry per row of bars, with a value per series. */
   data: T[]
-  /** The field that names each entry, such as "month"; a bar follows its name through updates, and an entry of a name that repeats is, in the order of the data, a bar of its own. */
+  /** The field of the category of an entry along x, such as "month": it names the entry on the axis and in the tooltip, and a bar follows its name through updates, and an entry of a name that repeats is, in the order of the data, a bar of its own. */
   index: keyof T & string
   /**
    * The fields that hold the series, one row of bars each.

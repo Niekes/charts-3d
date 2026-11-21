@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { ChartContainer3D, type ChartConfig, type Renderer3D } from "@/components/ui/chart-3d"
 import { SurfaceChart3D } from "@/components/ui/surface-chart-3d"
-import { RendererSelect } from "@/docs/examples/renderer-select"
+import { Button, RendererSelect } from "@/docs/examples/renderer-select"
 
 // Interfering waves along both axes, deterministic so the page looks the same on every load.
 const chartData = Array.from({ length: 24 }, (_, row) =>
@@ -36,13 +36,7 @@ export default function SurfaceChart3DUpdateDemo() {
       >
         <SurfaceChart3D data={data} domain={{ x: [-5, 5], z: [-5, 5] }} />
       </ChartContainer3D>
-      <button
-        type="button"
-        onClick={() => setData(randomWave())}
-        className="inline-flex h-8 items-center justify-center self-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        Update
-      </button>
+      <Button onClick={() => setData(randomWave())}>Update</Button>
       <RendererSelect renderer={renderer} onChange={setRenderer} />
     </div>
   )

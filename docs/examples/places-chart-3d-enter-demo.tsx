@@ -24,7 +24,7 @@ export default function PlacesChart3DEnterDemo() {
           value="metro"
           series="kind"
           id="name"
-          format={compact}
+          format={{ value: compact }}
         />
       </ChartContainer3D>
       <PlaceSelect min={min} onChange={setMin} />

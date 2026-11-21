@@ -57,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `format` of `GlobeChart3D`, `PlacesChart3D` and
+  `ChoroplethChart3D` is a record keyed by what it formats, as in every other
+  chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means
+  one thing in every chart that takes it, listed under Props on the
+  `chart-3d` page (ADR-0012).
 - `Mark3D` names its shape: a mark is a polygon unless `shape` says
   `"circle"` or `"symbol"`, and the core draws each through an exhaustive
   switch on every renderer. A chart of your own that hands `Marks3D` a

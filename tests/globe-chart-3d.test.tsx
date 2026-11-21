@@ -319,7 +319,7 @@ describe("GlobeChart3D hover", () => {
           lat="lat"
           value="population"
           step={30}
-          format={(v) => `${v} people`}
+          format={{ value: (v) => `${v} people` }}
         />
       </ChartContainer3D>
     )

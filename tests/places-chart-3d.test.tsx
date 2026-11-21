@@ -172,7 +172,7 @@ describe("PlacesChart3D hover", () => {
           value="people"
           series="kind"
           id="name"
-          format={(v) => `${v} people`}
+          format={{ value: (v) => `${v} people` }}
         />
       </ChartContainer3D>
     )

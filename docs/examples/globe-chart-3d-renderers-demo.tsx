@@ -17,7 +17,7 @@ export default function GlobeChart3DRenderersDemo() {
         series="class"
         label="place"
         step={step}
-        format={compact}
+        format={{ value: compact }}
       />
     </RendererGrid>
   )
