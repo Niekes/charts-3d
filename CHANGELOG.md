@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ChoroplethChart3D`: a region whose value is missing - `null`, `""`, not
+  a number - says no value in its tooltip, where it said 0.
 - The focus stays within the `Marks3D` of the hovered mark: two charts in
   one container whose `groups` share a name, such as the point names of a
   line and a scatter chart, no longer light each other.

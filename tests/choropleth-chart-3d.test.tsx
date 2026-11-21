@@ -168,7 +168,7 @@ describe("ChoroplethChart3D hover", () => {
     return { rings, x, y }
   }
 
-  test("a region under the pointer names its series and its value, formatted; label names it after its entry instead; a value that is not a number stands as 0", async () => {
+  test("a region under the pointer names its series and its value, formatted; label names it after its entry instead; a value that is not a number is missing, not 0", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
         <ChoroplethChart3D
@@ -204,7 +204,8 @@ describe("ChoroplethChart3D hover", () => {
     const alpha = region(named.svg, "mystery")
     await named.send("pointermove", { clientX: alpha.x, clientY: alpha.y })
     expect(named.host.textContent).toContain("Alpha")
-    expect(named.host.textContent).toMatch(/n\s*0/)
+    const tip = named.host.querySelector('[data-slot="chart-3d-tooltip"]')!
+    expect(tip.textContent).toBe("Alpha")
     await named.unmount()
   })
 
