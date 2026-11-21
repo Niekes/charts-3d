@@ -106,7 +106,10 @@ npm run docs:preview  # serve the production build
 GitHub Pages serves the site under `/charts-3d/`, so `docs:build` moves the
 prerendered pages from `build/client/charts-3d/` to the root of
 `build/client/`, next to the assets, and keeps the SPA fallback as `404.html`.
-Pages are deployed to GitHub Pages from `master`.
+Pages are deployed to GitHub Pages from the tag of every release: the release
+workflow runs the docs workflow on it, so the docs show the API on npm, and the
+release commit pins their install commands to the release. The `github-pages`
+environment has to allow deployments from `v*` tags.
 
 ## Releases
 

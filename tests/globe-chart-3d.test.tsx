@@ -334,6 +334,35 @@ describe("GlobeChart3D hover", () => {
     await chart.unmount()
   })
 
+  test.each([
+    [null, ""],
+    [-5, "-5 people"],
+  ])(
+    "a tile of the value %s stands flat, and its tooltip says %j, not 0",
+    async (population, said) => {
+      const chart = await mount(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[{ lon: 15, lat: 45, population }]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={30}
+            format={{ value: (v) => `${v} people` }}
+          />
+        </ChartContainer3D>
+      )
+      const { x, y } = prism(chart.svg)
+      await chart.send("pointermove", { clientX: x, clientY: y })
+      const tooltip = chart.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent!
+      expect(tooltip).toMatch(/lat\s*45/)
+      expect(tooltip).not.toContain("0 people")
+      if (said) expect(tooltip).toContain(said)
+      await chart.unmount()
+    }
+  )
+
   test("label names the tile after its last entry in the title of the tooltip, in place of the series", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
@@ -796,7 +825,7 @@ describe("GlobeChart3D values that are no numbers", () => {
 })
 
 describe("GlobeChart3D step", () => {
-  test("a step that makes no tiles - 0, below 0, NaN, Infinity, wider than 180 - draws the tiles of the default", () => {
+  test("a step that does not divide 180 - 0, below 0, NaN, Infinity, wider than 180, 7, 40 - draws the tiles of the default", () => {
     const html = (step?: number) =>
       renderToString(
         <ChartContainer3D config={config}>
@@ -811,7 +840,9 @@ describe("GlobeChart3D step", () => {
         </ChartContainer3D>
       )
     expect(faces(html()).length).toBeGreaterThan(0)
-    for (const step of [0, -5, NaN, Infinity, 400]) expect(html(step)).toBe(html())
+    for (const step of [0, -5, NaN, Infinity, 400, 7, 40]) expect(html(step)).toBe(html())
+    // A divisor that is no integer, as 0.1 is not in binary, still divides.
+    expect(html(0.1)).not.toBe(html())
   })
 })
 

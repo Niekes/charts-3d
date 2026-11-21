@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { range, ticks } from "d3-array"
+import { extent, range, ticks } from "d3-array"
 import {
   polygons3D,
   sort,
@@ -24,13 +24,18 @@ import {
   useTweenAxes,
   worldBox,
   colorOf,
+  finite,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
-  /** One entry per point along x, with a value per series. */
+  /**
+   * One entry per point along x, with a value per series. The area fills down
+   * to the floor of the box, so it is a measure of values of 0 and up: below
+   * 0 the floor drops to the lowest value, and the area reads from there.
+   */
   data: T[]
   /** The field of the category of an entry along x, such as "year": it names the entry on the axis and in the tooltip, and a point follows its name through updates. An entry of a name that repeats is, in the order of the data, a point of its own. */
   index: keyof T & string
@@ -281,13 +286,13 @@ function ribbonTooltip<T extends Record<string, unknown>>(
     tooltip(
       {
         title: config[key]?.label ?? key,
-        items: names.map((name) => {
+        // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
+        items: names.flatMap((name, i) => {
           const value = target[`${name}-${key}`]
-          return {
-            label: (format.x ?? String)(nameOf(name)),
-            value: format.y?.(value) ?? value,
-            color,
-          }
+          if (!finite(spanned[i][key])) return []
+          return [
+            { label: (format.x ?? String)(nameOf(name)), value: format.y?.(value) ?? value, color },
+          ]
         }),
       },
       { key, entries: spanned }
@@ -301,9 +306,11 @@ function ribbonTooltip<T extends Record<string, unknown>>(
  */
 function areaAxes(entries: number, series: number, values: number[]): AxesSpec {
   const every = entries ? ticks(0, entries - 1, 10).filter(Number.isInteger) : []
+  // extent, not a spread: thousands of arguments overflow the stack.
+  const [lo = 0, hi = 0] = extent(values)
   return {
     x: pad({ domain: [0, Math.max(0, entries - 1)], ticks: every }, 1),
-    y: axis(Math.min(0, ...values), Math.max(0, ...values)),
+    y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [0, Math.max(0, series - 1)], ticks: range(series) }, 1),
   }
 }

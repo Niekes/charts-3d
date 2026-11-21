@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent } from "d3-array"
+import { extent, max } from "d3-array"
 import { cubes3D, sort, type AxesSpec, type Point3D } from "d3-3d"
 
 import {
@@ -157,7 +157,7 @@ function useField(
   }: Pick<BarFieldChart3DProps, "x" | "z"> & { domain: NonNullable<BarFieldChart3DProps["domain"]> }
 ) {
   return React.useMemo(() => {
-    const columns = Math.max(0, ...data.map((row) => row.length))
+    const columns = max(data, (row) => row.length) ?? 0
     const sides = {
       x: gridAxis(columns, { at: x, ends: domain.x }),
       z: gridAxis(data.length, { at: z, ends: domain.z }),

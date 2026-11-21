@@ -10,6 +10,7 @@
       "description": "The container, camera, orbit, axes and tooltip that every 3D chart builds on.",
       "dependencies": ["d3-3d@^2.4.0", "d3-array@^3.2.4"],
       "devDependencies": ["@types/d3-array"],
+      "registryDependencies": ["utils"],
       "files": [
         {
           "path": "registry/new-york/ui/chart-3d.tsx",

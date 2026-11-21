@@ -128,6 +128,39 @@ for (const file of files) {
 const unversioned = (dependencies) => dependencies.map((d) => d.replace(/@[^@/]*$/, ""))
 const coreDependencies = unversioned(core?.dependencies ?? [])
 
+/**
+ * The core imports only React, the npm packages its item declares and `cn`
+ * of shadcn's `utils`, which its item depends on: whatever else it imported
+ * would install with the npm package but break every `shadcn add`.
+ */
+const coreAllowed = new Set(["react", ...coreDependencies, "@/lib/utils"])
+for (const [, specifier] of read(`${UI}/${CORE}.tsx`).matchAll(/from\s+"([^"]+)"/g)) {
+  if (!coreAllowed.has(specifier)) {
+    fail(
+      `${UI}/${CORE}.tsx: may import only ${[...coreAllowed].join(", ")}, not '${specifier}'; declare it on its item in registry.json`
+    )
+  }
+}
+if (!core?.registryDependencies?.includes("utils")) {
+  fail(`registry.json: '${CORE}' imports '@/lib/utils' and depends on 'utils'`)
+}
+
+/**
+ * The registry and the npm package install the same versions: a range on an
+ * item is the range of the dependency in package.json.
+ */
+const packageDependencies = JSON.parse(read("package.json")).dependencies
+for (const item of registry.items) {
+  for (const dependency of item.dependencies ?? []) {
+    const [, name, range] = dependency.match(/^(@?[^@]+)(?:@(.+))?$/) ?? []
+    if (packageDependencies[name] === undefined || range !== packageDependencies[name]) {
+      fail(
+        `registry.json: '${item.name}' installs '${dependency}', package.json '${name}@${packageDependencies[name]}'`
+      )
+    }
+  }
+}
+
 for (const file of files.filter((file) => file !== `${CORE}.tsx`)) {
   const name = basename(file, ".tsx")
   const component = pascalCase(name)

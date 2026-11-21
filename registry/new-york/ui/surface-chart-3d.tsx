@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent } from "d3-array"
+import { extent, max } from "d3-array"
 import {
   gridPlanes3D,
   sort,
@@ -17,6 +17,7 @@ import {
   axis,
   gridAxis,
   intoWorld,
+  faded,
   shade,
   useChart3D,
   useTween,
@@ -227,8 +228,7 @@ function quadMark(quad: GridPlane<GridPoint>, fade: Record<string, number>): Mar
   return {
     key,
     points: quad.map((p) => p.projected),
-    fill:
-      seen < 1 ? `color-mix(in srgb, ${shaded} ${Math.round(seen * 100)}%, transparent)` : shaded,
+    fill: faded(shaded, seen),
     // Its group is the cell, so hovering it lights the cell alone.
     groups: [key],
     tooltip,
@@ -254,7 +254,7 @@ function useGrid(
   return React.useMemo(() => {
     // Named places span the box exactly; the indices keep half a cell of room.
     const sides = {
-      x: gridAxis(Math.max(0, ...raw.map((row) => row.length)), {
+      x: gridAxis(max(raw, (row) => row.length) ?? 0, {
         at: x,
         ends: domain.x,
         padded: !(x || domain.x),

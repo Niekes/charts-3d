@@ -39,8 +39,10 @@ updates `CHANGELOG.md` (for example the `release/0.3.0` branch). Merging it
 into `master` triggers `.github/workflows/release.yml`, which stages the new
 version on npm - but only when `package.json` changed and the version is not
 on npm yet - and, if it is missing, tags the pinned release commit and creates
-the `vX.Y.Z` release on GitHub. The version goes live once a maintainer
-approves it with 2FA. Never run `npm publish`, `npm stage approve` or push a
+the `vX.Y.Z` release on GitHub, then deploys the docs from that tag, their
+install commands pinned to it. It runs from `master` alone, one release at a
+time, and a pushed tag counts as released. The version goes live once a
+maintainer approves it with 2FA. Never run `npm publish`, `npm stage approve` or push a
 version tag by hand.
 
 ## The registry template
@@ -107,7 +109,7 @@ Two consequences worth remembering:
 - **The core knows nothing about the charts.** It holds the container, the
   camera and its shortcuts and gizmo, the axes, the marks and their
   renderers, the tooltip and the helpers (`axis`, `linear`, `worldBox`,
-  `shade`, `faded`, `useSeries`, and `numeric` and `finite`, which read a
+  `shade`, `faded`, `useSeries`, and `finite`, which reads a
   field of the data as a number).
   A helper that two charts need moves here.
 
@@ -155,6 +157,10 @@ The rules that `scripts/check-template.mjs` enforces:
   `registry.json` or its own item declares there, and the core as
   `@/registry/new-york/ui/chart-3d`, which the shadcn CLI rewrites to the
   `ui` alias of the project;
+- the core imports only React, the npm packages its item declares and
+  `@/lib/utils`, and its item depends on shadcn's `utils`;
+- every npm dependency of an item names the range `package.json` gives it,
+  so the registry and the npm package install the same versions;
 - a chart renders no SVG or HTML elements of its own: it draws through
   `Axes3D` and `Marks3D` - through `Marks3D` alone where it has no axes, as
   the globe (ADR-0007) - so every renderer can draw it;

@@ -62,6 +62,25 @@ describe("ChoroplethChart3D", () => {
     expect(regions(html).length).toBeGreaterThanOrEqual(1)
   })
 
+  test("a region of several features, a mainland and its island, colors every one of them", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[{ region: "a", n: 5 }]}
+          land={{
+            type: "FeatureCollection",
+            features: [square("a", 0, 0), square("a", -45, 0, 10)],
+          }}
+          id="region"
+          value="n"
+        />
+      </ChartContainer3D>
+    )
+    // Both parts are left out of the land, and both are colored.
+    expect(landOf(html)).toHaveLength(0)
+    expect(regions(html)).toHaveLength(2)
+  })
+
   test("draws the land on the ocean, then the region of an entry in its series color, cut at the horizon; an unknown or far region draws nothing", () => {
     const html = renderToString(
       <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>

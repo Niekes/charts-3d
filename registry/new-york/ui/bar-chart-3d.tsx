@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { extent } from "d3-array"
 import { cubes3D, sort, type AxesSpec, type Camera3DInstance } from "d3-3d"
 
 import {
@@ -17,6 +18,7 @@ import {
   useTweenAxes,
   worldBox,
   colorOf,
+  finite,
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
@@ -148,9 +150,11 @@ function barCells(rows: Record<string, number>, series: string[], values: Record
  */
 function barBox(entries: number, series: number, values: number[]) {
   const index = (length: number) => Array.from({ length }, (_, i) => i)
+  // extent, not a spread: thousands of arguments overflow the stack.
+  const [lo = 0, hi = 0] = extent(values)
   const spec: AxesSpec = {
     x: pad({ domain: [-0.5, entries - 0.5], ticks: index(entries) }, 1),
-    y: axis(Math.min(0, ...values), Math.max(0, ...values)),
+    y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
   // A shallow box for few series, so the bars stay square.
@@ -192,13 +196,16 @@ function barTooltip<T extends Record<string, unknown>>(
     tooltip(
       {
         title: (format.x ?? String)(name),
-        items: [
-          {
-            label: config[key]?.label ?? key,
-            value: format.y?.(value) ?? value,
-            color: colorOf(key),
-          },
-        ],
+        // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
+        items: finite(entry[key])
+          ? [
+              {
+                label: config[key]?.label ?? key,
+                value: format.y?.(value) ?? value,
+                color: colorOf(key),
+              },
+            ]
+          : [],
       },
       { entry, key }
     )
