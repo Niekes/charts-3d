@@ -454,7 +454,7 @@ describe("LineChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same lines on the canvas, every mark of the svg once", async () => {
+  test("canvas paints the lines, every mark of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -468,15 +468,7 @@ describe("LineChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    // A canvas gives out one context only: another type on the same element is null.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
-      this: HTMLCanvasElement & { ctxType?: string },
-      type: string
-    ) {
-      if (this.ctxType && this.ctxType !== type) return null
-      this.ctxType = type
-      return (type === "2d" ? ctx : null) as never
-    })
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -500,10 +492,6 @@ describe("LineChart3D renderers", () => {
     // A circle per point, the rest polygons.
     expect(ctx.arc).toHaveBeenCalledTimes(5)
 
-    ctx.fill.mockClear()
-    await view.render(scene("webgl"))
-    expect(marks(view.host).all).toHaveLength(0)
-    expect(ctx.fill).toHaveBeenCalledTimes(svg)
     await view.unmount()
   })
 })

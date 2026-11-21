@@ -1,7 +1,8 @@
 # One scene is the renderer contract - charts project with d3-3d, the core draws
 
-Status: amended 2026-11-13 - the webgl renderer is gone; `"webgl"` draws
-as `"canvas"` until 1.0.0. Read "three renderers" below as SVG and canvas.
+Status: amended 2026-11-21 - the webgl renderer is gone, and with 0.8.0 its
+name too. Read "three renderers" below as SVG and canvas, and what it says of
+webgl as history.
 
 Context: the registry draws with three renderers - SVG, canvas and webgl - and
 a chart must behave the same on all of them, gap-free. A chart that draws for
@@ -47,3 +48,7 @@ than the canvas - projecting the marks on the CPU takes the time, not filling
 them - so `"webgl"` draws as `"canvas"` until 1.0.0 drops the name. The contract stands for the two renderers left, and the parity test
 drives them both; `paintGL` is no longer among the places a new mark shape
 must reach.
+
+Amended 2026-11-21: the name `"webgl"` is gone in 0.8.0; `Renderer3D` is
+`"svg" | "canvas"`. It goes before 1.0.0, not with it, because a name that
+1.0.0 ships stays until 2.0.0.

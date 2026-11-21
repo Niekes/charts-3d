@@ -24,7 +24,7 @@ their scale features: colour scales, lighting, data zoom and image export.
 
 | Library                     | 3D types                                                                                                                   | Renderers                                          | SSR                         | React                                    | License                                                | Stars                      | npm/wk                 | Last release                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------- | ---------------------------------------- | ------------------------------------------------------ | -------------------------- | ---------------------- | --------------------------------------- |
-| **charts-3d**               | bar, scatter, surface, area, globe, places, choropleth                                                                     | SVG (default), canvas, WebGL                       | yes (SVG first)             | native, shadcn registry                  | BSD-3-Clause                                           | 0                          | 106                    | 0.6.0, 2026-11-05                       |
+| **charts-3d**               | bar, scatter, surface, area, globe, places, choropleth                                                                     | SVG (default), canvas                              | yes (SVG first)             | native, shadcn registry                  | BSD-3-Clause                                           | 0                          | 106                    | 0.6.0, 2026-11-05                       |
 | d3-3d                       | primitives (points, lines, cubes, grid planes, polygons, axes)                                                             | none (you draw: SVG/canvas, `.matrix()` for WebGL) | yes (pure math)             | no                                       | BSD-3-Clause                                           | 417                        | 3,171                  | 2.4.1, 2026-10-27                       |
 | ECharts-GL                  | bar3D, line3D, scatter3D, surface, map3D, lines3D, polygons3D, scatterGL, graphGL, flowGL, linesGL; globe, geo3D, mapbox3D | WebGL                                              | no **[unverified]**         | via wrappers (echarts-for-react 2.1M/wk) | BSD-3-Clause on GitHub, `MIT` in npm metadata          | 2,713                      | 200,819                | 2.1.0, 2026-05-28                       |
 | Plotly.js                   | scatter3d, surface, mesh3d, line, ribbon, cone, streamtube, isosurface, …                                                  | WebGL (gl3d)                                       | no **[unverified]**         | react-plotly.js (980k/wk)                | MIT                                                    | 18,382                     | 977,061                | 4.3.0, 2026-11-10                       |
@@ -157,7 +157,7 @@ their scale features: colour scales, lighting, data zoom and image export.
 - It renders on the server and draws SVG first. Every WebGL competitor (ECharts-GL, Plotly 3D,
   SciChart, LightningChart, deck.gl, globe.gl, cobe) needs a browser, so they show nothing
   until hydration.
-- It draws one scene with three renderers, SVG, canvas and WebGL, behind one prop. Nivo does
+- It draws one scene with two renderers, SVG and canvas, behind one prop. Nivo does
   this for 2D; no 3D library does.
 - It themes through shadcn tokens and `data-slot`s, so dark mode needs no re-render. The
   engines theme through JS option objects.
@@ -175,8 +175,8 @@ their scale features: colour scales, lighting, data zoom and image export.
   cobe. Nobody knows about it yet.
 - **Breadth.** 7 chart types against more than 15 in ECharts-GL and Plotly. There is no 3D
   line, mesh, contour, colour-scale legend or data zoom.
-- **Scale.** Rendering is CPU-bound: projection runs in JS every frame, and WebGL only fills
-  the polygons. SciChart, LightningChart, deck.gl and ECharts scatterGL project on the GPU.
+- **Scale.** Rendering is CPU-bound: projection runs in JS every frame, on every renderer.
+  SciChart, LightningChart, deck.gl and ECharts scatterGL project on the GPU.
   The project's own notes put the SVG renderer at about 20 ms plus 0.04 ms per path a frame.
 - **Accessibility of the data.** Only the camera is accessible. Highcharts is far ahead on
   data navigation, descriptions and tables.

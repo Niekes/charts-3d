@@ -778,7 +778,7 @@ describe("RoutesChart3D renderers", () => {
     vi.unstubAllGlobals()
   })
 
-  test("canvas and webgl paint the same routes on the canvas, every mark of the svg once", async () => {
+  test("canvas paints the routes, every mark of the svg once", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -792,15 +792,7 @@ describe("RoutesChart3D renderers", () => {
       fillStyle: "",
       getImageData: vi.fn(() => ({ data: [1, 2, 3, 255] })),
     }
-    // A canvas gives out one context only: another type on the same element is null.
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
-      this: HTMLCanvasElement & { ctxType?: string },
-      type: string
-    ) {
-      if (this.ctxType && this.ctxType !== type) return null
-      this.ctxType = type
-      return (type === "2d" ? ctx : null) as never
-    })
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never)
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -829,10 +821,6 @@ describe("RoutesChart3D renderers", () => {
     // A circle per stop, the rest polygons: the ocean and the pieces of the legs.
     expect(ctx.arc).toHaveBeenCalledTimes(3)
 
-    ctx.fill.mockClear()
-    await view.render(scene("webgl"))
-    expect(view.host.querySelectorAll('[data-slot="chart-3d-marks"] > *')).toHaveLength(0)
-    expect(ctx.fill).toHaveBeenCalledTimes(all)
     await view.unmount()
   })
 })

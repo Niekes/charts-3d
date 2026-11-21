@@ -450,7 +450,7 @@ describe("BarFieldChart3D transitions", () => {
 })
 
 describe("BarFieldChart3D renderers", () => {
-  test("svg, canvas and webgl, which draws on the canvas, draw the same bars", async () => {
+  test("svg and canvas draw the same bars", async () => {
     const ctx = {
       setTransform: vi.fn(),
       beginPath: vi.fn(),
@@ -482,13 +482,10 @@ describe("BarFieldChart3D renderers", () => {
 
     const view = await mount(chart("svg"))
     expect(view.bars()).toHaveLength(6)
-    for (const renderer of ["canvas", "webgl"] as const) {
-      ctx.fill.mockClear()
-      await view.render(chart(renderer))
-      expect(view.host.querySelector("canvas")).not.toBeNull()
-      expect(view.bars()).toHaveLength(0)
-      expect(ctx.fill).toHaveBeenCalledTimes(6)
-    }
+    await view.render(chart("canvas"))
+    expect(view.host.querySelector("canvas")).not.toBeNull()
+    expect(view.bars()).toHaveLength(0)
+    expect(ctx.fill).toHaveBeenCalledTimes(6)
     await view.unmount()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
