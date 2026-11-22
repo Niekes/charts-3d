@@ -99,6 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ChoroplethChart3D`: a feature whose `id` is null is scenery, as one
   without an id, where an entry whose id was missing colored every such
   feature.
+- `GlobeChart3D`: when `step` changes, the tiles of the old grid fade out at
+  their own size, where they swelled to the new one and covered their
+  neighbours while they left.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

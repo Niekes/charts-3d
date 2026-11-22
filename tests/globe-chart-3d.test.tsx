@@ -587,6 +587,45 @@ describe("GlobeChart3D transitions", () => {
     host.remove()
   })
 
+  test("a tile that leaves as the step changes keeps its size: the old grid fades out as it was", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, number | string>[], step: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="n"
+              series="type"
+              step={step}
+            />
+          </ChartContainer3D>
+        )
+      )
+    /** How wide the tiles of `key` span on screen. */
+    const width = (key: string) => {
+      const xs = [...host.querySelectorAll('[data-slot="chart-3d-marks"] path')]
+        .filter((p) => p.getAttribute("fill")!.includes(`--color-${key}`))
+        .flatMap((p) => [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),/g)].map((m) => +m[1]))
+      return Math.max(...xs) - Math.min(...xs)
+    }
+
+    await render([{ lon: 5, lat: 5, n: 10, type: "population" }], 10)
+    await act(() => vi.advanceTimersByTime(700))
+    const before = width("population")
+    await render([{ lon: 60, lat: 5, n: 10, type: "quake" }], 30)
+    await act(() => vi.advanceTimersByTime(100))
+    // Mid-fade, the tile of the old step is as wide as it was, not three times.
+    expect(width("population")).toBeLessThan(before * 1.5)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a new value while a tile leaves: it fades out, never black", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
