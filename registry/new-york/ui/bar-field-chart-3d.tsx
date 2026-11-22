@@ -167,7 +167,8 @@ function useField(
     const target: Record<string, number> = Object.fromEntries(
       data.flatMap((row, r) =>
         row.flatMap((v, c) =>
-          finite(v) && c in sides.x.places && r in sides.z.places ? [[`${r}-${c}`, v]] : []
+          // A number given as text, as parsed CSV has it, is that number.
+          finite(v) && c in sides.x.places && r in sides.z.places ? [[`${r}-${c}`, Number(v)]] : []
         )
       )
     )

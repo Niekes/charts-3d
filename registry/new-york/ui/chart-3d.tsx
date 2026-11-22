@@ -816,8 +816,9 @@ function glideOf(
 ) {
   const origin = (key: string, among: Record<string, number>) =>
     typeof enter === "function" ? enter(key, among) : enter
-  const fresh = Object.keys(to).filter((k) => !(k in shown))
-  const gone = Object.keys(shown).filter((k) => !(k in to))
+  // Own keys only: a name of the data such as "constructor" is no key that every object has.
+  const fresh = Object.keys(to).filter((k) => !Object.hasOwn(shown, k))
+  const gone = Object.keys(shown).filter((k) => !Object.hasOwn(to, k))
   return {
     from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, origin(k, shown) ?? to[k]])) },
     to,
@@ -3146,11 +3147,11 @@ function useRuns<T extends Record<string, unknown>>(
   // The positions of the render before: a point is there as long as it has one.
   const shown = React.useRef<Record<string, number>>({})
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
-  const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
+  const alive = (name: string) =>
+    Object.hasOwn(presence, name) || positionKey("x", name) in shown.current
   // A point that has lost its place is drawn while it fades out: it folds into its neighbour first.
-  const runs = runsOf(
-    (known.current = withGone(live, known.current, alive)),
-    (name) => name in presence
+  const runs = runsOf((known.current = withGone(live, known.current, alive)), (name) =>
+    Object.hasOwn(presence, name)
   )
   const places = useTween(target, neighbour(runs), toward && pointwise(toward))
   shown.current = places
@@ -3172,7 +3173,7 @@ function useRuns<T extends Record<string, unknown>>(
         return {
           name,
           // A point still on its way when its presence has run out is seen no more.
-          seen: presence[name] ?? 0,
+          seen: Object.hasOwn(presence, name) ? presence[name] : 0,
           moves: live.has(name) ? AXES.some((a) => at[a] !== own[a]) : stays,
           at,
         }
@@ -3340,7 +3341,7 @@ function useConfigKeys<T extends Record<string, unknown>>(
   const known = React.useRef(new Map<string, string>())
   entries.forEach((d, name) => known.current.set(name, keyOf(field && d[field], fallback)))
   for (const name of known.current.keys()) {
-    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
+    if (!Object.hasOwn(alive, name) && !entries.has(name)) known.current.delete(name)
   }
   return (name: string) => known.current.get(name) ?? fallback
 }

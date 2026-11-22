@@ -73,6 +73,17 @@ describe("BarFieldChart3D", () => {
     expect(html).toContain("var(--color-high) 0%, var(--color-mid)")
   })
 
+  test("numbers given as text, as parsed CSV has them, draw what the numbers draw", () => {
+    const html = (data: unknown) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarFieldChart3D data={data as number[][]} />
+        </ChartContainer3D>
+      )
+    // Compared as text, "9" would top "100" and the axis would end at 10.
+    expect(html([["10", "9", "100"]])).toBe(html([[10, 9, 100]]))
+  })
+
   test("a value that is no finite number draws no bar, and the rest stand", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>

@@ -55,7 +55,9 @@ import { AreaChart3D } from "@/registry/new-york/ui/area-chart-3d"
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
 import { ChoroplethChart3D } from "@/registry/new-york/ui/choropleth-chart-3d"
 import { GlobeChart3D } from "@/registry/new-york/ui/globe-chart-3d"
+import { LineChart3D } from "@/registry/new-york/ui/line-chart-3d"
 import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
+import { RoutesChart3D } from "@/registry/new-york/ui/routes-chart-3d"
 import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
 import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
 
@@ -4095,6 +4097,77 @@ describe("joined", () => {
     expect(joined("a", "b-c")).not.toBe(joined("a-b", "c"))
     expect(joined("a", "b")).toBe(joined("a", "b"))
   })
+})
+
+describe("a name that every object inherits", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const noLand: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
+  type Row = { id: string; x: number; y: number; z: number; a: number }
+  const charts: Record<string, (data: Row[]) => ReactElement> = {
+    bar: (data) => <BarChart3D data={data} index="id" keys={["a"]} />,
+    area: (data) => <AreaChart3D data={data} index="id" keys={["a"]} />,
+    scatter: (data) => <ScatterChart3D data={data} x="x" y="y" z="z" id="id" />,
+    line: (data) => <LineChart3D data={data} x="x" y="y" z="z" id="id" />,
+    places: (data) => <PlacesChart3D data={data} land={noLand} lon="x" lat="y" id="id" />,
+    routes: (data) => <RoutesChart3D data={data} land={noLand} lon="x" lat="y" id="id" />,
+  }
+  const rows = (...ids: string[]) => ids.map((id, i) => ({ id, x: i * 10, y: i, z: i, a: i + 1 }))
+
+  /** The marks at every step of a glide of an entry named `name` in, out and in again. */
+  async function steps(draw: (data: Row[]) => ReactElement, name: string) {
+    // A fresh clock, so both runs see their frames at the same times.
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Row[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{ a: { color: "red" } }}>{draw(data)}</ChartContainer3D>
+        )
+      )
+    const seen: string[] = []
+    const glide = async (ms: number) => {
+      await act(() => vi.advanceTimersByTime(ms))
+      seen.push(host.querySelector('[data-slot="chart-3d-marks"]')!.innerHTML)
+    }
+    await render(rows("p", "q"))
+    for (const ids of [
+      ["p", "q", name],
+      ["p", "q"],
+      ["p", "q", name],
+    ]) {
+      await render(rows(...ids))
+      await glide(150)
+      await glide(350)
+      // Another point moves late in its coming or going: the places glide on past its presence.
+      await render(rows(...ids).map((d) => (d.id === "p" ? { ...d, x: d.x + 5 } : d)))
+      await glide(300)
+      await glide(300)
+      await glide(1000)
+    }
+    await act(async () => root.unmount())
+    host.remove()
+    return seen
+  }
+
+  for (const name of ["constructor", "toString", "__proto__"])
+    for (const [chart, draw] of Object.entries(charts))
+      test(`an entry named ${name} glides in and out of the ${chart} chart like any other`, async () => {
+        // Nothing of Object's own - a function, a number that is none - reaches the marks, and
+        // they move exactly as for a name of no account.
+        const named = await steps(draw, name)
+        for (const marks of named) expect(marks).not.toMatch(/NaN|function|\[object/)
+        expect(named).toEqual(await steps(draw, "plain"))
+      })
 })
 
 describe("keyOf", () => {

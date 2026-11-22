@@ -217,6 +217,27 @@ describe("SurfaceChart3D places", () => {
     expect(html).not.toContain(" 0%, transparent")
   })
 
+  test("heights given as text, as parsed CSV has them, draw what the numbers draw", () => {
+    const html = (data: unknown) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D data={data as number[][]} />
+        </ChartContainer3D>
+      )
+    // Compared as text, "9" would top "100" and the y axis would run upside down.
+    expect(
+      html([
+        ["10", "9"],
+        ["100", "2"],
+      ])
+    ).toBe(
+      html([
+        [10, 9],
+        [100, 2],
+      ])
+    )
+  })
+
   test("a column or row without a finite place drops out, its neighbours join", () => {
     const html = (x?: number[], z?: number[]) =>
       renderToString(

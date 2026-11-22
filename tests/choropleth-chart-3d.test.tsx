@@ -384,6 +384,34 @@ describe("ChoroplethChart3D hover", () => {
     await chart.unmount()
   })
 
+  test("regions and series with a hyphen keep marks of their own", async () => {
+    const errors: string[] = []
+    const spy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a) => void errors.push(a.join(" ")))
+    // ISO 3166-2 codes, and series keys with a hyphen: "US" of "CA-low" and "US-CA" of "low".
+    const chart = await mount(
+      <ChartContainer3D config={{ "CA-low": { color: "red" }, low: { color: "blue" } }}>
+        <ChoroplethChart3D
+          data={[
+            { code: "US", s: "CA-low", n: 1 },
+            { code: "US-CA", s: "low", n: 2 },
+          ]}
+          land={{
+            type: "FeatureCollection",
+            features: [square("US", 0, 0), square("US-CA", -40, 0)],
+          }}
+          id="code"
+          value="n"
+          series="s"
+        />
+      </ChartContainer3D>
+    )
+    spy.mockRestore()
+    expect(errors.filter((e) => /same key/.test(e))).toEqual([])
+    await chart.unmount()
+  })
+
   test("tooltip makes what a region says of what it would say and the entry behind it, and null says nothing", async () => {
     const data = [{ code: "a", n: 5, capital: "Alpha City" }]
     let built = 0

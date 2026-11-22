@@ -215,7 +215,7 @@ function cellTooltip(
 ): Mark3D["tooltip"] {
   if (quad.some((p) => !(`${p.r}-${p.c}` in present) || !finite(data[p.r][p.c]))) return undefined
   return () => {
-    const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
+    const value = quad.reduce((sum, p) => sum + Number(data[p.r][p.c]), 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
     const column = Math.min(...quad.map((p) => p.c))
     return tooltip(
@@ -301,9 +301,10 @@ function useGrid(
  * With the lowest and the highest height, 0 for a grid without one.
  */
 function cleanGrid(raw: number[][]) {
-  const [floor = 0, peak = 0] = extent(raw.flat().filter(finite))
-  const data = raw.map((row) => row.map((y) => (finite(y) ? y : floor)))
-  return { data, floor, peak }
+  // A height given as text, as parsed CSV has it, is that number.
+  const heights = raw.map((row) => row.map((y) => (finite(y) ? Number(y) : undefined)))
+  const [floor = 0, peak = 0] = extent(heights.flat(), (y) => y)
+  return { data: heights.map((row) => row.map((y) => y ?? floor)), floor, peak }
 }
 
 /** The height of every cell with a place, keyed by its row and column, gliding into new data. */

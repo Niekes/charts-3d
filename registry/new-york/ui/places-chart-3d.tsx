@@ -339,7 +339,7 @@ function usePlaces<T extends Record<string, unknown>>(
   shown.current = at
   const live = new Set(names)
   for (const name of known.current.keys()) {
-    if (!(name in alive) && !live.has(name)) known.current.delete(name)
+    if (!Object.hasOwn(alive, name) && !live.has(name)) known.current.delete(name)
   }
   return (name: string): Place => {
     const place = known.current.get(name)!

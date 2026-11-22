@@ -182,7 +182,8 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
     () =>
       data.map((entry) => ({
         entry,
-        name: id && String(entry[id]),
+        // Named within its route: two routes through one stop each keep their own.
+        name: id && joined(keyOf(series && entry[series], ""), String(entry[id])),
         // The raw value: the core reads it as the key of its line, with the fallback.
         route: series && entry[series],
         leg: keyOf(leg && entry[leg], ""),
@@ -234,7 +235,7 @@ type Came = Map<string, Coming>
  */
 function useCame(presence: Record<string, number>) {
   const came: Came = React.useRef(new Map()).current
-  for (const name of came.keys()) if (!(name in presence)) came.delete(name)
+  for (const name of came.keys()) if (!Object.hasOwn(presence, name)) came.delete(name)
   return came
 }
 

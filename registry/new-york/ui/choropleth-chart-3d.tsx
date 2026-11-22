@@ -131,7 +131,7 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
     const parts = features.get(rid)!
     const soil = opaque.has(rid)
       ? []
-      : parts.flatMap((part, i) => ground(part, `ground-${rid}-${i}`))
+      : parts.flatMap((part, i) => ground(part, joined("ground", rid, String(i))))
     const region = regions.get(rid)
     const says = (key: string) => tips(joined(rid, key), () => regionTooltip(region, key, reading))
     return [...soil, ...overlaysOf(rid, parts, colors.get(rid) ?? [], paint, says)]
@@ -166,11 +166,13 @@ function overlaysOf(
     const key = (JSON.parse(pid) as [string, string])[1]
     const tooltip = says(key)
     return parts.flatMap((part, i) =>
-      paint(part, `region-${rid}-${key}-${i}`, faded(colorOf(key), opacity)).map((mark) => ({
-        ...mark,
-        groups: [rid],
-        tooltip,
-      }))
+      paint(part, joined("region", rid, key, String(i)), faded(colorOf(key), opacity)).map(
+        (mark) => ({
+          ...mark,
+          groups: [rid],
+          tooltip,
+        })
+      )
     )
   })
 }
