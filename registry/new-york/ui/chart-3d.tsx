@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent, max, min, nice, ticks } from "d3-array"
+import { extent, max, min, nice, range, ticks } from "d3-array"
 import {
   axes3D,
   box,
@@ -2641,24 +2641,30 @@ function room(a: AxisLabel, b: AxisLabel, normal: Point2D, t: Point2D) {
  * come too close move as one block, centred on the places they want.
  */
 function dodge(want: number[], gaps: number[]) {
-  const blocks: { start: number; offsets: number[]; at: number }[] = []
+  // Where each point stands from the first, keeping its gaps, and the running
+  // sums of the wants and of those, so a block's mean is two lookups, not a loop.
+  const from = prefix(gaps)
+  const [wants, froms] = [prefix(want), prefix(from)]
+  const blocks: { start: number; end: number; at: number }[] = []
   want.forEach((at, start) => {
-    let block = { start, offsets: [0], at }
+    let block = { start, end: start + 1, at }
     let last = blocks.at(-1)
-    while (last && last.at + last.offsets.at(-1)! + gaps[block.start - 1] > block.at) {
+    while (last && last.at + from[block.start] - from[last.start] > block.at) {
       blocks.pop()
-      const base = last.offsets.at(-1)! + gaps[block.start - 1]
-      const offsets = [...last.offsets, ...block.offsets.map((o) => o + base)]
-      const first = last.start
+      const [first, end] = [last.start, block.end]
       // Where the block moves its points the least: the mean of the places they want.
-      const mean = offsets.reduce((sum, o, k) => sum + want[first + k] - o, 0) / offsets.length
-      block = { start: first, offsets, at: mean }
+      const mean = (wants[end] - wants[first] - (froms[end] - froms[first])) / (end - first)
+      block = { start: first, end, at: mean + from[first] }
       last = blocks.at(-1)
     }
     blocks.push(block)
   })
-  return blocks.flatMap((block) => block.offsets.map((o) => block.at + o))
+  return blocks.flatMap((b) => range(b.start, b.end).map((k) => b.at + from[k] - from[b.start]))
 }
+
+/** The running sums of `values`, from 0: the i-th is the sum of the first i. */
+const prefix = (values: number[]) =>
+  values.reduce((sums, v) => (sums.push(sums[sums.length - 1] + v), sums), [0])
 
 /**
  * How much of a label shows beside the labels placed before it: it fades as
@@ -2761,6 +2767,14 @@ function AxisLabel3D({
 function axis(lo: number, hi: number, count = 5): AxisSpec {
   const [start, stop] = nice(lo, lo === hi ? hi + 1 : hi, count)
   return { domain: [start, stop], ticks: ticks(start, stop, count) }
+}
+
+/**
+ * The ticks of `count` entries laid out at 0, 1, 2…: about ten of them, on
+ * whole entries, so a long row of entries is not labelled at every one.
+ */
+function entryTicks(count: number) {
+  return count ? ticks(0, count - 1, 10).filter(Number.isInteger) : []
 }
 
 /**
@@ -3584,6 +3598,7 @@ export {
   Marks3D,
   Labels3D,
   axis,
+  entryTicks,
   pad,
   linear,
   worldBox,

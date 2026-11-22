@@ -24,6 +24,7 @@ import {
   finite,
   keyOf,
   joined,
+  entryTicks,
   floored,
   gridAxis,
   facing,
@@ -4044,6 +4045,15 @@ describe("finite", () => {
   test("what Number alone reads as 0, or not as a number, is none", () => {
     const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
     expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("entryTicks", () => {
+  test("ticks every entry of a dozen, about ten of a year, and none of none", () => {
+    expect(entryTicks(0)).toEqual([])
+    expect(entryTicks(1)).toEqual([0])
+    expect(entryTicks(12)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    expect(entryTicks(365)).toEqual([0, 50, 100, 150, 200, 250, 300, 350])
   })
 })
 

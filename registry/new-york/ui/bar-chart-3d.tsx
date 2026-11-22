@@ -24,6 +24,7 @@ import {
   type Tooltip3D,
   type World,
   joined,
+  entryTicks,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -161,7 +162,8 @@ function barBox(entries: number, series: number, values: number[]) {
   // extent, not a spread: thousands of arguments overflow the stack.
   const [lo = 0, hi = 0] = extent(values)
   const spec: AxesSpec = {
-    x: pad({ domain: [-0.5, entries - 0.5], ticks: index(entries) }, 1),
+    // About ten ticks, not one per bar: a year of days lays out ten labels, not 365.
+    x: pad({ domain: [-0.5, entries - 0.5], ticks: entryTicks(entries) }, 1),
     y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }

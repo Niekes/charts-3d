@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent, range, ticks } from "d3-array"
+import { extent, range } from "d3-array"
 import {
   polygons3D,
   sort,
@@ -30,6 +30,7 @@ import {
   type Mark3D,
   type Tooltip3D,
   joined,
+  entryTicks,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -306,14 +307,12 @@ function ribbonTooltip<T extends Record<string, unknown>>(
 /**
  * The axes of an area chart: the entries along x, with half a row of room
  * between the first and the last and the walls, a row per series along z.
- * A line has many entries, so x ticks about ten of them, not every one.
  */
 function areaAxes(entries: number, series: number, values: number[]): AxesSpec {
-  const every = entries ? ticks(0, entries - 1, 10).filter(Number.isInteger) : []
   // extent, not a spread: thousands of arguments overflow the stack.
   const [lo = 0, hi = 0] = extent(values)
   return {
-    x: pad({ domain: [0, Math.max(0, entries - 1)], ticks: every }, 1),
+    x: pad({ domain: [0, Math.max(0, entries - 1)], ticks: entryTicks(entries) }, 1),
     y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [0, Math.max(0, series - 1)], ticks: range(series) }, 1),
   }

@@ -1003,6 +1003,30 @@ describe("BarChart3D entries of the same name", () => {
     expect(faces(render(twice))).toHaveLength(faces(three).length)
   })
 
+  test("a year of daily bars ticks about ten of its days, not every one", () => {
+    const year = Array.from({ length: 365 }, (_, i) => ({ name: `day${i}`, a: i % 7 }))
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={year} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    // A tick is laid out on each of the four edges of its axis.
+    const labels = new Set(html.match(/>day\d+</g))
+    expect(labels.size).toBeGreaterThan(4)
+    expect(labels.size).toBeLessThanOrEqual(12)
+    expect(labels).toContain(">day0<")
+  })
+
+  test("a dozen bars keep a tick each", () => {
+    const months = Array.from({ length: 12 }, (_, i) => ({ name: `m${i}`, a: i }))
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={months} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    expect(new Set(html.match(/>m\d+</g)).size).toBe(12)
+  })
+
   test("names and series with a hyphen draw the bars of their own values", () => {
     const render = (names: [string, string]) =>
       renderToString(

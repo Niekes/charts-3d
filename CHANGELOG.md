@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `entryTicks(count)`, about ten ticks on whole entries, which the bar and
+  the area chart lay along x.
 - `joined(...parts)`, one key of several parts, such as an entry and its
   series, joined by a character no name holds.
 - `keyOf(value, fallback)`, the config key a field of the data names: the
@@ -63,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `BarChart3D` ticks about ten of its entries along x, as `AreaChart3D`
+  does, not every one: a dozen bars keep a label each, a year of daily bars
+  lays out eight instead of 365, and turns at frame rate. The labels of an
+  edge make room for each other in linear time, not quadratic.
 - **Breaking:** `format` of `GlobeChart3D`, `PlacesChart3D` and
   `ChoroplethChart3D` is a record keyed by what it formats, as in every other
   chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means
