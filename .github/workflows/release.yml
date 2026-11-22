@@ -5,11 +5,11 @@ name: Release
 #
 # The registry is a tag that `npx shadcn add niekes/charts-3d/<item>#v<version>`
 # can pin. The shadcn CLI does not pass the tag on to the registry
-# dependencies, so the tag sits on a release commit beside `master` that pins
+# dependencies, so the tag sits on a release commit beside `main` that pins
 # the core to it too.
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - package.json
   # Retries a release whose publish failed.
@@ -23,8 +23,8 @@ concurrency:
 jobs:
   publish:
     name: Stage on npm
-    # A release is cut from `master` alone, a manual retry too.
-    if: github.ref == 'refs/heads/master'
+    # A release is cut from `main` alone, a manual retry too.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -89,7 +89,7 @@ jobs:
               npm run lint:template
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              # The release commit stays off `master`: only its tag is pushed.
+              # The release commit stays off `main`: only its tag is pushed.
               git checkout --detach
               git commit -am "🔖 chore(release): $VERSION"
               git tag "v$VERSION"
@@ -99,7 +99,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Deploy the docs of the release
-        # The docs follow the release, not `master`: built from its tag, they
+        # The docs follow the release, not `main`: built from its tag, they
         # show its API and install it.
         run: gh workflow run docs.yml --ref "v$(node -p "require('./package.json').version")"
         env:

@@ -129,7 +129,7 @@ The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hid
 
 ## Tooltip
 
-The tooltip of a mark follows the pointer, above and to its right. Where it would leave the chart it flips to the other side - on each axis alone, and only to a side with more room - and glides there; where the reader asks for reduced motion, it jumps. `placement` puts it in another corner of the pointer ([ADR-0005](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0005-tooltip-follows-pointer.md)).
+The tooltip of a mark follows the pointer, above and to its right. Where it would leave the chart it flips to the other side - on each axis alone, and only to a side with more room - and glides there; where the reader asks for reduced motion, it jumps. `placement` puts it in another corner of the pointer ([ADR-0005](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0005-tooltip-follows-pointer.md)).
 
 ```tsx
 <ChartContainer3D config={chartConfig} placement="bottom-left">
@@ -144,7 +144,7 @@ The tooltip is `data-slot="chart-3d-tooltip"`, and its `data-placement` names th
 >
 ```
 
-What a mark says is built from the data behind it, its values as the ticks name them through `format`, until `tooltip` on the chart says otherwise: a function of what the mark would say - a title and its items, a label and a value each - and of the data behind the mark, in the words of the chart's props: the `entry` and series `key` of a bar, the `entry` of a point, the `key` and the spanned `entries` of a face of a ribbon, the `row`, `column` and `value` of a cell. It runs when the pointer lands on the mark, and `null` shows none ([ADR-0006](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0006-tooltip-content.md)).
+What a mark says is built from the data behind it, its values as the ticks name them through `format`, until `tooltip` on the chart says otherwise: a function of what the mark would say - a title and its items, a label and a value each - and of the data behind the mark, in the words of the chart's props: the `entry` and series `key` of a bar, the `entry` of a point, the `key` and the spanned `entries` of a face of a ribbon, the `row`, `column` and `value` of a cell. It runs when the pointer lands on the mark, and `null` shows none ([ADR-0006](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0006-tooltip-content.md)).
 
 ```tsx
 <BarChart3D
@@ -175,7 +175,7 @@ The arrow keys glide the camera to its next view instead of jumping there. Where
 
 ## Transitions
 
-A chart glides into new data over the `animationDuration` of its container; 0 makes it jump, and so does a reader who asks for reduced motion. The glide happens in the numbers, before the projection - `useTween` eases them from the ones on screen - so the camera answers at once, mid-glide too. Every key moves as its own mark ([Enter](https://github.com/Niekes/charts-3d/blob/master/GLOSSARY.md) in the glossary):
+A chart glides into new data over the `animationDuration` of its container; 0 makes it jump, and so does a reader who asks for reduced motion. The glide happens in the numbers, before the projection - `useTween` eases them from the ones on screen - so the camera answers at once, mid-glide too. Every key moves as its own mark ([Enter](https://github.com/Niekes/charts-3d/blob/main/GLOSSARY.md) in the glossary):
 
 - A key the data **brings** starts at its enter value: a new bar grows out of the floor, at its place, and fades in as it grows.
 - A key that **stays** glides from where it stands to its new number - also to a new place, when the data reorders.
@@ -205,7 +205,7 @@ The axes glide along (`useTweenAxes`): their ends ease instead of jumping from o
 
 ## Props
 
-A prop means the same in every chart that takes it, so the next chart reads like the last, and a new chart takes these names ([ADR-0012](https://github.com/Niekes/charts-3d/blob/master/docs/adr/0012-a-prop-name-means-one-thing.md)).
+A prop means the same in every chart that takes it, so the next chart reads like the last, and a new chart takes these names ([ADR-0012](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0012-a-prop-name-means-one-thing.md)).
 
 | Prop          | What it is                                                                                                                                                                         | Charts                                           |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |

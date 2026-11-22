@@ -35,7 +35,7 @@ function Content({ path, url }: { path: string; url: string }) {
   const Mdx = page.body
   // The Markdown of every page is prerendered beside it, see routes.ts.
   const markdownUrl = `${url}.md`
-  const sourceUrl = `${githubUrl}/blob/master/docs/content/${path}`
+  const sourceUrl = `${githubUrl}/blob/main/docs/content/${path}`
 
   return (
     <DocsPage toc={toc}>

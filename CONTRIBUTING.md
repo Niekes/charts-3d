@@ -118,7 +118,7 @@ version, and is re-run then.
 Every version ships twice, from the same files: as the npm package
 `@niekes/charts-3d` and as the shadcn registry. A release is a pull request
 that bumps the version in `package.json` and updates `CHANGELOG.md` - for
-example the `release/0.3.0` branch. Merging it into `master` starts it: when
+example the `release/0.3.0` branch. Merging it into `main` starts it: when
 `package.json` changed, the [Release workflow](.github/workflows/release.yml)
 does both:
 
@@ -130,9 +130,9 @@ does both:
   the version's section of `CHANGELOG.md` as its notes, and the items can be
   pinned with `npx shadcn add niekes/charts-3d/<item>#v<version>`. The shadcn
   CLI does not pass the tag on to the registry dependencies, so the tag does
-  not sit on the `master` commit: the workflow makes a release commit beside
-  `master` in which every chart depends on
-  `niekes/charts-3d/chart-3d#v<version>`, and tags that one. On `master` the
+  not sit on the `main` commit: the workflow makes a release commit beside
+  `main` in which every chart depends on
+  `niekes/charts-3d/chart-3d#v<version>`, and tags that one. On `main` the
   dependencies stay unpinned.
 
 The workflow skips the publish when the version is already on npm, so

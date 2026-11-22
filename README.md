@@ -9,13 +9,13 @@
 
 <p align="center">
   <a href="https://github.com/niekes/charts-3d/actions/workflows/main.yml"><img src="https://github.com/niekes/charts-3d/actions/workflows/main.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/niekes/charts-3d/actions/workflows/main.yml"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fniekes%2Fcharts-3d%2Fmaster%2F.github%2Fbadges%2Fcoverage.json" alt="Coverage"></a>
-  <a href="https://fallow.tools/docs/explanations/health/"><img src="https://raw.githubusercontent.com/niekes/charts-3d/master/.github/badges/health.svg" alt="fallow health"></a>
+  <a href="https://github.com/niekes/charts-3d/actions/workflows/main.yml"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fniekes%2Fcharts-3d%2Fmain%2F.github%2Fbadges%2Fcoverage.json" alt="Coverage"></a>
+  <a href="https://fallow.tools/docs/explanations/health/"><img src="https://raw.githubusercontent.com/niekes/charts-3d/main/.github/badges/health.svg" alt="fallow health"></a>
   <a href="https://ui.shadcn.com/docs/registry"><img src="https://img.shields.io/badge/shadcn-registry-000000?logo=shadcnui&logoColor=white" alt="shadcn registry"></a>
   <a href="https://www.npmjs.com/package/@niekes/charts-3d"><img src="https://img.shields.io/npm/v/@niekes/charts-3d" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/@niekes/charts-3d"><img src="https://img.shields.io/npm/dw/@niekes/charts-3d" alt="npm weekly downloads"></a>
   <a href="https://www.npmjs.com/package/d3-3d"><img src="https://img.shields.io/npm/v/d3-3d?label=d3-3d" alt="d3-3d version"></a>
-  <a href="https://github.com/niekes/charts-3d/blob/master/LICENSE"><img src="https://img.shields.io/github/license/niekes/charts-3d" alt="License"></a>
+  <a href="https://github.com/niekes/charts-3d/blob/main/LICENSE"><img src="https://img.shields.io/github/license/niekes/charts-3d" alt="License"></a>
   <img src="https://img.shields.io/badge/TypeScript-Ready-blue" alt="TypeScript">
   <a href="https://github.com/niekes/charts-3d"><img src="https://img.shields.io/github/stars/niekes/charts-3d" alt="GitHub stars"></a>
   <a href="https://github.com/sponsors/niekes"><img src="https://img.shields.io/github/sponsors/niekes?logo=GitHub+Sponsors&logoColor=%23EA4AAA&style=flat" alt="GitHub Sponsors"></a>
