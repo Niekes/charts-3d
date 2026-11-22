@@ -449,6 +449,44 @@ describe("PlacesChart3D transitions", () => {
     host.remove()
   })
 
+  test("a dot whose series changes fades from the old color into the new one, as a tile of the globe does", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (type: string) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <PlacesChart3D
+              data={[{ lon: 15, lat: 15, name: "Rome", type }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+              series="type"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const fills = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] circle')].map(
+        (c) => c.getAttribute("fill")!
+      )
+
+    await render("city")
+    await act(() => vi.advanceTimersByTime(700))
+    await render("capital")
+    await act(() => vi.advanceTimersByTime(300))
+    // Mid-glide both colors are there, both faded.
+    const mid = fills()
+    expect(mid.some((f) => f.includes("--color-city") && f.includes("transparent"))).toBe(true)
+    expect(mid.some((f) => f.includes("--color-capital") && f.includes("transparent"))).toBe(true)
+    await act(() => vi.advanceTimersByTime(500))
+    expect(fills()).toEqual(["var(--color-capital)"])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a new value while a dot leaves: it fades out, never black", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)

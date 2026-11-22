@@ -105,6 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PlacesChart3D`: a dot sent to a new place mid-glide turns the short way
   round from where it is on screen, where it measured from the place it was
   headed for and could circle most of the globe the long way.
+- `PlacesChart3D`: a dot whose series changes fades out in the old color as
+  it fades in in the new one, as a tile of the globe and a region of the
+  choropleth do, where its color switched at once.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

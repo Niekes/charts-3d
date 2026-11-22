@@ -113,12 +113,13 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 }: PlacesChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { lon, lat, value, series, id }
-  const { entries, names, target, present } = useDots(data, fields)
+  const fallback = Object.keys(config)[0]
+  const { entries, names, target, present } = useDots(data, fields, fallback)
   const sizes = useTween(target, 0)
   const opacity = useTween(present, 0)
   // max, not a spread: thousands of arguments overflow the stack.
   const { peak } = useTween({ peak: max(Object.values(target)) ?? 0 })
-  const place = usePlaces(names, entries, fields, Object.keys(config)[0], sizes)
+  const place = usePlaces(names, entries, fields, fallback, sizes)
 
   const reading = { config, fields, radius, format, tooltip }
   const behind = new Map(entries.map((d, i) => [names[i], d]))
@@ -154,16 +155,25 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 /**
  * The entries with a place on the globe, the name of each, their values and
  * their presence - built once per change of the data, not at every frame the
- * camera turns.
+ * camera turns. A dot is named by its entry and its series, so a dot that
+ * changes color leaves as one and enters as the other, as a tile of the
+ * globe does.
  */
-function useDots<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
-  const { lon, lat, value, id } = fields
+function useDots<T extends Record<string, unknown>>(
+  data: T[],
+  fields: Fields<T>,
+  fallback: string
+) {
+  const { lon, lat, value, series, id } = fields
   return React.useMemo(() => {
     // An entry without a place on the globe has no dot.
     const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
     // Two entries of one name, or at one place, are two dots.
     const names = uniqueIds(
-      entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
+      entries.map((d) => {
+        const name = id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`
+        return `${name}\n${keyOf(series && d[series], fallback)}`
+      })
     )
     return {
       entries,
@@ -176,7 +186,7 @@ function useDots<T extends Record<string, unknown>>(data: T[], fields: Fields<T>
       ),
       present: Object.fromEntries(names.map((name) => [name, 1])),
     }
-  }, [data, lon, lat, value, id])
+  }, [data, lon, lat, value, series, id, fallback])
 }
 
 /**
