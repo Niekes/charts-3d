@@ -484,7 +484,9 @@ function ChartContainer3D({
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const drawing = useScene(requested, width, height, placement)
+  // The colors of the config as a string: a new config object with the same colors is no change.
+  const palette = JSON.stringify(Object.entries(config).map(([k, c]) => [k, c.color, c.theme]))
+  const drawing = useScene(requested, width, height, placement, palette)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
   const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { heading, ms })
@@ -582,7 +584,13 @@ const PRECEDING = 2
  * them in - so a set that mounts later but sits earlier lies under the others
  * on every renderer.
  */
-function useScene(requested: Renderer3D, width: number, height: number, placement: Placement3D) {
+function useScene(
+  requested: Renderer3D,
+  width: number,
+  height: number,
+  placement: Placement3D,
+  palette: string
+) {
   const scene = React.useRef<Mark3D[]>([])
   const sets = React.useRef(new Map<string, { marks: Mark3D[]; node: Element }>())
   const place = React.useCallback((id: string, set?: { marks: Mark3D[]; node: Element }) => {
@@ -595,7 +603,7 @@ function useScene(requested: Renderer3D, width: number, height: number, placemen
   const tip = useTip(placement)
   const focus = useFocus()
   const renderer = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width)
+  const { canvas, repaint } = useCanvas(scene, width, palette)
   const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
   return { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus }
 }
@@ -1464,10 +1472,11 @@ function useRenderer(requested: Renderer3D) {
 
 /**
  * A ref for the canvas of the marks, and the repaint that paints them: on new
- * marks, when the canvas changes its size and when the theme changes. A color
+ * marks, when the canvas changes its size and when the theme or the colors of
+ * the config change. A color
  * resolves on the canvas itself, inside the chart, so the `--color-*` apply.
  */
-function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
+function useCanvas(scene: React.RefObject<Mark3D[]>, width: number, palette: string) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
 
@@ -1498,6 +1507,12 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number) {
     },
     [repaint]
   )
+
+  // New colors in the config write new `--color-*`: the same CSS of a mark resolves anew.
+  React.useLayoutEffect(() => {
+    colors.current.clear()
+    repaint()
+  }, [palette, repaint])
 
   return { canvas, repaint }
 }
@@ -2985,6 +3000,15 @@ function finite(value: unknown) {
 }
 
 /**
+ * The config key a field of the data names, as `series` reads it: the value
+ * as a string, or `fallback` where it is missing or blank, never
+ * "undefined" or "null".
+ */
+function keyOf(value: unknown, fallback: string) {
+  return value == null || String(value).trim() === "" ? fallback : String(value)
+}
+
+/**
  * `value` as an amount a mark is sized by, such as the area of a dot or the
  * height of a tile: one below 0, or one that is not a finite number, stands
  * as 0.
@@ -3188,7 +3212,7 @@ function liveJoints<T extends Record<string, unknown>>(
   return new Map(
     named.map(({ d, name, placed }): [string, Joint] => [
       name,
-      { line: series ? String(d[series]) : fallback, gap: !placed },
+      { line: keyOf(series && d[series], fallback), gap: !placed },
     ])
   )
 }
@@ -3263,7 +3287,7 @@ function useConfigKeys<T extends Record<string, unknown>>(
   alive: Record<string, number>
 ) {
   const known = React.useRef(new Map<string, string>())
-  entries.forEach((d, name) => known.current.set(name, field ? String(d[field]) : fallback))
+  entries.forEach((d, name) => known.current.set(name, keyOf(field && d[field], fallback)))
   for (const name of known.current.keys()) {
     if (!(name in alive) && !entries.has(name)) known.current.delete(name)
   }
@@ -3521,6 +3545,7 @@ export {
   colorOf,
   faded,
   finite,
+  keyOf,
   nonNegative,
   useSeries,
   usePoints,

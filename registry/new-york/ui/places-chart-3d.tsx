@@ -11,6 +11,7 @@ import {
   earth,
   faded,
   finite,
+  keyOf,
   nonNegative,
   globe,
   orthographic,
@@ -224,7 +225,11 @@ function dotTooltip<T extends Record<string, unknown>>(
   return () =>
     tooltip(
       {
-        title: fields.id ? String(entry[fields.id]) : (config[key]?.label ?? key),
+        // A place without a name is titled by its series, never "null" or "undefined".
+        title:
+          fields.id && entry[fields.id] != null
+            ? String(entry[fields.id])
+            : (config[key]?.label ?? key),
         items: [
           ...(value !== undefined
             ? [
@@ -260,7 +265,7 @@ function headings<T extends Record<string, unknown>>(
     known.set(names[i], {
       lon: was + ((((to - was) % 360) + 540) % 360) - 180,
       lat: Number(d[lat]),
-      key: series ? String(d[series]) : fallback,
+      key: keyOf(series && d[series], fallback),
     })
   })
   return Object.fromEntries(

@@ -547,3 +547,21 @@ describe("LineChart3D renderers", () => {
     await view.unmount()
   })
 })
+
+describe("a missing series", () => {
+  test("an entry without its series lies on the line of the first color of the config, never --color-undefined", () => {
+    const { fills, html } = serverMarks(
+      chart(
+        [
+          { x: 0, y: 0, z: 0, s: "b" },
+          { x: 1, y: 1, z: 1 },
+          { x: 2, y: 2, z: 2 },
+        ],
+        { series: "s" }
+      )
+    )
+    expect(html).not.toContain("--color-undefined")
+    // The two entries without a series are one line of the first key: a segment, two halves, two dots.
+    expect(fills.filter((f) => f === "var(--color-a)")).toHaveLength(2 + 2)
+  })
+})

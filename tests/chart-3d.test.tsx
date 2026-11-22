@@ -22,6 +22,7 @@ import {
   earth,
   faded,
   finite,
+  keyOf,
   floored,
   gridAxis,
   facing,
@@ -2009,6 +2010,37 @@ describe("renderer", () => {
     host.remove()
   })
 
+  test("canvas resolves its colors again when the colors of config change, not when the object does", async () => {
+    stubCanvas()
+    const filled = [{ ...marks[0], fill: "var(--color-a)" }]
+    const chart = await mount(
+      <ChartContainer3D config={{ a: { color: "red" } }} renderer="canvas">
+        <Marks3D marks={filled} />
+      </ChartContainer3D>
+    )
+    const canvas = chart.host.querySelector("canvas")!
+    const reads = vi.spyOn(window, "getComputedStyle")
+    const resolvedOnCanvas = () => reads.mock.calls.filter(([el]) => el === canvas).length
+
+    // A new config object with the same colors: the cache holds, every frame.
+    await chart.render(
+      <ChartContainer3D config={{ a: { color: "red" } }} renderer="canvas">
+        <Marks3D marks={filled} />
+      </ChartContainer3D>
+    )
+    expect(resolvedOnCanvas()).toBe(0)
+
+    // A new color behind the same var(--color-a): SVG follows the CSS, so the canvas does too.
+    await chart.render(
+      <ChartContainer3D config={{ a: { color: "blue" } }} renderer="canvas">
+        <Marks3D marks={filled} />
+      </ChartContainer3D>
+    )
+    expect(resolvedOnCanvas()).toBeGreaterThan(0)
+
+    await chart.unmount()
+  })
+
   test("canvas keeps its pixels while its size stays: a repaint clears it instead, and a new size sizes it again", async () => {
     const ctx = stubCanvas()
     const size = { width: 320, height: 200 }
@@ -3921,6 +3953,21 @@ describe("finite", () => {
   test("what Number alone reads as 0, or not as a number, is none", () => {
     const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
     expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("keyOf", () => {
+  test("a value names its config key as the string it reads as, a 0 too", () => {
+    expect(["a", 0, 7, " b "].map((v) => keyOf(v, "first"))).toEqual(["a", "0", "7", " b "])
+  })
+
+  test('a missing or blank value names the fallback, never "undefined" or "null"', () => {
+    expect([undefined, null, "", "  "].map((v) => keyOf(v, "first"))).toEqual([
+      "first",
+      "first",
+      "first",
+      "first",
+    ])
   })
 })
 

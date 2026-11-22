@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `keyOf(value, fallback)`, the config key a field of the data names: the
+  value as a string, or `fallback` where it is missing or blank.
 - `earth` also returns `ground(feature, key)`, which draws one feature as
   land, for a chart that paints the land of a region in an order of its own.
 - `LineChart3D`, lines through the chart box: the entries of `data` at their
@@ -87,6 +89,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The canvas renderer follows new colors in `config`: a mark it painted in
+  the old color of a key, where SVG already showed the new one, until the
+  theme changed.
+- An entry without its `series` field, or with it null or blank, takes the
+  first key of the config, the key it takes without `series`, where it was
+  the key "undefined": a mark without a color, titled "undefined", in the
+  scatter, line, places, routes, globe and choropleth charts.
+- `PlacesChart3D`, `RoutesChart3D`: a place or a stop whose `id` is null or
+  missing is titled by its series or named by its place, never "null" or
+  "undefined".
 - `LineChart3D`, `RoutesChart3D`: thousands of points that arrive at once,
   as data that loads into an empty chart, find where they enter from in one
   sweep per line, where a search per point froze the page for seconds.

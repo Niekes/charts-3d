@@ -528,3 +528,25 @@ async function mount(element: ReactElement) {
   }
   return { host, svg, send, unmount }
 }
+
+describe("a missing series", () => {
+  test("a region whose entry has no series takes the first color of the config, over its land", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[
+            { code: "a", n: 1, type: "quake" },
+            { code: "b", n: 3 },
+          ]}
+          land={land}
+          id="code"
+          value="n"
+          series="type"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("--color-undefined")
+    expect(regions(html, "population")).toHaveLength(1)
+    expect(regions(html, "quake")).toHaveLength(1)
+  })
+})

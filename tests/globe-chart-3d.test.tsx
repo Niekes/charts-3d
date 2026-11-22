@@ -1020,3 +1020,27 @@ describe("GlobeChart3D while the camera turns, its tiles", () => {
     await globe.unmount()
   })
 })
+
+describe("a missing series", () => {
+  test("a tile whose entry has no series takes the first color of the config, never --color-undefined", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <GlobeChart3D
+          data={[
+            { lon: 15, lat: 45, people: 1000 },
+            { lon: 15, lat: 15, people: 1, kind: "quake" },
+          ]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          value="people"
+          series="kind"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("--color-undefined")
+    expect(faces(html).length).toBeGreaterThanOrEqual(1)
+    expect(faces(html, "quake")).toHaveLength(1)
+  })
+})

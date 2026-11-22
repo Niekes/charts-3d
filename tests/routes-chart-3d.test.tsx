@@ -409,6 +409,16 @@ describe("RoutesChart3D hover", () => {
     await view.unmount()
   })
 
+  test.each([null, undefined])(
+    'a stop whose id is %s is named by its place, never "null" or "undefined"',
+    async (id) => {
+      const view = await mount(chart([{ ...route[0], id: id as never }], { id: "id" }))
+      await view.point(marks(view.host).stops[0].at)
+      expect(view.tip()).toBe("lat, lon39, -9")
+      await view.unmount()
+    }
+  )
+
   test("tooltip makes what a route says from the default and the entries of its stops", async () => {
     const seen: Stop[][] = []
     const view = await mount(
@@ -1435,5 +1445,24 @@ describe("RoutesChart3D renderers", () => {
     // Its ring and, over it, its line.
     expect(ctx.stroke.mock.calls.filter(([outline]) => `${outline}` === "M12 3v18")).toHaveLength(2)
     await view.unmount()
+  })
+})
+
+describe("a missing series", () => {
+  test("stops without their series are a route of the first color of the config, never --color-undefined", () => {
+    const { html, stops } = serverMarks(
+      chart(
+        [
+          { lon: -20, lat: 10 },
+          { lon: 20, lat: 10 },
+        ],
+        { series: "s" }
+      )
+    )
+    expect(html).not.toContain("--color-undefined")
+    expect(stops.map((s) => s.el.getAttribute("fill"))).toEqual([
+      "var(--color-a)",
+      "var(--color-a)",
+    ])
   })
 })

@@ -570,3 +570,26 @@ describe("ScatterChart3D without a config", () => {
     expect(html).toContain('fill="var(--color-undefined)"')
   })
 })
+
+describe("a missing series", () => {
+  test("an entry without its series takes the first color of the config, never --color-undefined", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D
+          data={[
+            { x: 0, y: 0, z: 0, s: "b" },
+            { x: 1, y: 2, z: 3 },
+            { x: 2, y: 1, z: 0, s: null },
+          ]}
+          x="x"
+          y="y"
+          z="z"
+          series="s"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("--color-undefined")
+    expect(html).not.toContain("--color-null")
+    expect(html.match(/fill="var\(--color-a\)"/g)).toHaveLength(2)
+  })
+})
