@@ -316,8 +316,9 @@ describe("BarChart3D labels", () => {
             .map((l) => `${l.text} ${l.opacity}`)
             .join()
           if (series !== "Desktop 1,Mobile 1") failures.push(`${view(yaw, tilt)}: ${series}`)
-          // A floor title shows wherever the floor does; level with it, the floor is edge-on and has no room.
-          for (const title of tilt === 0 ? [] : ["Month", "Device"])
+          // A floor title shows wherever the floor does. Near level, the edge of the two rows points
+          // at the camera, a few pixels long, and its title fades out with it.
+          for (const title of Math.abs(tilt) <= 15 ? [] : ["Month", "Device"])
             if (!shown.some((l) => l.text === title))
               failures.push(`${view(yaw, tilt)}: no ${title}`)
           for (const [i, a] of shown.entries())
@@ -382,7 +383,9 @@ describe("BarChart3D labels", () => {
       drawn(bars.host).find((l) => l.text === text && l.opacity > 0)!.el.style.translate
     expect(row("Desktop")).toBe("0px 0px")
     expect(row("Mobile")).not.toBe("0px 0px")
-    expect(row("Device")).toBe(row("Mobile"))
+    // The edge points almost at the camera, too short for its title, which fades out where it moves.
+    const title = drawn(bars.host).filter((l) => l.text === "Device")
+    expect(title.some((l) => l.el.style.translate === row("Mobile"))).toBe(true)
     await bars.unmount()
   })
 })

@@ -2296,8 +2296,6 @@ const FADE = 4
 const DODGE = 12
 // How far the mark of a tick reaches out from its edge.
 const MARK = 6
-// How far the y title rises with the top of the box, so a steep edge crosses it instead of carrying it off its axis.
-const LIFT = 3 * GAP
 
 /** The closed quad of a wall; its gridlines are their own lines, so a new one fades in. */
 function quad(wall: AxisWall) {
@@ -2345,9 +2343,7 @@ type AxisLabel = {
   text: React.ReactNode
   opacity: number
   title?: boolean
-  /** Where the text hangs on its box: its start or end edge; its middle by default. */
-  anchor?: "start" | "end"
-  /** The turn of the text in degrees: the title of a floor axis runs along its edge. */
+  /** The turn of the text in degrees: the title of an axis runs along its edge. */
   angle?: number
 }
 
@@ -2368,7 +2364,7 @@ function labelAxes(
   const axes = edges
     .filter((edge) => edge.length)
     .map((edge) =>
-      edgeLabels(edge, edges, spec[edge.axis], format[edge.axis] ?? String, titles[edge.axis])
+      edgeLabels(edge, spec[edge.axis], format[edge.axis] ?? String, titles[edge.axis])
     )
   const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
   const placed: AxisLabel[] = []
@@ -2427,7 +2423,6 @@ function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, ch
 
 function edgeLabels(
   edge: AxisEdge,
-  edges: AxisEdge[],
   { domain, leaving = [], span }: GlidingAxis,
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
@@ -2466,12 +2461,9 @@ function edgeLabels(
   const [s0, s1] = span ?? [edge[0][axis], edge[edge.length - 1][axis]]
   const start = along(edge, clamp(range.lo, range.hi, s0))
   const end = along(edge, clamp(range.lo, range.hi, s1))
-  const upper = clamp(range.lo, range.hi, end.y <= start.y ? s1 : s0)
-  const head = title
-    ? titleLabel(`${id}-title`, axis, title, start, end, n, depth, face(edge, edges, upper))
-    : undefined
-  // A second row of tick labels pushes the title of a floor axis out with it; the y title is clear of them.
-  if (head && rows === 2 && axis !== "y") head.shift = row
+  const head = title ? titleLabel(`${id}-title`, axis, title, start, end, n, ranged) : undefined
+  // A second row of tick labels pushes the title out with it.
+  if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
   hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
@@ -2487,40 +2479,11 @@ function edgeLabels(
 }
 
 /**
- * The top of the box: the ends at `value` of the four edges of `edge`'s
- * axis, round the face they frame.
- */
-function face(edge: AxisEdge, edges: AxisEdge[], value: number) {
-  const round = ({ sides: [a, b] }: AxisEdge) => (a ? 3 - b : b)
-  return edges
-    .filter((e) => e.axis === edge.axis)
-    .sort((p, q) => round(p) - round(q))
-    .map((e) => along(e, value))
-}
-
-/**
- * The height on screen of `face` between `x0` and `x1`: its least y there,
- * at a corner inside or where an edge crosses either end.
- */
-function highest(face: Point2D[], x0: number, x1: number) {
-  const [lo, hi] = [Math.min(x0, x1), Math.max(x0, x1)]
-  const inside = face.filter((p) => within(lo, hi, p.x)).map((p) => p.y)
-  const crossing = face.flatMap((p, i) => {
-    const q = face[(i + 1) % face.length]
-    return [lo, hi]
-      .filter((x) => p.x !== q.x && within(Math.min(p.x, q.x), Math.max(p.x, q.x), x))
-      .map((x) => p.y + ((q.y - p.y) * (x - p.x)) / (q.x - p.x))
-  })
-  return Math.min(...inside, ...crossing)
-}
-
-/**
- * The title of an axis. The y axis has a free end, the top: its title
- * stands upright over that corner on the box's side of the line, its edge on
- * the line, a gap clear of the `top` of the box as far as it reaches, rising
- * with it by up to `LIFT`. A floor axis ends in corners the other axes label,
- * so its title runs along its edge, never upside down, beyond its tick labels
- * at the middle of the edge, `depth` being how far they reach out (ADR-0013).
+ * The title of an axis, along its edge as the screen shows it, never upside
+ * down, beyond its `ticks` on the side of the `normal`, at the middle of the
+ * edge (ADR-0013). It fades out where the edge points at the camera and shrinks
+ * to less than a line. Its box is the upright extent of the turned text,
+ * which the labels of the other axes keep clear of.
  */
 function titleLabel(
   key: string,
@@ -2529,47 +2492,42 @@ function titleLabel(
   start: Point2D,
   end: Point2D,
   normal: Point2D,
-  depth: number,
-  top: Point2D[]
+  ticks: AxisLabel[]
 ): AxisLabel {
-  const h = 12
-  const w = textWidth(text, h)
-  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-  const label = { key, axis, text, title: true, opacity: 1, shift: ZERO, w, h }
-  if (axis !== "y") return floorTitle(label, middle, normal, GAP + depth + GAP)
-  // The title runs from the higher end over the box, away from the tick labels, which keep their side.
-  const corner = end.y <= start.y ? end : start
-  const side = Math.sign(-normal.x) || 1
-  const under = Math.max(corner.y - LIFT, highest(top, corner.x, corner.x + side * w))
-  return {
-    ...label,
-    anchor: side > 0 ? "start" : "end",
-    at: { x: corner.x + (side * w) / 2, y: under - GAP - h / 2 },
-  }
-}
-
-/**
- * The title of a floor axis turned square to the `normal` of its edge, one
- * line deep `gap` beyond it. Its box is the upright extent of the turned
- * text, which the labels of the other axes keep clear of.
- */
-function floorTitle(
-  label: Omit<AxisLabel, "at">,
-  middle: Point2D,
-  normal: Point2D,
-  gap: number
-): AxisLabel {
-  // In whole tenths of a degree, folded into [-90°, 90°): never upside down, and float noise on a
-  // vertical edge does not flip it from frame to frame.
-  const tenths = Math.round((Math.atan2(normal.x, -normal.y) * 1800) / Math.PI)
+  const [w, h] = [textWidth(text, 12), 12]
+  // Along the line of the axis, not square to its normal, which perspective leans off it. In whole
+  // tenths of a degree, folded into [-90°, 90°): never upside down, and float noise on a vertical
+  // edge does not flip it from frame to frame.
+  const tenths = Math.round((Math.atan2(end.y - start.y, end.x - start.x) * 1800) / Math.PI)
   const angle = ((((tenths + 900) % 1800) + 1800) % 1800) / 10 - 90
   const [c, s] = [Math.cos, Math.sin].map((f) => Math.abs(f((angle * Math.PI) / 180)))
-  const { w, h } = label
+  const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+  const length = Math.hypot(end.x - start.x, end.y - start.y)
+  // Out square to the line, on the side of the normal, which perspective leans off it.
+  const square = { x: (start.y - end.y) / length, y: (end.x - start.x) / length }
+  const side = Math.sign(square.x * normal.x + square.y * normal.y) || 1
+  const out = length ? { x: side * square.x, y: side * square.y } : normal
+  // How far the tick labels reach out from the line that way.
+  const reach = Math.max(
+    0,
+    ...ticks.map(
+      (t) =>
+        (t.at.x - start.x) * out.x +
+        (t.at.y - start.y) * out.y +
+        (Math.abs(out.x) * t.w + Math.abs(out.y) * t.h) / 2
+    )
+  )
   return {
-    ...label,
+    key,
+    axis,
+    text,
+    title: true,
     angle,
+    shift: ZERO,
+    // Fades out as the edge, pointing at the camera, shrinks from a line to half of one.
+    opacity: clamp(0, 1, (2 * length) / h - 1),
     // Along the edge, the text reaches out half its height, whatever its length.
-    at: beside(middle, normal, 0, 0, gap + h / 2),
+    at: beside(middle, out, 0, 0, reach + GAP + h / 2),
     w: c * w + s * h,
     h: s * w + c * h,
   }
@@ -2667,8 +2625,8 @@ function dodge(want: number[], gaps: number[]) {
 function shows(label: AxisLabel, placed: AxisLabel[]) {
   return placed.reduce(
     (opacity, p) =>
-      // A floor title lies beyond the labels of its own axis by construction; only the y title can meet them.
-      p.axis === label.axis && (!label.title || label.angle !== undefined)
+      // A title lies beyond the labels of its own axis by construction.
+      p.axis === label.axis
         ? opacity
         : Math.min(opacity, 1 - (1 - clamp(0, 1, apart(label, p) / FADE)) * p.opacity),
     label.opacity
@@ -2730,19 +2688,13 @@ function AxisLine3D({
  * A label of the chart box. Its place follows the camera at once; a change
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
-function AxisLabel3D({
-  label: { at, w, shift, opacity, text, title, anchor, angle },
-}: {
-  label: AxisLabel
-}) {
-  // A label anchored at its start or end begins exactly there, at that edge of its guessed box.
-  const x = at.x + (anchor === "start" ? -w / 2 : anchor === "end" ? w / 2 : 0)
+function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { label: AxisLabel }) {
   return (
     <text
-      x={fixed(x)}
+      x={fixed(at.x)}
       y={fixed(at.y)}
-      transform={angle ? `rotate(${fixed(angle)} ${fixed(x)} ${fixed(at.y)})` : undefined}
-      textAnchor={anchor ?? "middle"}
+      transform={angle ? `rotate(${fixed(angle)} ${fixed(at.x)} ${fixed(at.y)})` : undefined}
+      textAnchor="middle"
       dominantBaseline="central"
       style={{
         opacity: Math.round(opacity * 100) / 100,
