@@ -152,6 +152,24 @@ describe("ChoroplethChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
+  test("a feature whose id is null is scenery, as one without: an entry without an id colors nothing", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[{ code: null, n: 5 }]}
+          land={{
+            type: "FeatureCollection",
+            features: [{ ...square("a", 0, 0), id: null } as unknown as GeoJSON.Feature],
+          }}
+          id="code"
+          value="n"
+        />
+      </ChartContainer3D>
+    )
+    expect(regions(html)).toHaveLength(0)
+    expect(landOf(html)).toHaveLength(1)
+  })
+
   test("series names the config key of the color, and the last entry on a region wins", () => {
     const html = renderToString(
       <ChartContainer3D config={config}>

@@ -96,6 +96,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `keyOf` drops the spaces around a value, as `leg` of `RoutesChart3D`
   already did: a padded `series`, such as `" b "` from a CSV, colors its
   config key `b`, where it was a key of its own without a color.
+- `ChoroplethChart3D`: a feature whose `id` is null is scenery, as one
+  without an id, where an entry whose id was missing colored every such
+  feature.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

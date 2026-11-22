@@ -101,21 +101,21 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
 
   // A region under an opaque color is drawn once: its land ring is left out.
   const opaque = opaqueOf(presence)
-  // A feature without an id is never colored: it is scenery, under every region.
+  // A feature without an id, or with a null one, is never colored: it is scenery, under every region.
   const {
     marks: scenery,
     path,
     sink,
     ground,
   } = earth(
-    { features: land.features.filter((f) => f.id === undefined) },
+    { features: land.features.filter((f) => f.id == null) },
     camera,
     geoOrthographic(),
     geoPath
   )
   // A region may be several features, as a mainland and its islands.
   const features = group(
-    land.features.filter((f) => f.id !== undefined),
+    land.features.filter((f) => f.id != null),
     (f) => regionOf(f.id)
   )
   const colors = group(Object.entries(presence), ([pid]) => (JSON.parse(pid) as [string])[0])
