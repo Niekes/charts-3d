@@ -254,20 +254,20 @@ describe("AreaChart3D tooltip", () => {
     type Entry = (typeof data)[number]
     const seen: { key: string; entries: Entry[] }[] = []
     const given: { title: unknown; items: unknown[] }[] = []
-    const view = await mount(
-      chart(data, {
-        tooltip: (
-          tip: { title: unknown; items: unknown[] },
-          face: { key: string; entries: Entry[] }
-        ) => {
-          seen.push(face)
-          given.push(tip)
-          return { title: `${face.key}:${face.entries.map((e) => e.name).join("")}`, items: [] }
-        },
-      })
-    )
+    const tooltip = (
+      tip: { title: unknown; items: unknown[] },
+      face: { key: string; entries: Entry[] }
+    ) => {
+      seen.push(face)
+      given.push(tip)
+      return { title: `${face.key}:${face.entries.map((e) => e.name).join("")}`, items: [] }
+    }
+    const view = await mount(chart(data, { tooltip }))
     // A segment of the top spans two entries in a row, a side none.
     await view.point(middle(tops(view.host)[1].corners))
+    expect(seen).toHaveLength(1)
+    // A frame renders the chart again with the same props: what the face says is not built again.
+    await view.render(chart(data, { tooltip }))
     expect(seen).toHaveLength(1)
     expect(seen[0].key).toBe("b")
     expect(seen[0].entries).toHaveLength(2)
@@ -283,6 +283,23 @@ describe("AreaChart3D tooltip", () => {
     expect(seen[1]).toEqual({ key: "b", entries: [] })
     expect(tip(view.host)).toBe("b:")
     await view.unmount()
+  })
+
+  test("names and series with a hyphen draw the ribbons of their own values", () => {
+    const render = (names: [string, string]) =>
+      serverMarks(
+        <ChartContainer3D config={{ "b-c": { color: "red" }, c: { color: "blue" } }}>
+          <AreaChart3D
+            data={[
+              { name: names[0], "b-c": 1, c: 0 },
+              { name: names[1], "b-c": 0, c: 5 },
+            ]}
+            index="name"
+          />
+        </ChartContainer3D>
+      ).marks.map((m) => m.corners)
+    // "a" with "b-c" and "a-b" with "c" both read "a-b-c" when joined with a hyphen.
+    expect(render(["a", "a-b"])).toEqual(render(["p", "q"]))
   })
 
   test("a segment between entries of the same name names both by that name", async () => {

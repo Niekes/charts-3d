@@ -23,6 +23,9 @@ import {
   faded,
   finite,
   keyOf,
+  joined,
+  entryTicks,
+  useTooltips,
   floored,
   gridAxis,
   facing,
@@ -52,7 +55,9 @@ import { AreaChart3D } from "@/registry/new-york/ui/area-chart-3d"
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
 import { ChoroplethChart3D } from "@/registry/new-york/ui/choropleth-chart-3d"
 import { GlobeChart3D } from "@/registry/new-york/ui/globe-chart-3d"
+import { LineChart3D } from "@/registry/new-york/ui/line-chart-3d"
 import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
+import { RoutesChart3D } from "@/registry/new-york/ui/routes-chart-3d"
 import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
 import { SurfaceChart3D } from "@/registry/new-york/ui/surface-chart-3d"
 
@@ -312,6 +317,8 @@ const pointer = (
     clientX,
     clientY,
     relatedTarget: relatedTarget ?? null,
+    // A move with the main button held, as a drag sends it; a hover reads no buttons.
+    buttons: type === "pointermove" ? 1 : 0,
     ...init,
   })
 
@@ -451,6 +458,27 @@ describe("shortcuts", () => {
     await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
     await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBeCloseTo(Math.PI / 72 + (46 * Math.PI) / 460)
+
+    await chart.unmount()
+  })
+
+  test("a drag let go beyond the chart before it turned does not turn it later without a button", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    const yaw = view(chart.host).yaw
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    // Let go off the chart a pixel on: not captured yet, the svg never hears the release.
+    document.body.dispatchEvent(pointer("pointerup", 151, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true, buttons: 0 }))
+    expect(view(chart.host).yaw).toBe(yaw)
+    // A new press turns it as ever.
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    expect(view(chart.host).yaw).toBeCloseTo(yaw + (46 * Math.PI) / 230)
 
     await chart.unmount()
   })
@@ -2494,7 +2522,9 @@ describe("helpers", () => {
     const tooltip = { items: [] }
     const marks = cubeMarks("c", cube.faces, "red", tooltip)
 
-    expect(marks.map((m) => m.key).sort()).toEqual(["c-front", "c-left", "c-top"])
+    expect(marks.map((m) => m.key).sort()).toEqual(
+      ["front", "left", "top"].map((face) => joined("c", face))
+    )
     for (const mark of marks) {
       expect(mark.fill).toMatch(/^color-mix\(in oklch, red \d+%, black\)$/)
       expect(mark.points).toHaveLength(4)
@@ -2575,6 +2605,38 @@ describe("helpers", () => {
     expect(gridAxis(0).spec.domain).toEqual([-0.5, 0.5])
   })
 
+  test("useTooltips builds a tooltip once per key until what it reads changes", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    let tips: ReturnType<typeof useTooltips> | undefined
+    function Probe({ data }: { data: object }) {
+      tips = useTooltips([data])
+      return null
+    }
+    const data = {}
+    await act(async () => root.render(<Probe data={data} />))
+    const first = tips!
+    let built = 0
+    const build = () => (built++, () => ({ items: [] }))
+    const a = first("a", build)
+    expect(first("a", build)).toBe(a)
+    // A key without a tooltip is cached as one, not built again.
+    expect(first("b", () => (built++, undefined))).toBeUndefined()
+    expect(first("b", () => (built++, undefined))).toBeUndefined()
+    expect(built).toBe(2)
+    // Another render with the same data keeps the cache and the function.
+    await act(async () => root.render(<Probe data={data} />))
+    expect(tips).toBe(first)
+    expect(tips!("a", build)).toBe(a)
+    // New data starts over.
+    await act(async () => root.render(<Probe data={{}} />))
+    expect(tips!("a", build)).not.toBe(a)
+    expect(built).toBe(3)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {
     let read: ReturnType<typeof useSeries> | undefined
     function Probe(props: Parameters<typeof useSeries>[0]) {
@@ -2595,7 +2657,12 @@ describe("helpers", () => {
     )
     // The series are the keys of the config; a value that is not a number stands as 0.
     expect(read!.series).toEqual(["a", "b"])
-    expect(read!.target).toEqual({ "x-a": 1, "x-b": 0, "y-a": 2, "y-b": 3 })
+    expect(read!.target).toEqual({
+      [joined("x", "a")]: 1,
+      [joined("x", "b")]: 0,
+      [joined("y", "a")]: 2,
+      [joined("y", "b")]: 3,
+    })
     expect(read!.values).toEqual(read!.target)
     expect(read!.rows).toEqual({ x: 0, y: 1 })
     expect([...read!.entries]).toEqual([
@@ -3197,7 +3264,7 @@ describe("focus", () => {
     )
     chart.svg.setPointerCapture = vi.fn()
     const press = (type: string, clientX: number) =>
-      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true })
+      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true, buttons: 1 })
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
@@ -3966,6 +4033,93 @@ describe("finite", () => {
     const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
     expect(none.filter(finite)).toEqual([])
   })
+})
+
+describe("entryTicks", () => {
+  test("ticks every entry of a dozen, about ten of a year, and none of none", () => {
+    expect(entryTicks(0)).toEqual([])
+    expect(entryTicks(1)).toEqual([0])
+    expect(entryTicks(12)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    expect(entryTicks(365)).toEqual([0, 50, 100, 150, 200, 250, 300, 350])
+  })
+})
+
+describe("joined", () => {
+  test("keeps the parts apart where a hyphen would run them together", () => {
+    expect(joined("a", "b-c")).not.toBe(joined("a-b", "c"))
+    expect(joined("a", "b")).toBe(joined("a", "b"))
+  })
+})
+
+describe("a name that every object inherits", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const noLand: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
+  type Row = { id: string; x: number; y: number; z: number; a: number }
+  const charts: Record<string, (data: Row[]) => ReactElement> = {
+    bar: (data) => <BarChart3D data={data} index="id" keys={["a"]} />,
+    area: (data) => <AreaChart3D data={data} index="id" keys={["a"]} />,
+    scatter: (data) => <ScatterChart3D data={data} x="x" y="y" z="z" id="id" />,
+    line: (data) => <LineChart3D data={data} x="x" y="y" z="z" id="id" />,
+    places: (data) => <PlacesChart3D data={data} land={noLand} lon="x" lat="y" id="id" />,
+    routes: (data) => <RoutesChart3D data={data} land={noLand} lon="x" lat="y" id="id" />,
+  }
+  const rows = (...ids: string[]) => ids.map((id, i) => ({ id, x: i * 10, y: i, z: i, a: i + 1 }))
+
+  /** The marks at every step of a glide of an entry named `name` in, out and in again. */
+  async function steps(draw: (data: Row[]) => ReactElement, name: string) {
+    // A fresh clock, so both runs see their frames at the same times.
+    vi.useRealTimers()
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Row[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={{ a: { color: "red" } }}>{draw(data)}</ChartContainer3D>
+        )
+      )
+    const seen: string[] = []
+    const glide = async (ms: number) => {
+      await act(() => vi.advanceTimersByTime(ms))
+      seen.push(host.querySelector('[data-slot="chart-3d-marks"]')!.innerHTML)
+    }
+    await render(rows("p", "q"))
+    for (const ids of [
+      ["p", "q", name],
+      ["p", "q"],
+      ["p", "q", name],
+    ]) {
+      await render(rows(...ids))
+      await glide(150)
+      await glide(350)
+      // Another point moves late in its coming or going: the places glide on past its presence.
+      await render(rows(...ids).map((d) => (d.id === "p" ? { ...d, x: d.x + 5 } : d)))
+      await glide(300)
+      await glide(300)
+      await glide(1000)
+    }
+    await act(async () => root.unmount())
+    host.remove()
+    return seen
+  }
+
+  for (const name of ["constructor", "toString", "__proto__"])
+    for (const [chart, draw] of Object.entries(charts))
+      test(`an entry named ${name} glides in and out of the ${chart} chart like any other`, async () => {
+        // Nothing of Object's own - a function, a number that is none - reaches the marks, and
+        // they move exactly as for a name of no account.
+        const named = await steps(draw, name)
+        for (const marks of named) expect(marks).not.toMatch(/NaN|function|\[object/)
+        expect(named).toEqual(await steps(draw, "plain"))
+      })
 })
 
 describe("keyOf", () => {

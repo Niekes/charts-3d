@@ -4,7 +4,12 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, facing, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import {
+  ChartContainer3D,
+  facing,
+  type Renderer3D,
+  type Tooltip3D,
+} from "@/registry/new-york/ui/chart-3d"
 import { PlacesChart3D } from "@/registry/new-york/ui/places-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -239,7 +244,12 @@ describe("PlacesChart3D hover", () => {
   )
 
   test("tooltip makes what a dot says of what it would say and the entry behind it, and null says nothing", async () => {
-    const chart = await mount(
+    let built = 0
+    const tooltip = (tip: Tooltip3D, { entry }: { entry: (typeof data)[number] }) => (
+      built++,
+      { ...tip, title: `${entry.name}, a ${entry.kind}` }
+    )
+    const places = () => (
       <ChartContainer3D config={config}>
         <PlacesChart3D
           data={data}
@@ -248,12 +258,16 @@ describe("PlacesChart3D hover", () => {
           lat="lat"
           value="people"
           series="kind"
-          tooltip={(tip, { entry }) => ({ ...tip, title: `${entry.name}, a ${entry.kind}` })}
+          tooltip={tooltip}
         />
       </ChartContainer3D>
     )
+    const chart = await mount(places())
     const { x, y } = dot(chart.svg, "capital")
     await chart.send("pointermove", { clientX: x, clientY: y })
+    // A frame renders the chart again with the same props: what the dot says is not built again.
+    await chart.render(places())
+    expect(built).toBe(1)
     // The items stay what the dot would say.
     expect(chart.host.textContent).toContain("Rome, a capital")
     expect(chart.host.textContent).toMatch(/people\s*100/)
@@ -693,7 +707,8 @@ async function mount(element: ReactElement) {
     await act(async () => root.unmount())
     host.remove()
   }
-  return { host, svg, send, unmount }
+  const render = (next: ReactElement) => act(async () => root.render(next))
+  return { host, svg, send, render, unmount }
 }
 
 describe("PlacesChart3D missing values", () => {

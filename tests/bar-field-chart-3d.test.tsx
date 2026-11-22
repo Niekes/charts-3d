@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Renderer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 import { BarFieldChart3D } from "@/registry/new-york/ui/bar-field-chart-3d"
 
 const config = { low: { color: "blue" }, high: { color: "red" } }
@@ -71,6 +71,17 @@ describe("BarFieldChart3D", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("var(--color-high) 0%, var(--color-mid)")
+  })
+
+  test("numbers given as text, as parsed CSV has them, draw what the numbers draw", () => {
+    const html = (data: unknown) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarFieldChart3D data={data as number[][]} />
+        </ChartContainer3D>
+      )
+    // Compared as text, "9" would top "100" and the axis would end at 10.
+    expect(html([["10", "9", "100"]])).toBe(html([[10, 9, 100]]))
   })
 
   test("a value that is no finite number draws no bar, and the rest stand", () => {
@@ -244,16 +255,19 @@ describe("BarFieldChart3D tooltip", () => {
 
   test("tooltip makes what a bar says from the default and its row, column and value; null shows none", async () => {
     const seen: unknown[] = []
-    const view = await mount(
+    const grid = [[7]]
+    const tooltip = (tip: Tooltip3D, bar: unknown) => (seen.push(bar), { ...tip, title: "bar" })
+    const field = () => (
       <ChartContainer3D config={config}>
-        <BarFieldChart3D
-          data={[[7]]}
-          tooltip={(tip, bar) => (seen.push(bar), { ...tip, title: "bar" })}
-        />
+        <BarFieldChart3D data={grid} tooltip={tooltip} />
       </ChartContainer3D>
     )
+    const view = await mount(field())
     await view.hover(view.bars()[0])
     expect(seen).toEqual([{ row: 0, column: 0, x: 0, z: 0, value: 7 }])
+    // A frame renders the chart again with the same props: what the bar says is not built again.
+    await view.render(field())
+    expect(seen).toHaveLength(1)
     expect(view.tip()).toMatch(/^bar/)
     await view.render(
       <ChartContainer3D config={config}>

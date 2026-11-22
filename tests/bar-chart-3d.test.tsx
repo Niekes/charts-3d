@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Renderer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
 
@@ -130,6 +130,40 @@ describe("BarChart3D", () => {
     expect(data).toContain(seen[0].entry)
     expect(tip(view.host)).toBe(`${seen[0].entry.name}/aAn/a`)
     await view.unmount()
+  })
+
+  test("a bar under a resting pointer builds its tooltip once, not again at every frame", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    let built = 0
+    const tooltip = (tip: Tooltip3D) => (built++, tip)
+    // Props that keep their identity, as at a frame of the camera, which renders the chart alone.
+    const keys = ["a"]
+    const render = (rows: typeof data) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={keys} tooltip={tooltip} />
+          </ChartContainer3D>
+        )
+      )
+    await render(data)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, ...lastFace(host) }))
+    )
+    expect(built).toBe(1)
+    // A frame of the camera renders the chart again with the same data.
+    for (let i = 0; i < 3; i++) await render(data)
+    expect(built).toBe(1)
+    // New data under the pointer says the new value.
+    await render(data.map((d) => ({ ...d, a: d.a * 10 })))
+    expect(built).toBe(2)
+    expect(tip(host)).toMatch(/A\s*(10|30)/)
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 
   test("a missing value stands as a flat bar, and its tooltip leaves it out instead of saying 0", async () => {
@@ -1030,6 +1064,47 @@ describe("BarChart3D entries of the same name", () => {
       )
     const three = render(twice.map((d, i) => ({ ...d, month: `${d.month}${i}` })))
     expect(faces(render(twice))).toHaveLength(faces(three).length)
+  })
+
+  test("a year of daily bars ticks about ten of its days, not every one", () => {
+    const year = Array.from({ length: 365 }, (_, i) => ({ name: `day${i}`, a: i % 7 }))
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={year} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    // A tick is laid out on each of the four edges of its axis.
+    const labels = new Set(html.match(/>day\d+</g))
+    expect(labels.size).toBeGreaterThan(4)
+    expect(labels.size).toBeLessThanOrEqual(12)
+    expect(labels).toContain(">day0<")
+  })
+
+  test("a dozen bars keep a tick each", () => {
+    const months = Array.from({ length: 12 }, (_, i) => ({ name: `m${i}`, a: i }))
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <BarChart3D data={months} index="name" keys={["a"]} />
+      </ChartContainer3D>
+    )
+    expect(new Set(html.match(/>m\d+</g)).size).toBe(12)
+  })
+
+  test("names and series with a hyphen draw the bars of their own values", () => {
+    const render = (names: [string, string]) =>
+      renderToString(
+        <ChartContainer3D config={{ "b-c": { color: "red" }, c: { color: "blue" } }}>
+          <BarChart3D
+            data={[
+              { name: names[0], "b-c": 1, c: 0 },
+              { name: names[1], "b-c": 0, c: 5 },
+            ]}
+            index="name"
+          />
+        </ChartContainer3D>
+      )
+    // "a" with "b-c" and "a-b" with "c" both read "a-b-c" when joined with a hyphen.
+    expect(faces(render(["a", "a-b"]))).toEqual(faces(render(["p", "q"])))
   })
 
   test("a bar of a repeated name says that name, and the entry behind it", async () => {

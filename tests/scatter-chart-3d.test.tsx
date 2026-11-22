@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 import { ScatterChart3D } from "@/registry/new-york/ui/scatter-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -82,13 +82,46 @@ describe("ScatterChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
-  test("the tooltip of a point shows its values rounded", async () => {
+  test("a point under a resting pointer builds its tooltip once, not again at every frame", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    let built = 0
+    const tooltip = (tip: Tooltip3D) => (built++, tip)
+    const render = (data: { x: number; y: number; z: number }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} x="x" y="y" z="z" tooltip={tooltip} />
+          </ChartContainer3D>
+        )
+      )
+    const data = [{ x: 1, y: 2, z: 3 }]
+    await render(data)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const point = host.querySelector("circle")!
+    const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+    )
+    for (let i = 0; i < 3; i++) await render(data)
+    expect(built).toBe(1)
+    // New data under the pointer says its new value.
+    await render([{ x: 1, y: 7, z: 3 }])
+    expect(built).toBe(2)
+    expect(host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent).toContain("y7")
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("the tooltip of a point shows its values rounded, keeping a small one", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
       root.render(
         <ChartContainer3D config={config}>
-          <ScatterChart3D data={[{ x: 1 / 3, y: 2, z: 3 }]} x="x" y="y" z="z" />
+          <ScatterChart3D data={[{ x: 1 / 3, y: 0.0004, z: 1234.56789 }]} x="x" y="y" z="z" />
         </ChartContainer3D>
       )
     )
@@ -99,8 +132,12 @@ describe("ScatterChart3D", () => {
     await act(() =>
       svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
     )
-    expect(host.textContent).toContain((1 / 3).toLocaleString())
-    expect(host.textContent).not.toContain("0.3333333")
+    const tip = host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent
+    expect(tip).toContain("0.333")
+    expect(tip).not.toContain("0.3333")
+    // A small number keeps its first digits instead of rounding to 0.
+    expect(tip).toContain("0.0004")
+    expect(tip).toContain((1234.568).toLocaleString())
 
     await act(async () => root.unmount())
     host.remove()

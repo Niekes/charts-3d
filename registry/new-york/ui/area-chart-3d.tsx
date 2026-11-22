@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent, range, ticks } from "d3-array"
+import { extent, range } from "d3-array"
 import {
   polygons3D,
   sort,
@@ -29,6 +29,9 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  joined,
+  entryTicks,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -72,7 +75,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   data,
   index,
   keys,
-  format = {},
+  format,
   titles,
   tooltip,
 }: AreaChart3DProps<T>) {
@@ -81,6 +84,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   // unfolds from its neighbour as far as its presence.
   const { series, target, entries, values, rows, presence, lanes, lanePresence, labels, nameOf } =
     useSeries({ data, index, keys, format })
+  const tips = useTooltips([data, index, keys, config, format, tooltip])
   const spec = useTweenAxes(areaAxes(data.length, series.length, Object.values(target)))
   // The box deepens with the series, so a ribbon stays a ribbon, and glides
   // there with the axes.
@@ -104,10 +108,12 @@ export function AreaChart3D<T extends Record<string, unknown>>({
     .sort((a, b) => sort(a.faces[4], b.faces[4]))
     .flatMap(({ key, line, faces }) =>
       ribbonMarks(key, painted(faces, toward), line, lanePresence[key] ?? 0, (names) =>
-        // A series turned off says nothing, as an entry that left.
-        series.includes(key)
-          ? ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
-          : undefined
+        tips(joined(key, ...names), () =>
+          // A series turned off says nothing, as an entry that left.
+          series.includes(key)
+            ? ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
+            : undefined
+        )
       )
     )
 
@@ -152,7 +158,7 @@ function linePoints(
   const own = Object.entries(rows)
     .sort(([, a], [, b]) => a - b)
     .flatMap(([name, x]) => {
-      const value = values[`${name}-${key}`]
+      const value = values[joined(name, key)]
       return value === undefined ? [] : [{ name, x, value, seen: presence[name] ?? 0 }]
     })
   let anchor = own.find((p) => p.seen === 1)
@@ -245,7 +251,7 @@ function ribbonMarks(
   const spans = (f: RibbonFace) =>
     f.face === "top" ? [line[f.segment].name, line[f.segment + 1].name] : []
   return faces.map((f) => {
-    const id = f.face === "top" ? `${key}-top-${line[f.segment].name}` : `${key}-${f.face}`
+    const id = f.face === "top" ? joined(key, "top", line[f.segment].name) : joined(key, f.face)
     return {
       key: id,
       points: f.map((p) => p.projected),
@@ -291,7 +297,7 @@ function ribbonTooltip<T extends Record<string, unknown>>(
         title: config[key]?.label ?? key,
         // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
         items: names.flatMap((name, i) => {
-          const value = target[`${name}-${key}`]
+          const value = target[joined(name, key)]
           if (!finite(spanned[i][key])) return []
           return [
             { label: (format.x ?? String)(nameOf(name)), value: format.y?.(value) ?? value, color },
@@ -305,14 +311,12 @@ function ribbonTooltip<T extends Record<string, unknown>>(
 /**
  * The axes of an area chart: the entries along x, with half a row of room
  * between the first and the last and the walls, a row per series along z.
- * A line has many entries, so x ticks about ten of them, not every one.
  */
 function areaAxes(entries: number, series: number, values: number[]): AxesSpec {
-  const every = entries ? ticks(0, entries - 1, 10).filter(Number.isInteger) : []
   // extent, not a spread: thousands of arguments overflow the stack.
   const [lo = 0, hi = 0] = extent(values)
   return {
-    x: pad({ domain: [0, Math.max(0, entries - 1)], ticks: every }, 1),
+    x: pad({ domain: [0, Math.max(0, entries - 1)], ticks: entryTicks(entries) }, 1),
     y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [0, Math.max(0, series - 1)], ticks: range(series) }, 1),
   }

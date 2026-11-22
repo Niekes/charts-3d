@@ -28,6 +28,8 @@ import {
   type Mark3D,
   type Symbol3D,
   type Tooltip3D,
+  joined,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -117,6 +119,7 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   // A stop that comes, goes or moves travels the great circle, at an even pace.
   const runs = useRuns(named, series && "route", presence, target, overGlobe)
   const reading = { config, entries, fields, tooltip }
+  const tooltips = useTooltips([data, lon, lat, id, series, leg, config, tooltip])
   const came = useCame(presence)
   const lists = runs.map((run) => pieces(run, legOf))
   // A route ends with its last run: one after a gap goes on from there.
@@ -133,7 +136,12 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
     .filter((piece) => piece.slice(0, piece.symbol ? 1 : 2).every((p) => p.rotated.z > 0))
     // The stops lie over the legs and the tips over the stops, each among its own from back to front.
     .sort((a, b) => layer(a) - layer(b) || sort(a, b))
-    .map((piece) => pieceMark(piece, routeTooltip(piece, reading)))
+    .map((piece) =>
+      pieceMark(
+        piece,
+        tooltips(joined(piece.key, piece.colorKey), () => routeTooltip(piece, reading))
+      )
+    )
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...routes]} />
@@ -174,7 +182,8 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
     () =>
       data.map((entry) => ({
         entry,
-        name: id && String(entry[id]),
+        // Named within its route: two routes through one stop each keep their own.
+        name: id && joined(keyOf(series && entry[series], ""), String(entry[id])),
         // The raw value: the core reads it as the key of its line, with the fallback.
         route: series && entry[series],
         leg: keyOf(leg && entry[leg], ""),
@@ -226,7 +235,7 @@ type Came = Map<string, Coming>
  */
 function useCame(presence: Record<string, number>) {
   const came: Came = React.useRef(new Map()).current
-  for (const name of came.keys()) if (!(name in presence)) came.delete(name)
+  for (const name of came.keys()) if (!Object.hasOwn(presence, name)) came.delete(name)
   return came
 }
 
@@ -263,7 +272,7 @@ function pieces(
       return Array.from({ length: count }, (_, k) =>
         piece(
           [onGlobe(along(k / count)), onGlobe(along((k + 1) / count))],
-          `${from.name}-${to.name}-${k}`,
+          joined(from.name, to.name, String(k)),
           from.moves || to.moves ? 1 : Math.max(from.seen, to.seen),
           [from.name, to.name],
           to.name

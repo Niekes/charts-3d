@@ -27,6 +27,8 @@ import {
   ramp,
   type Mark3D,
   type Tooltip3D,
+  useTooltips,
+  joined,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type SurfaceChart3DProps = {
@@ -105,12 +107,21 @@ export function SurfaceChart3D({
   // Every column and row glides to its place.
   const placesX = useTween(sides.x.places)
   const placesZ = useTween(sides.z.places)
+  const tips = useTooltips([raw, present, format, titles, tooltip])
   // Everything of a cell but its shade waits for the data to move, not the camera.
   const { lattice, points } = React.useMemo(() => {
     const lattice = gridLattice(heights, { x: placesX, z: placesZ }, floor)
-    const cells = { raw, present, keys: [low, high] as [string, string], format, titles, tooltip }
+    const cells = {
+      raw,
+      present,
+      keys: [low, high] as [string, string],
+      tips,
+      format,
+      titles,
+      tooltip,
+    }
     return { lattice, points: gridPoints(lattice, { x: placesX, z: placesZ }, cells) }
-  }, [heights, placesX, placesZ, floor, raw, present, low, high, format, titles, tooltip])
+  }, [heights, placesX, placesZ, floor, raw, present, low, high, tips, format, titles, tooltip])
   const spec = useTweenAxes({ x: sides.x.spec, y: axis(floor, peak), z: sides.z.spec })
   const world = worldBox(spec)
 
@@ -149,6 +160,7 @@ type Cells = Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip"> & {
   raw: number[][]
   present: Record<string, number>
   keys: [string, string]
+  tips: ReturnType<typeof useTooltips>
 }
 
 /**
@@ -159,7 +171,7 @@ type Cells = Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip"> & {
 function gridPoints(
   lattice: { r: number; c: number; y: number }[][],
   places: Record<"x" | "z", Record<string, number>>,
-  { raw, present, keys, ...say }: Cells
+  { raw, present, keys, tips, ...say }: Cells
 ): GridPoint[] {
   const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
   return lattice.flatMap((row, i) =>
@@ -172,7 +184,11 @@ function gridPoints(
         point.cell = {
           key: point.key,
           color: ramp(height, [lo, hi], keys),
-          tooltip: cellTooltip(quad, raw, present, say),
+          // What a cell says reads the data at its corners, not the heights on their way; a
+          // column that leaves gives the cell beside it new corners when the glide is done.
+          tooltip: tips(joined(...quad.map((p) => `${p.r}-${p.c}`)), () =>
+            cellTooltip(quad, raw, present, say)
+          ),
         }
       }
       return point
@@ -199,7 +215,7 @@ function cellTooltip(
 ): Mark3D["tooltip"] {
   if (quad.some((p) => !(`${p.r}-${p.c}` in present) || !finite(data[p.r][p.c]))) return undefined
   return () => {
-    const value = quad.reduce((sum, p) => sum + data[p.r][p.c], 0) / quad.length
+    const value = quad.reduce((sum, p) => sum + Number(data[p.r][p.c]), 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
     const column = Math.min(...quad.map((p) => p.c))
     return tooltip(
@@ -285,9 +301,10 @@ function useGrid(
  * With the lowest and the highest height, 0 for a grid without one.
  */
 function cleanGrid(raw: number[][]) {
-  const [floor = 0, peak = 0] = extent(raw.flat().filter(finite))
-  const data = raw.map((row) => row.map((y) => (finite(y) ? y : floor)))
-  return { data, floor, peak }
+  // A height given as text, as parsed CSV has it, is that number.
+  const heights = raw.map((row) => row.map((y) => (finite(y) ? Number(y) : undefined)))
+  const [floor = 0, peak = 0] = extent(heights.flat(), (y) => y)
+  return { data: heights.map((row) => row.map((y) => y ?? floor)), floor, peak }
 }
 
 /** The height of every cell with a place, keyed by its row and column, gliding into new data. */

@@ -19,6 +19,8 @@ import {
   worldBox,
   type Mark3D,
   type Tooltip3D,
+  joined,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type LineChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -94,6 +96,7 @@ export function LineChart3D<T extends Record<string, unknown>>({
   const { fields, named, entries, axes, presence, target } = usePoints(data, x, y, z, id)
   // A point that comes or goes unfolds from its neighbour straight through the box.
   const runs = useRuns(named, series, presence, target)
+  const tips = useTooltips([data, x, y, z, id, series, config, format, titles, tooltip])
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
   const world = worldBox(spec)
@@ -110,11 +113,13 @@ export function LineChart3D<T extends Record<string, unknown>>({
       elbowMarks(
         elbow,
         colors ? ramp(elbow[elbow.own].y, [lo, hi], colors) : colorOf(elbow.line),
-        pointTooltip(
-          entries.get(elbow.name),
-          series ? (config[elbow.line]?.label ?? elbow.line) : undefined,
-          fields,
-          { format, titles, tooltip }
+        tips(joined(elbow.line, elbow.name), () =>
+          pointTooltip(
+            entries.get(elbow.name),
+            series ? (config[elbow.line]?.label ?? elbow.line) : undefined,
+            fields,
+            { format, titles, tooltip }
+          )
         )
       )
     )
@@ -175,14 +180,14 @@ function elbowMarks(
   return [
     ...at.slice(1).map((b, i) => ({
       ...mark,
-      key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
+      key: joined(elbow.name, i < elbow.own ? "before" : "after"),
       points: segment(at[i], b, WIDTH),
     })),
     { ...mark, shape: "circle" as const, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
     {
       ...mark,
       shape: "circle" as const,
-      key: `${elbow.name}-dot`,
+      key: joined(elbow.name, "dot"),
       points: [at[elbow.own]],
       r: WIDTH,
       whenLit: true,

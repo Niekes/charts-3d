@@ -23,6 +23,9 @@ import {
   type Mark3D,
   type Tooltip3D,
   type World,
+  joined,
+  entryTicks,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -80,6 +83,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
       format,
     })
   const cells = barCells(rows, lanes, values)
+  const tips = useTooltips([data, index, keys, config, format, tooltip])
 
   const box = barBox(data.length, series.length, Object.values(target))
   // Every axis glides with the bars: the value ends with the heights, the row
@@ -96,15 +100,17 @@ export function BarChart3D<T extends Record<string, unknown>>({
       <Marks3D
         marks={bars.flatMap((bar) =>
           barMarks({
-            id: `${bar.name}-${bar.key}`,
+            id: joined(bar.name, bar.key),
             faces: bar.faces,
             color: colorOf(bar.key),
             // A series turned off says nothing, as an entry that left.
-            tooltip: barTooltip(
-              { id: bar.name, name: nameOf(bar.name), key: bar.key },
-              series.includes(bar.key) ? entries.get(bar.name) : undefined,
-              target,
-              { config, format, tooltip }
+            tooltip: tips(joined(bar.name, bar.key), () =>
+              barTooltip(
+                { id: bar.name, name: nameOf(bar.name), key: bar.key },
+                series.includes(bar.key) ? entries.get(bar.name) : undefined,
+                target,
+                { config, format, tooltip }
+              )
             ),
             opacity: (presence[bar.name] ?? 0) * (lanePresence[bar.key] ?? 0),
           })
@@ -145,7 +151,7 @@ function barCells(
 ) {
   return Object.entries(rows).flatMap(([name, x]) =>
     Object.entries(lanes).flatMap(([key, j]) => {
-      const value = values[`${name}-${key}`]
+      const value = values[joined(name, key)]
       return value === undefined ? [] : [{ name, x, j, key, value }]
     })
   )
@@ -160,7 +166,8 @@ function barBox(entries: number, series: number, values: number[]) {
   // extent, not a spread: thousands of arguments overflow the stack.
   const [lo = 0, hi = 0] = extent(values)
   const spec: AxesSpec = {
-    x: pad({ domain: [-0.5, entries - 0.5], ticks: index(entries) }, 1),
+    // About ten ticks, not one per bar: a year of days lays out ten labels, not 365.
+    x: pad({ domain: [-0.5, entries - 0.5], ticks: entryTicks(entries) }, 1),
     y: axis(Math.min(0, lo), Math.max(0, hi)),
     z: pad({ domain: [-0.5, series - 0.5], ticks: index(series) }, 1),
   }
@@ -198,7 +205,7 @@ function barTooltip<T extends Record<string, unknown>>(
   }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = target[`${id}-${key}`]
+  const value = target[joined(id, key)]
   return () =>
     tooltip(
       {

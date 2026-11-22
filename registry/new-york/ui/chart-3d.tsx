@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { extent, max, min, nice, ticks } from "d3-array"
+import { extent, max, min, nice, range, ticks } from "d3-array"
 import {
   axes3D,
   box,
@@ -817,8 +817,9 @@ function glideOf(
 ) {
   const origin = (key: string, among: Record<string, number>) =>
     typeof enter === "function" ? enter(key, among) : enter
-  const fresh = Object.keys(to).filter((k) => !(k in shown))
-  const gone = Object.keys(shown).filter((k) => !(k in to))
+  // Own keys only: a name of the data such as "constructor" is no key that every object has.
+  const fresh = Object.keys(to).filter((k) => !Object.hasOwn(shown, k))
+  const gone = Object.keys(shown).filter((k) => !Object.hasOwn(to, k))
   return {
     from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, origin(k, shown) ?? to[k]])) },
     to,
@@ -1036,8 +1037,8 @@ function useOrbit(
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return touching.current ? onDragStart() : onHover(e)
-      // A drag moves only while its modifier is held: the platform one turning, Alt panning.
-      if (d.rotate ? !platformMod(e) : !e.altKey) return release()
+      // A drag needs its button - a release off the chart is unheard - and its modifier held.
+      if (!(e.buttons & 1) || (d.rotate ? !platformMod(e) : !e.altKey)) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
       // A press that wanders a few pixels is still a click on a bar.
@@ -2023,6 +2024,13 @@ ${colorConfig
   )
 }
 
+/**
+ * A number as the tooltip says it: to three decimals, as `toLocaleString`
+ * does, but below 1 to three significant digits, so 0.0004 is not 0.
+ */
+const rounded = (value: number) =>
+  value.toLocaleString(undefined, Math.abs(value) < 1 ? { maximumSignificantDigits: 3 } : {})
+
 function ChartTooltip3D({ tip }: { tip: Tip3D }) {
   const { tooltip, ref, place } = tip
   // Before the browser paints it, so a new tooltip never shows where the last one was.
@@ -2044,7 +2052,7 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
           )}
           <span className="text-muted-foreground">{item.label}</span>
           <span className="ml-auto font-mono font-medium text-foreground tabular-nums">
-            {typeof item.value === "number" ? item.value.toLocaleString() : item.value}
+            {typeof item.value === "number" ? rounded(item.value) : item.value}
           </span>
         </div>
       ))}
@@ -2649,24 +2657,30 @@ function room(a: AxisLabel, b: AxisLabel, normal: Point2D, t: Point2D) {
  * come too close move as one block, centred on the places they want.
  */
 function dodge(want: number[], gaps: number[]) {
-  const blocks: { start: number; offsets: number[]; at: number }[] = []
+  // Where each point stands from the first, keeping its gaps, and the running
+  // sums of the wants and of those, so a block's mean is two lookups, not a loop.
+  const from = prefix(gaps)
+  const [wants, froms] = [prefix(want), prefix(from)]
+  const blocks: { start: number; end: number; at: number }[] = []
   want.forEach((at, start) => {
-    let block = { start, offsets: [0], at }
+    let block = { start, end: start + 1, at }
     let last = blocks.at(-1)
-    while (last && last.at + last.offsets.at(-1)! + gaps[block.start - 1] > block.at) {
+    while (last && last.at + from[block.start] - from[last.start] > block.at) {
       blocks.pop()
-      const base = last.offsets.at(-1)! + gaps[block.start - 1]
-      const offsets = [...last.offsets, ...block.offsets.map((o) => o + base)]
-      const first = last.start
+      const [first, end] = [last.start, block.end]
       // Where the block moves its points the least: the mean of the places they want.
-      const mean = offsets.reduce((sum, o, k) => sum + want[first + k] - o, 0) / offsets.length
-      block = { start: first, offsets, at: mean }
+      const mean = (wants[end] - wants[first] - (froms[end] - froms[first])) / (end - first)
+      block = { start: first, end, at: mean + from[first] }
       last = blocks.at(-1)
     }
     blocks.push(block)
   })
-  return blocks.flatMap((block) => block.offsets.map((o) => block.at + o))
+  return blocks.flatMap((b) => range(b.start, b.end).map((k) => b.at + from[k] - from[b.start]))
 }
+
+/** The running sums of `values`, from 0: the i-th is the sum of the first i. */
+const prefix = (values: number[]) =>
+  values.reduce((sums, v) => (sums.push(sums[sums.length - 1] + v), sums), [0])
 
 /**
  * How much of a label shows beside the labels placed before it: it fades as
@@ -2765,6 +2779,14 @@ function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { la
 function axis(lo: number, hi: number, count = 5): AxisSpec {
   const [start, stop] = nice(lo, lo === hi ? hi + 1 : hi, count)
   return { domain: [start, stop], ticks: ticks(start, stop, count) }
+}
+
+/**
+ * The ticks of `count` entries laid out at 0, 1, 2…: about ten of them, on
+ * whole entries, so a long row of entries is not labelled at every one.
+ */
+function entryTicks(count: number) {
+  return count ? ticks(0, count - 1, 10).filter(Number.isInteger) : []
 }
 
 /**
@@ -3137,11 +3159,11 @@ function useRuns<T extends Record<string, unknown>>(
   // The positions of the render before: a point is there as long as it has one.
   const shown = React.useRef<Record<string, number>>({})
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
-  const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
+  const alive = (name: string) =>
+    Object.hasOwn(presence, name) || positionKey("x", name) in shown.current
   // A point that has lost its place is drawn while it fades out: it folds into its neighbour first.
-  const runs = runsOf(
-    (known.current = withGone(live, known.current, alive)),
-    (name) => name in presence
+  const runs = runsOf((known.current = withGone(live, known.current, alive)), (name) =>
+    Object.hasOwn(presence, name)
   )
   const places = useTween(target, neighbour(runs), toward && pointwise(toward))
   shown.current = places
@@ -3163,7 +3185,7 @@ function useRuns<T extends Record<string, unknown>>(
         return {
           name,
           // A point still on its way when its presence has run out is seen no more.
-          seen: presence[name] ?? 0,
+          seen: Object.hasOwn(presence, name) ? presence[name] : 0,
           moves: live.has(name) ? AXES.some((a) => at[a] !== own[a]) : stays,
           at,
         }
@@ -3331,7 +3353,7 @@ function useConfigKeys<T extends Record<string, unknown>>(
   const known = React.useRef(new Map<string, string>())
   entries.forEach((d, name) => known.current.set(name, keyOf(field && d[field], fallback)))
   for (const name of known.current.keys()) {
-    if (!(name in alive) && !entries.has(name)) known.current.delete(name)
+    if (!Object.hasOwn(alive, name) && !entries.has(name)) known.current.delete(name)
   }
   return (name: string) => known.current.get(name) ?? fallback
 }
@@ -3368,6 +3390,27 @@ function pointTooltip<T extends Record<string, unknown>>(
       },
       { entry }
     )
+}
+
+/**
+ * The tooltips of a chart's marks, each built once per mark `key` and kept
+ * until one of `deps` - what the tooltips read: the data, the config, the
+ * props - changes. A mark under a pointer that rests so hands the hover the
+ * same tooltip at every frame of the camera or of a glide, and the hover
+ * builds what it says only when it changes, never per frame (ADR-0006).
+ */
+function useTooltips(deps: React.DependencyList) {
+  // The caller names what its tooltips read, so the list is no literal the linter can check.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cache = React.useMemo(() => new Map<string, Mark3D["tooltip"]>(), deps)
+  // As stable as the cache, so a chart may build its marks in a memo of its own.
+  return React.useCallback(
+    (key: string, build: () => Mark3D["tooltip"]) => {
+      if (!cache.has(key)) cache.set(key, build())
+      return cache.get(key)
+    },
+    [cache]
+  )
 }
 
 /**
@@ -3409,7 +3452,7 @@ function useSeries<T extends Record<string, unknown>>({
       ids,
       target: Object.fromEntries(
         data.flatMap((d, i) =>
-          series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+          series.map((key) => [joined(ids[i], key), finite(d[key]) ? Number(d[key]) : 0])
         )
       ),
       order: Object.fromEntries(ids.map((id, i) => [id, i])),
@@ -3464,6 +3507,13 @@ function uniqueIds(names: string[]) {
 /** The name of the entry of `id`, as its data names it. */
 const nameOf = (id: string) => id.split(REPEAT)[0]
 
+/**
+ * One key of several parts, such as an entry and its series: joined by a
+ * control character no name of the data is expected to hold, where a hyphen
+ * would make "a" and "b-c" the key of "a-b" and "c".
+ */
+const joined = (...parts: string[]) => parts.join("\u0001")
+
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(
   id: string,
@@ -3475,7 +3525,7 @@ function cubeMarks(
   return faces
     .filter((face) => face.ccw)
     .map((face) => ({
-      key: `${id}-${face.face}`,
+      key: joined(id, face.face),
       points: face.map((p) => p.projected),
       fill: shade(face, color),
       tooltip,
@@ -3581,6 +3631,7 @@ export {
   Marks3D,
   Labels3D,
   axis,
+  entryTicks,
   pad,
   linear,
   worldBox,
@@ -3599,8 +3650,10 @@ export {
   faded,
   finite,
   keyOf,
+  joined,
   nonNegative,
   useSeries,
+  useTooltips,
   usePoints,
   useConfigKeys,
   useRuns,

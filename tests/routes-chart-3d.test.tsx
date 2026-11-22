@@ -428,18 +428,21 @@ describe("RoutesChart3D hover", () => {
 
   test("tooltip makes what a route says from the default and the entries of its stops", async () => {
     const seen: Stop[][] = []
-    const view = await mount(
-      chart(route.slice(0, 2), {
-        id: "id",
-        tooltip: (tip, { entries }) => {
-          seen.push(entries)
-          return { ...tip, title: "Route", items: tip.items.slice(0, 1) }
-        },
-      })
-    )
+    const rows = route.slice(0, 2)
+    const props: Partial<RoutesChart3DProps<Stop>> = {
+      id: "id",
+      tooltip: (tip, { entries }) => {
+        seen.push(entries)
+        return { ...tip, title: "Route", items: tip.items.slice(0, 1) }
+      },
+    }
+    const view = await mount(chart(rows, props))
     const { quads, stops } = marks(view.host)
     await view.point(middle(quads[Math.floor(quads.length / 2)].corners))
     expect(seen).toEqual([route.slice(0, 2)])
+    // A frame renders the chart again with the same props: what the leg says is not built again.
+    await view.render(chart(rows, props))
+    expect(seen).toHaveLength(1)
     expect(view.tip()).toBe("RouteLisbon39, -9")
     await view.render(chart(route.slice(0, 2), { tooltip: () => null }))
     await view.point(stops[0].at)
@@ -460,6 +463,32 @@ describe("RoutesChart3D transitions", () => {
   })
 
   const glide = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+
+  test("two routes through one stop keep their own: one that comes leaves the other as it was", async () => {
+    // Two flights through the same airport, named alike on each route.
+    const a = [
+      { id: "LHR", lon: 0, lat: 50, s: "a" },
+      { id: "JFK", lon: -40, lat: 40, s: "a" },
+    ]
+    const b = [
+      { id: "LHR", lon: 0, lat: 50, s: "b" },
+      { id: "CDG", lon: 20, lat: 30, s: "b" },
+    ]
+    const view = await mount(chart(b, { id: "id", series: "s" }))
+    const route = (key: string) =>
+      marks(view.host).all.filter((m) => m.outerHTML.includes(`--color-${key}`)).length
+    const alone = route("b")
+    // The route in front comes; the other, unchanged, neither folds nor regrows.
+    await view.render(chart([...a, ...b], { id: "id", series: "s" }))
+    await glide(200)
+    expect(route("b")).toBe(alone)
+    await glide(1000)
+    // And as it goes, it fades out instead of vanishing at once.
+    await view.render(chart(b, { id: "id", series: "s" }))
+    expect(route("a")).toBeGreaterThan(0)
+    await view.unmount()
+  })
+
   // Three stops on the equator, which runs level through the middle of the globe.
   const west = { id: "west", lon: -40, lat: 0 }
   const mid = { id: "mid", lon: 0, lat: 0 }

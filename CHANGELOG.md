@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `useTooltips(deps)`, the tooltips of a chart's marks, each built once per
+  mark and kept until `deps` change.
+- `entryTicks(count)`, about ten ticks on whole entries, which the bar and
+  the area chart lay along x.
+- `joined(...parts)`, one key of several parts, such as an entry and its
+  series, joined by a control character no name is expected to hold.
 - `keyOf(value, fallback)`, the config key a field of the data names: the
   value as a string, or `fallback` where it is missing or blank.
 - `earth` also returns `ground(feature, key)`, which draws one feature as
@@ -61,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `BarChart3D` ticks about ten of its entries along x, as `AreaChart3D`
+  does, not every one: a dozen bars keep a label each, a year of daily bars
+  lays out eight instead of 365, and turns at frame rate. The labels of an
+  edge make room for each other in linear time, not quadratic.
 - The title of an axis runs along its edge as the screen shows it, never
   upside down, beyond its tick labels at the middle of the edge: the y title
   stands along the vertical axis, bottom to top, instead of over its top end,
@@ -95,6 +105,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An entry named like a property every object has - `constructor`,
+  `toString`, `__proto__` - glides in and out like any other: the bar and
+  the area chart hid it until its glide was done, the line drew NaN and the
+  scatter threw. The glides ask for the keys an object has of its own.
+- `BarFieldChart3D`, `SurfaceChart3D`: a height given as text, as parsed CSV
+  has it, is the number it names - compared as text, "9" topped "100", the
+  axis ended short or ran upside down and a glide added the text up.
+- `RoutesChart3D` with `id`: a stop is named within its route, so two routes
+  through one stop keep their own - a route that came or went folded the
+  other one, which had not changed, and regrew it.
+- A drag let go beyond the chart before it turned anything no longer turns
+  the camera later, when the pointer comes back with the modifier but no
+  button held: a drag ends with its button.
+- The tooltip says a number below 1 to three significant digits, so 0.0004
+  no longer reads 0; from 1 on it keeps three decimals, as before.
+- `BarChart3D`, `AreaChart3D`: names and series with a hyphen keep their
+  values apart - the entry "a" of the series "b-c" and the entry "a-b" of
+  "c" drew the same bar. The keys of the marks of the bar, the bar field,
+  the area, the line, the routes and the choropleth chart join their parts
+  with `joined`, so a region "US" of the series "CA-low" and "US-CA" of
+  "low" no longer share one.
+- A mark under a pointer that rests no longer builds its tooltip again at
+  every frame of the camera or of a glide, nor renders the container with
+  it: the charts keep their tooltips through `useTooltips` - the globe kept
+  its own already - and `tooltip` runs once until the data, the config or a
+  prop it reads changes.
 - The tooltip and the focus under a pointer that rests follow new data and
   a turn of the camera: the mark under the pointer is hit again whenever the
   marks change, where the tooltip of a mark that had changed or left went on
