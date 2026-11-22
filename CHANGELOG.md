@@ -71,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does, not every one: a dozen bars keep a label each, a year of daily bars
   lays out eight instead of 365, and turns at frame rate. The labels of an
   edge make room for each other in linear time, not quadratic.
+- The title of an axis runs along its edge as the screen shows it, never
+  upside down, beyond its tick labels at the middle of the edge: the y title
+  stands along the vertical axis, bottom to top, instead of over its top end,
+  and a floor title no longer sticks out from the box by its width. A title
+  fades out where its edge points at the camera, as the y axis does from
+  straight above (ADR-0013).
 - **Breaking:** `format` of `GlobeChart3D`, `PlacesChart3D` and
   `ChoroplethChart3D` is a record keyed by what it formats, as in every other
   chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means

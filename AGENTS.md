@@ -250,14 +250,11 @@ How the charts draw, so that a new one draws the same way:
   edge their room along it - one row, slid along the edge up to `DODGE`, two
   rows, then every 2nd, 4th… label - and `labelAxes` lets a label fade as it
   nears one of an axis with fewer ticks. Whatever follows the camera is
-  geometry, in `x` and `y`; only a change of edge, row or stride moves in the
-  CSS transition, through `opacity` and `translate`. The title of an axis is
-  upright: the y title stands over the top end of its line on the box's side,
-  its edge on the line, a gap clear of the top of the box wherever the box is
-  highest under the text, rising with it by up to `LIFT`, so a steep edge
-  crosses the text rather than carrying it off its axis; the title of a floor
-  axis, whose ends are corners the other axes label, sits beyond its tick
-  labels at the middle of its edge.
+  geometry, in `x`, `y` and the turn of a title; only a change of edge, row or stride moves in the
+  CSS transition, through `opacity` and `translate`. The title of an axis
+  runs along its line as the screen shows it, never upside down, beyond its
+  tick labels at the middle of the edge, and fades out where the edge points
+  at the camera ([ADR-0013](docs/adr/0013-titles-run-along-their-edge.md)).
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
   React moves the DOM nodes.
