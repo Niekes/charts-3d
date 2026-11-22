@@ -61,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The title of a floor axis, x or z, runs along its edge as the screen
+  shows it, never upside down, beyond its tick labels at the middle of the
+  edge; seen from above, it no longer sticks out from the box by its width.
+  The y title stays upright (ADR-0013).
 - **Breaking:** `format` of `GlobeChart3D`, `PlacesChart3D` and
   `ChoroplethChart3D` is a record keyed by what it formats, as in every other
   chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means

@@ -2347,6 +2347,8 @@ type AxisLabel = {
   title?: boolean
   /** Where the text hangs on its box: its start or end edge; its middle by default. */
   anchor?: "start" | "end"
+  /** The turn of the text in degrees: the title of a floor axis runs along its edge. */
+  angle?: number
 }
 
 /**
@@ -2513,12 +2515,12 @@ function highest(face: Point2D[], x0: number, x1: number) {
 }
 
 /**
- * The title of an axis, upright. The y axis has a free end, the top: its
- * title stands over that corner on the box's side of the line, its edge on
+ * The title of an axis. The y axis has a free end, the top: its title
+ * stands upright over that corner on the box's side of the line, its edge on
  * the line, a gap clear of the `top` of the box as far as it reaches, rising
  * with it by up to `LIFT`. A floor axis ends in corners the other axes label,
- * so its title sits beyond its tick labels, at the middle of its edge,
- * `depth` being how far they reach out.
+ * so its title runs along its edge, never upside down, beyond its tick labels
+ * at the middle of the edge, `depth` being how far they reach out (ADR-0013).
  */
 function titleLabel(
   key: string,
@@ -2534,7 +2536,7 @@ function titleLabel(
   const w = textWidth(text, h)
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const label = { key, axis, text, title: true, opacity: 1, shift: ZERO, w, h }
-  if (axis !== "y") return { ...label, at: beside(middle, normal, w, h, GAP + depth + GAP) }
+  if (axis !== "y") return floorTitle(label, middle, normal, GAP + depth + GAP)
   // The title runs from the higher end over the box, away from the tick labels, which keep their side.
   const corner = end.y <= start.y ? end : start
   const side = Math.sign(-normal.x) || 1
@@ -2543,6 +2545,33 @@ function titleLabel(
     ...label,
     anchor: side > 0 ? "start" : "end",
     at: { x: corner.x + (side * w) / 2, y: under - GAP - h / 2 },
+  }
+}
+
+/**
+ * The title of a floor axis turned square to the `normal` of its edge, one
+ * line deep `gap` beyond it. Its box is the upright extent of the turned
+ * text, which the labels of the other axes keep clear of.
+ */
+function floorTitle(
+  label: Omit<AxisLabel, "at">,
+  middle: Point2D,
+  normal: Point2D,
+  gap: number
+): AxisLabel {
+  // In whole tenths of a degree, folded into [-90°, 90°): never upside down, and float noise on a
+  // vertical edge does not flip it from frame to frame.
+  const tenths = Math.round((Math.atan2(normal.x, -normal.y) * 1800) / Math.PI)
+  const angle = ((((tenths + 900) % 1800) + 1800) % 1800) / 10 - 90
+  const [c, s] = [Math.cos, Math.sin].map((f) => Math.abs(f((angle * Math.PI) / 180)))
+  const { w, h } = label
+  return {
+    ...label,
+    angle,
+    // Along the edge, the text reaches out half its height, whatever its length.
+    at: beside(middle, normal, 0, 0, gap + h / 2),
+    w: c * w + s * h,
+    h: s * w + c * h,
   }
 }
 
@@ -2638,7 +2667,8 @@ function dodge(want: number[], gaps: number[]) {
 function shows(label: AxisLabel, placed: AxisLabel[]) {
   return placed.reduce(
     (opacity, p) =>
-      p.axis === label.axis && !label.title
+      // A floor title lies beyond the labels of its own axis by construction; only the y title can meet them.
+      p.axis === label.axis && (!label.title || label.angle !== undefined)
         ? opacity
         : Math.min(opacity, 1 - (1 - clamp(0, 1, apart(label, p) / FADE)) * p.opacity),
     label.opacity
@@ -2701,7 +2731,7 @@ function AxisLine3D({
  * of edge, of row or of the labels that fit fades and moves it in a transition.
  */
 function AxisLabel3D({
-  label: { at, w, shift, opacity, text, title, anchor },
+  label: { at, w, shift, opacity, text, title, anchor, angle },
 }: {
   label: AxisLabel
 }) {
@@ -2711,6 +2741,7 @@ function AxisLabel3D({
     <text
       x={fixed(x)}
       y={fixed(at.y)}
+      transform={angle ? `rotate(${fixed(angle)} ${fixed(x)} ${fixed(at.y)})` : undefined}
       textAnchor={anchor ?? "middle"}
       dominantBaseline="central"
       style={{

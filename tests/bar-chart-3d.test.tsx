@@ -246,6 +246,11 @@ function drawn(host: HTMLElement) {
       const [dx = 0, dy = 0] = (el.style.translate || "0px").split(" ").map(parseFloat)
       const h = el.classList.contains("text-[10px]") ? 10 : 12
       const w = el.textContent!.length * h * 0.6
+      // The title of a floor axis lies along its edge, aslant.
+      const turn =
+        (Number(/rotate\((-?[\d.]+)/.exec(el.getAttribute("transform") ?? "")?.[1] ?? 0) *
+          Math.PI) /
+        180
       const anchor = { start: 0.5, middle: 0, end: -0.5 }[
         el.getAttribute("text-anchor") ?? "start"
       ]!
@@ -259,15 +264,26 @@ function drawn(host: HTMLElement) {
         y: Number(el.getAttribute("y")) + dy,
         w,
         h,
+        turn,
         opacity: Number(el.style.opacity || 1),
       }
     }
   )
 }
 
-/** The space between the boxes of two labels, negative where they overlap. */
-const apart = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
-  Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2)
+type Box = { x: number; y: number; w: number; h: number; turn: number }
+
+/** The space between the boxes of two labels, negative where they overlap: the widest gap along a side of either, as a title lies aslant. */
+const apart = (a: Box, b: Box) =>
+  Math.max(
+    ...[a.turn, a.turn + Math.PI / 2, b.turn, b.turn + Math.PI / 2].map((t) => {
+      const e = { x: Math.cos(t), y: Math.sin(t) }
+      const reach = (l: Box) =>
+        (l.w / 2) * Math.abs(Math.cos(l.turn) * e.x + Math.sin(l.turn) * e.y) +
+        (l.h / 2) * Math.abs(Math.cos(l.turn) * e.y - Math.sin(l.turn) * e.x)
+      return Math.abs((a.x - b.x) * e.x + (a.y - b.y) * e.y) - reach(a) - reach(b)
+    })
+  )
 
 const chart = (
   defaultView: { yaw: number; tilt: number; perspective?: number },
@@ -285,7 +301,12 @@ describe("BarChart3D labels", () => {
     for (const perspective of [undefined, 4]) {
       // shortcut: straight from below in perspective the y tick labels overlap, so that pass starts at -75°; fix `fit` for a leaning edge before a chart looks from there.
       const from = perspective ? -75 : -90
-      const bars = await mount(chart({ yaw: 0, tilt: (from * Math.PI) / 180, perspective }))
+      const bars = await mount(
+        chart(
+          { yaw: 0, tilt: (from * Math.PI) / 180, perspective },
+          { x: "Month", y: "Visitors", z: "Device" }
+        )
+      )
       const view = (yaw: number, tilt: number) => `${yaw}°/${tilt}°${perspective ? "/p" : ""}`
       for (let tilt = from; tilt <= 90; tilt += 15) {
         for (let yaw = 0; yaw < 360; yaw += 5) {
@@ -295,6 +316,10 @@ describe("BarChart3D labels", () => {
             .map((l) => `${l.text} ${l.opacity}`)
             .join()
           if (series !== "Desktop 1,Mobile 1") failures.push(`${view(yaw, tilt)}: ${series}`)
+          // A floor title shows wherever the floor does; level with it, the floor is edge-on and has no room.
+          for (const title of tilt === 0 ? [] : ["Month", "Device"])
+            if (!shown.some((l) => l.text === title))
+              failures.push(`${view(yaw, tilt)}: no ${title}`)
           for (const [i, a] of shown.entries())
             for (const b of shown.slice(i + 1))
               if (apart(a, b) < 0) failures.push(`${view(yaw, tilt)}: ${a.text} covers ${b.text}`)
