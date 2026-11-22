@@ -119,7 +119,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const opacity = useTween(present, 0)
   // max, not a spread: thousands of arguments overflow the stack.
   const { peak } = useTween({ peak: max(Object.values(target)) ?? 0 })
-  const place = usePlaces(names, entries, fields, fallback, sizes)
+  const place = usePlaces(names, entries, fields, sizes)
 
   const reading = { config, fields, radius, format, tooltip }
   const behind = new Map(entries.map((d, i) => [names[i], d]))
@@ -155,9 +155,9 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
 /**
  * The entries with a place on the globe, the name of each, their values and
  * their presence - built once per change of the data, not at every frame the
- * camera turns. A dot is named by its entry and its series, so a dot that
+ * camera turns. A dot is named by its series and its entry, so a dot that
  * changes color leaves as one and enters as the other, as a tile of the
- * globe does.
+ * globe does - at the place of its entry, which the two share.
  */
 function useDots<T extends Record<string, unknown>>(
   data: T[],
@@ -169,11 +169,11 @@ function useDots<T extends Record<string, unknown>>(
     // An entry without a place on the globe has no dot.
     const entries = data.filter((d) => finite(d[lon]) && finite(d[lat]))
     // Two entries of one name, or at one place, are two dots.
-    const names = uniqueIds(
-      entries.map((d) => {
-        const name = id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`
-        return `${name}\n${keyOf(series && d[series], fallback)}`
-      })
+    const ids = uniqueIds(
+      entries.map((d) => (id ? String(d[id]) : `${Number(d[lon])},${Number(d[lat])}`))
+    )
+    const names = ids.map((entry, i) =>
+      dotName(keyOf(series && entries[i][series], fallback), entry)
     )
     return {
       entries,
@@ -259,35 +259,54 @@ function dotTooltip<T extends Record<string, unknown>>(
 }
 
 /**
- * Where every dot heads, as numbers to glide: its lon and lat, remembered in
- * `known` with its config key. The lon is turned the short way round from
- * where the dot is on screen, `shown`, or else was headed, so over the
- * antimeridian a dot glides 2°, not 358°, and one sent on mid-glide turns
- * from where it is.
+ * The name of a dot: the config key of its color, then the id of its entry.
+ * shortcut: a config key with a line break in it would split wrong; none is expected.
+ */
+const dotName = (key: string, entry: string) => `${key}\n${entry}`
+
+/** The config key and the id of the entry that the name of a dot holds. */
+function readDot(name: string) {
+  const at = name.indexOf("\n")
+  return { key: name.slice(0, at), entry: name.slice(at + 1) }
+}
+
+/** The keys of the lon and the lat of an entry among the numbers that glide: every dot of the entry shares them. */
+const placeKeys = (name: string) => {
+  const { entry } = readDot(name)
+  return [`${entry}\nlon`, `${entry}\nlat`] as const
+}
+
+/**
+ * Where every dot heads, as numbers to glide: the lon and lat of its entry,
+ * remembered in `known` by the name of the dot with its config key, so the
+ * dot that leaves as its entry changes color glides on with the one that
+ * comes. The lon is turned the short way round from where the entry is on
+ * screen, `shown`, or else was headed, so over the antimeridian a dot glides
+ * 2°, not 358°, and one sent on mid-glide turns from where it is.
  */
 function headings<T extends Record<string, unknown>>(
   known: Map<string, Place>,
   shown: Record<string, number>,
   names: string[],
   data: T[],
-  { lon, lat, series }: Pick<Fields<T>, "lon" | "lat" | "series">,
-  fallback: string
+  { lon, lat }: Pick<Fields<T>, "lon" | "lat">
 ) {
   data.forEach((d, i) => {
     const to = Number(d[lon])
-    const was = shown[`${names[i]}\nlon`] ?? known.get(names[i])?.lon ?? to
+    const was = shown[placeKeys(names[i])[0]] ?? known.get(names[i])?.lon ?? to
     known.set(names[i], {
       lon: was + ((((to - was) % 360) + 540) % 360) - 180,
       lat: Number(d[lat]),
-      key: keyOf(series && d[series], fallback),
+      key: readDot(names[i]).key,
     })
   })
   return Object.fromEntries(
     names.flatMap((name) => {
       const place = known.get(name)!
+      const [lonKey, latKey] = placeKeys(name)
       return [
-        [`${name}\nlon`, place.lon],
-        [`${name}\nlat`, place.lat],
+        [lonKey, place.lon],
+        [latKey, place.lat],
       ]
     })
   )
@@ -302,17 +321,16 @@ function usePlaces<T extends Record<string, unknown>>(
   names: string[],
   data: T[],
   fields: Fields<T>,
-  fallback: string,
   alive: Record<string, number>
 ) {
   const known = React.useRef(new Map<string, Place>())
   // Where the dots were drawn the render before, so new data turns them from there.
   const shown = React.useRef<Record<string, number>>({})
-  const { lon, lat, series } = fields
+  const { lon, lat } = fields
   // Once per change of the data, so the camera turning compares nothing.
   const target = React.useMemo(
-    () => headings(known.current, shown.current, names, data, { lon, lat, series }, fallback),
-    [data, names, lon, lat, series, fallback]
+    () => headings(known.current, shown.current, names, data, { lon, lat }),
+    [data, names, lon, lat]
   )
   // A dot that moves glides there; a new one starts where it is, a gone one stays.
   const at = useTween(target)
@@ -323,6 +341,7 @@ function usePlaces<T extends Record<string, unknown>>(
   }
   return (name: string): Place => {
     const place = known.current.get(name)!
-    return { ...place, lon: at[`${name}\nlon`] ?? place.lon, lat: at[`${name}\nlat`] ?? place.lat }
+    const [lonKey, latKey] = placeKeys(name)
+    return { ...place, lon: at[lonKey] ?? place.lon, lat: at[latKey] ?? place.lat }
   }
 }

@@ -476,7 +476,8 @@ describe("AreaChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(700))
     const to = left("b")
     expect(of("a")).toHaveLength(0)
-    expect(Math.min(from, to) <= mid && mid <= Math.max(from, to)).toBe(true)
+    // On its way, strictly: a jump to its new row would stand at the end already.
+    expect(Math.min(from, to) + 1 < mid && mid < Math.max(from, to) - 1).toBe(true)
 
     // A series that comes fades in as it rises.
     await view.render(chart(data, { keys: ["b", "a"] }, side))
