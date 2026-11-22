@@ -9,6 +9,7 @@ import {
   normal,
   points3D,
   sort,
+  type Axes3DInstance,
   type AxesSpec,
   type AxisEdge,
   type AxisSpec,
@@ -2240,7 +2241,7 @@ function Axes3D({
 }) {
   const { camera } = useChart3D()
   const box = intoWorld(axes3D().camera(camera), world)
-  const { labels, lines, marks } = labelAxes(box.edges(spec), spec, format, titles)
+  const { labels, lines, marks } = labelAxes(box, spec, format, titles)
   // The gridline of a tick the new data dropped fades out with its label.
   const leaving = new Set(
     (["x", "y", "z"] as const).flatMap((a) =>
@@ -2355,16 +2356,26 @@ type AxisLabel = {
  * way to the ticks.
  */
 function labelAxes(
-  edges: AxisEdge[],
+  box: Axes3DInstance,
   spec: AxesSpec,
   format: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>,
   titles: Partial<Record<keyof AxesSpec, React.ReactNode>>
 ) {
+  // The edges again with a tick at each end of the domain: their corners on the box, which a title spans.
+  const ends = (a: AxisSpec) => ({ ...a, ticks: [Math.min(...a.domain), Math.max(...a.domain)] })
+  const frame = box.edges({ x: ends(spec.x), y: ends(spec.y), z: ends(spec.z) })
   // An axis without ticks, such as the rows of an empty chart, has nothing to label.
-  const axes = edges
+  const axes = box
+    .edges(spec)
     .filter((edge) => edge.length)
     .map((edge) =>
-      edgeLabels(edge, spec[edge.axis], format[edge.axis] ?? String, titles[edge.axis])
+      edgeLabels(
+        edge,
+        frame.find((f) => f.axis === edge.axis && f.sides.join() === edge.sides.join())!,
+        spec[edge.axis],
+        format[edge.axis] ?? String,
+        titles[edge.axis]
+      )
     )
   const shown = axes.filter((axis) => axis.chosen).sort((a, b) => a.ticks.length - b.ticks.length)
   const placed: AxisLabel[] = []
@@ -2423,6 +2434,7 @@ function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, ch
 
 function edgeLabels(
   edge: AxisEdge,
+  frame: AxisEdge,
   { domain, leaving = [], span }: GlidingAxis,
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
@@ -2461,7 +2473,8 @@ function edgeLabels(
   const [s0, s1] = span ?? [edge[0][axis], edge[edge.length - 1][axis]]
   const start = along(edge, clamp(range.lo, range.hi, s0))
   const end = along(edge, clamp(range.lo, range.hi, s1))
-  const head = title ? titleLabel(`${id}-title`, axis, title, start, end, n, ranged) : undefined
+  const [from, to] = [frame[0].projected, frame[frame.length - 1].projected]
+  const head = title ? titleLabel(`${id}-title`, axis, title, from, to, n, ranged) : undefined
   // A second row of tick labels pushes the title out with it.
   if (head && rows === 2) head.shift = row
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
@@ -2494,29 +2507,13 @@ function titleLabel(
   normal: Point2D,
   ticks: AxisLabel[]
 ): AxisLabel {
-  const [w, h] = [textWidth(text, 12), 12]
-  // Along the line of the axis, not square to its normal, which perspective leans off it. In whole
-  // tenths of a degree, folded into [-90°, 90°): never upside down, and float noise on a vertical
-  // edge does not flip it from frame to frame.
-  const tenths = Math.round((Math.atan2(end.y - start.y, end.x - start.x) * 1800) / Math.PI)
-  const angle = ((((tenths + 900) % 1800) + 1800) % 1800) / 10 - 90
+  const h = 12
+  const w = textWidth(text, h)
+  const angle = upright(start, end)
   const [c, s] = [Math.cos, Math.sin].map((f) => Math.abs(f((angle * Math.PI) / 180)))
   const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
   const length = Math.hypot(end.x - start.x, end.y - start.y)
-  // Out square to the line, on the side of the normal, which perspective leans off it.
-  const square = { x: (start.y - end.y) / length, y: (end.x - start.x) / length }
-  const side = Math.sign(square.x * normal.x + square.y * normal.y) || 1
-  const out = length ? { x: side * square.x, y: side * square.y } : normal
-  // How far the tick labels reach out from the line that way.
-  const reach = Math.max(
-    0,
-    ...ticks.map(
-      (t) =>
-        (t.at.x - start.x) * out.x +
-        (t.at.y - start.y) * out.y +
-        (Math.abs(out.x) * t.w + Math.abs(out.y) * t.h) / 2
-    )
-  )
+  const { out, reach } = clearOf(ticks, start, end, normal)
   return {
     key,
     axis,
@@ -2531,6 +2528,38 @@ function titleLabel(
     w: c * w + s * h,
     h: s * w + c * h,
   }
+}
+
+/**
+ * The turn in degrees of text along the line from `start` to `end`, in whole
+ * tenths folded into [-90°, 90°): never upside down, and float noise on a
+ * vertical line does not flip it from frame to frame.
+ */
+function upright(start: Point2D, end: Point2D) {
+  const tenths = Math.round((Math.atan2(end.y - start.y, end.x - start.x) * 1800) / Math.PI)
+  return ((((tenths + 900) % 1800) + 1800) % 1800) / 10 - 90
+}
+
+/**
+ * The way `out` square to the line from `start` to `end`, on the side of the
+ * `normal`, which perspective leans off the line, and how far the `ticks`
+ * reach that way from it.
+ */
+function clearOf(ticks: AxisLabel[], start: Point2D, end: Point2D, normal: Point2D) {
+  const length = Math.hypot(end.x - start.x, end.y - start.y)
+  const square = { x: (start.y - end.y) / length, y: (end.x - start.x) / length }
+  const side = Math.sign(square.x * normal.x + square.y * normal.y) || 1
+  const out = length ? { x: side * square.x, y: side * square.y } : normal
+  const reach = Math.max(
+    0,
+    ...ticks.map(
+      (t) =>
+        (t.at.x - start.x) * out.x +
+        (t.at.y - start.y) * out.y +
+        (Math.abs(out.x) * t.w + Math.abs(out.y) * t.h) / 2
+    )
+  )
+  return { out, reach }
 }
 
 /**

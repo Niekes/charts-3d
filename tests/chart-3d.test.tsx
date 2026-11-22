@@ -2911,6 +2911,16 @@ describe("Axes3D", () => {
     expect(turn("Height", 0, Math.PI / 2)).toBeNull()
   })
 
+  test("shows the title of an axis of one tick, along the edge of the box", () => {
+    const spec = { x: axis(0, 10), y: axis(0, 100), z: { ...axis(0, 1), ticks: [0.5] } }
+    const html = renderToString(
+      <ChartContainer3D config={{}} defaultView={{ yaw: Math.PI / 6, tilt: Math.PI / 6 }}>
+        <Axes3D spec={spec} world={worldBox(spec)} titles={{ z: "Depth" }} />
+      </ChartContainer3D>
+    )
+    expect(html).toMatch(/<text[^>]*opacity:1;[^>]*>Depth<\/text>/)
+  })
+
   test("draws the line of an axis on the edge it sits on, between its outermost ticks, and fades it from one to the next", async () => {
     const spec = { x: axis(0, 10), y: axis(0, 100), z: axis(0, 10) }
     const chart = await mount(

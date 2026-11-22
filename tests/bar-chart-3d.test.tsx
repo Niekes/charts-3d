@@ -246,15 +246,12 @@ function drawn(host: HTMLElement) {
       const [dx = 0, dy = 0] = (el.style.translate || "0px").split(" ").map(parseFloat)
       const h = el.classList.contains("text-[10px]") ? 10 : 12
       const w = el.textContent!.length * h * 0.6
-      // The title of a floor axis lies along its edge, aslant.
+      // The title of an axis lies along its edge, aslant.
       const turn =
         (Number(/rotate\((-?[\d.]+)/.exec(el.getAttribute("transform") ?? "")?.[1] ?? 0) *
           Math.PI) /
         180
-      const anchor = { start: 0.5, middle: 0, end: -0.5 }[
-        el.getAttribute("text-anchor") ?? "start"
-      ]!
-      const x = Number(el.getAttribute("x")) + dx + anchor * w
+      const x = Number(el.getAttribute("x")) + dx
       return {
         el,
         dx,
@@ -316,11 +313,17 @@ describe("BarChart3D labels", () => {
             .map((l) => `${l.text} ${l.opacity}`)
             .join()
           if (series !== "Desktop 1,Mobile 1") failures.push(`${view(yaw, tilt)}: ${series}`)
-          // A floor title shows wherever the floor does. Near level, the edge of the two rows points
-          // at the camera, a few pixels long, and its title fades out with it.
-          for (const title of Math.abs(tilt) <= 15 ? [] : ["Month", "Device"])
-            if (!shown.some((l) => l.text === title))
+          // A floor title shows unless its edge points at the camera, level with it or nearly: the
+          // months run along x, which points at it from 90° and 270°, the two rows along z, from 0° and 180°.
+          for (const [title, facing] of [
+            ["Month", 90],
+            ["Device", 0],
+          ] as const) {
+            const off = Math.abs(((((yaw - facing + 90) % 180) + 180) % 180) - 90)
+            const edgeOn = Math.abs(tilt) <= 15 && off <= 20
+            if (!edgeOn && !shown.some((l) => l.text === title))
               failures.push(`${view(yaw, tilt)}: no ${title}`)
+          }
           for (const [i, a] of shown.entries())
             for (const b of shown.slice(i + 1))
               if (apart(a, b) < 0) failures.push(`${view(yaw, tilt)}: ${a.text} covers ${b.text}`)
@@ -375,17 +378,15 @@ describe("BarChart3D labels", () => {
   })
 
   test("stack two series in two rows where the camera looks along their axis, the title beyond", async () => {
-    // Level with the box and turned by 10°, the two rows of bars stand almost behind one another.
+    // Level with the box and turned by 20°, the two rows of bars stand almost behind one another.
     const bars = await mount(
-      chart({ yaw: (10 * Math.PI) / 180, tilt: 0 }, { y: "Visitors", z: "Device" })
+      chart({ yaw: (20 * Math.PI) / 180, tilt: 0 }, { y: "Visitors", z: "Device" })
     )
     const row = (text: string) =>
-      drawn(bars.host).find((l) => l.text === text && l.opacity > 0)!.el.style.translate
+      drawn(bars.host).find((l) => l.text === text && l.opacity > 0.5)!.el.style.translate
     expect(row("Desktop")).toBe("0px 0px")
     expect(row("Mobile")).not.toBe("0px 0px")
-    // The edge points almost at the camera, too short for its title, which fades out where it moves.
-    const title = drawn(bars.host).filter((l) => l.text === "Device")
-    expect(title.some((l) => l.el.style.translate === row("Mobile"))).toBe(true)
+    expect(row("Device")).toBe(row("Mobile"))
     await bars.unmount()
   })
 })
