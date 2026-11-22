@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `useTooltips(deps)`, the tooltips of a chart's marks, each built once per
+  mark and kept until `deps` change.
 - `entryTicks(count)`, about ten ticks on whole entries, which the bar and
   the area chart lay along x.
 - `joined(...parts)`, one key of several parts, such as an entry and its
@@ -106,6 +108,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   values apart - the entry "a" of the series "b-c" and the entry "a-b" of
   "c" drew the same bar. The keys of the marks of the bar, the area, the
   line and the routes chart join their parts with `joined`.
+- A mark under a pointer that rests no longer builds its tooltip again at
+  every frame of the camera or of a glide, nor renders the container with
+  it: every chart keeps its tooltips through `useTooltips`, and `tooltip`
+  runs once until the data, the config or a prop it reads changes.
 - The tooltip and the focus under a pointer that rests follow new data and
   a turn of the camera: the mark under the pointer is hit again whenever the
   marks change, where the tooltip of a mark that had changed or left went on

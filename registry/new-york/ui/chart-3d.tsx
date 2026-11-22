@@ -1035,8 +1035,7 @@ function useOrbit(
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return touching.current ? onDragStart() : onHover(e)
-      // A drag moves only while its button and its modifier are held: the platform one turning,
-      // Alt panning. A press let go off the chart before the capture leaves no pointerup here.
+      // A drag needs its button - a release off the chart is unheard - and its modifier held.
       if (!(e.buttons & 1) || (d.rotate ? !platformMod(e) : !e.altKey)) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
@@ -3381,6 +3380,27 @@ function pointTooltip<T extends Record<string, unknown>>(
 }
 
 /**
+ * The tooltips of a chart's marks, each built once per mark `key` and kept
+ * until one of `deps` - what the tooltips read: the data, the config, the
+ * props - changes. A mark under a pointer that rests so hands the hover the
+ * same tooltip at every frame of the camera or of a glide, and the hover
+ * builds what it says only when it changes, never per frame (ADR-0006).
+ */
+function useTooltips(deps: React.DependencyList) {
+  // The caller names what its tooltips read, so the list is no literal the linter can check.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cache = React.useMemo(() => new Map<string, Mark3D["tooltip"]>(), deps)
+  // As stable as the cache, so a chart may build its marks in a memo of its own.
+  return React.useCallback(
+    (key: string, build: () => Mark3D["tooltip"]) => {
+      if (!cache.has(key)) cache.set(key, build())
+      return cache.get(key)
+    },
+    [cache]
+  )
+}
+
+/**
  * The entries of `data` and their series, for a chart that lays the entries
  * out along x and the series along z, as the bar and the area chart do. The
  * name of every entry comes from its `index` field, the series are `keys` or
@@ -3620,6 +3640,7 @@ export {
   joined,
   nonNegative,
   useSeries,
+  useTooltips,
   usePoints,
   useConfigKeys,
   useRuns,

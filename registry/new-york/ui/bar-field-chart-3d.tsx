@@ -21,6 +21,7 @@ import {
   type Mark3D,
   type Tooltip3D,
   type World,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 // The share of its cell a bar covers; the rest is the gap that tells two bars apart.
@@ -96,6 +97,7 @@ export function BarFieldChart3D({
   const { config, camera } = useChart3D()
   const [low, high = low] = colors ?? Object.keys(config)
   const field = useField(data, { domain, x, z })
+  const tips = useTooltips([field, format, titles, tooltip])
   // A bar glides to its new value; a new one grows from 0 as it fades in, a
   // gone one shrinks back to 0 as it fades out and leaves when the glide is done.
   const values = useTween(field.target, 0)
@@ -125,7 +127,7 @@ export function BarFieldChart3D({
       id: bar.key,
       faces: bar.faces,
       color: ramp(bar.value, [span.lo, span.hi], [low, high]),
-      tooltip: fieldTooltip(bar, field, { format, titles, tooltip }),
+      tooltip: tips(bar.key, () => fieldTooltip(bar, field, { format, titles, tooltip })),
       opacity: presence[bar.key] ?? 0,
     })
   )

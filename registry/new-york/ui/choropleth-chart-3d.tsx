@@ -16,6 +16,8 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  joined,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -92,6 +94,7 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   const largerFirst = useLargerFirst(land)
   const reading = { config, value, format, tooltip }
+  const tips = useTooltips([data, id, value, series, label, config, format, tooltip])
   const { regions, present } = useRegions(
     data,
     { id, value, series, label },
@@ -129,9 +132,8 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
     const soil = opaque.has(rid)
       ? []
       : parts.flatMap((part, i) => ground(part, `ground-${rid}-${i}`))
-    // A region still fading out has no entry, so it says nothing.
     const region = regions.get(rid)
-    const says = (key: string) => (region?.key === key ? regionTooltip(region, reading) : undefined)
+    const says = (key: string) => tips(joined(rid, key), () => regionTooltip(region, key, reading))
     return [...soil, ...overlaysOf(rid, parts, colors.get(rid) ?? [], paint, says)]
   })
 
@@ -200,10 +202,13 @@ function useLargerFirst(land: GeoJSON.FeatureCollection) {
 /**
  * What a region says on hover, made when the pointer lands on it: its name,
  * or the label of its series, over its value in the series color, labelled
- * by the field - or what `tooltip` makes of that.
+ * by the field - or what `tooltip` makes of that. It speaks in the color
+ * `of` its own series alone; a region still fading out has no entry, so it
+ * says nothing.
  */
 function regionTooltip<T extends Record<string, unknown>>(
-  { key, value, name, entry }: Region<T>,
+  region: Region<T> | undefined,
+  of: string,
   {
     config,
     value: field,
@@ -211,6 +216,8 @@ function regionTooltip<T extends Record<string, unknown>>(
     tooltip = (tip) => tip,
   }: { config: ChartConfig } & Pick<ChoroplethChart3DProps<T>, "value" | "format" | "tooltip">
 ): Mark3D["tooltip"] {
+  if (region?.key !== of) return undefined
+  const { key, value, name, entry } = region
   return () =>
     tooltip(
       {

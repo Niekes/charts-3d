@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Renderer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
 
@@ -130,6 +130,40 @@ describe("BarChart3D", () => {
     expect(data).toContain(seen[0].entry)
     expect(tip(view.host)).toBe(`${seen[0].entry.name}/aAn/a`)
     await view.unmount()
+  })
+
+  test("a bar under a resting pointer builds its tooltip once, not again at every frame", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    let built = 0
+    const tooltip = (tip: Tooltip3D) => (built++, tip)
+    // Props that keep their identity, as at a frame of the camera, which renders the chart alone.
+    const keys = ["a"]
+    const render = (rows: typeof data) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={keys} tooltip={tooltip} />
+          </ChartContainer3D>
+        )
+      )
+    await render(data)
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    await act(() =>
+      svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, ...lastFace(host) }))
+    )
+    expect(built).toBe(1)
+    // A frame of the camera renders the chart again with the same data.
+    for (let i = 0; i < 3; i++) await render(data)
+    expect(built).toBe(1)
+    // New data under the pointer says the new value.
+    await render(data.map((d) => ({ ...d, a: d.a * 10 })))
+    expect(built).toBe(2)
+    expect(tip(host)).toMatch(/A\s*(10|30)/)
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 
   test("a missing value stands as a flat bar, and its tooltip leaves it out instead of saying 0", async () => {

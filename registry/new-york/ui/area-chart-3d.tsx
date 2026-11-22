@@ -31,6 +31,7 @@ import {
   type Tooltip3D,
   joined,
   entryTicks,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -74,7 +75,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   data,
   index,
   keys,
-  format = {},
+  format,
   titles,
   tooltip,
 }: AreaChart3DProps<T>) {
@@ -83,6 +84,7 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   // unfolds from its neighbour as far as its presence.
   const { series, target, entries, values, rows, presence, lanes, lanePresence, labels, nameOf } =
     useSeries({ data, index, keys, format })
+  const tips = useTooltips([data, index, keys, config, format, tooltip])
   const spec = useTweenAxes(areaAxes(data.length, series.length, Object.values(target)))
   // The box deepens with the series, so a ribbon stays a ribbon, and glides
   // there with the axes.
@@ -106,10 +108,12 @@ export function AreaChart3D<T extends Record<string, unknown>>({
     .sort((a, b) => sort(a.faces[4], b.faces[4]))
     .flatMap(({ key, line, faces }) =>
       ribbonMarks(key, painted(faces, toward), line, lanePresence[key] ?? 0, (names) =>
-        // A series turned off says nothing, as an entry that left.
-        series.includes(key)
-          ? ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
-          : undefined
+        tips(joined(key, ...names), () =>
+          // A series turned off says nothing, as an entry that left.
+          series.includes(key)
+            ? ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
+            : undefined
+        )
       )
     )
 

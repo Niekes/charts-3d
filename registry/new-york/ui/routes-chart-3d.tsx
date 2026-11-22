@@ -29,6 +29,7 @@ import {
   type Symbol3D,
   type Tooltip3D,
   joined,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -118,6 +119,7 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   // A stop that comes, goes or moves travels the great circle, at an even pace.
   const runs = useRuns(named, series && "route", presence, target, overGlobe)
   const reading = { config, entries, fields, tooltip }
+  const says = useTooltips([data, lon, lat, id, series, leg, config, tooltip])
   const came = useCame(presence)
   const lists = runs.map((run) => pieces(run, legOf))
   // A route ends with its last run: one after a gap goes on from there.
@@ -134,7 +136,12 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
     .filter((piece) => piece.slice(0, piece.symbol ? 1 : 2).every((p) => p.rotated.z > 0))
     // The stops lie over the legs and the tips over the stops, each among its own from back to front.
     .sort((a, b) => layer(a) - layer(b) || sort(a, b))
-    .map((piece) => pieceMark(piece, routeTooltip(piece, reading)))
+    .map((piece) =>
+      pieceMark(
+        piece,
+        says(joined(piece.key, piece.colorKey), () => routeTooltip(piece, reading))
+      )
+    )
 
   const scenery = earth(land, camera, geoOrthographic(), geoPath).marks
   return <Marks3D marks={[...scenery, ...routes]} />

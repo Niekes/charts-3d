@@ -25,6 +25,7 @@ import {
   type World,
   joined,
   entryTicks,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -82,6 +83,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
       format,
     })
   const cells = barCells(rows, lanes, values)
+  const tips = useTooltips([data, index, keys, config, format, tooltip])
 
   const box = barBox(data.length, series.length, Object.values(target))
   // Every axis glides with the bars: the value ends with the heights, the row
@@ -102,11 +104,13 @@ export function BarChart3D<T extends Record<string, unknown>>({
             faces: bar.faces,
             color: colorOf(bar.key),
             // A series turned off says nothing, as an entry that left.
-            tooltip: barTooltip(
-              { id: bar.name, name: nameOf(bar.name), key: bar.key },
-              series.includes(bar.key) ? entries.get(bar.name) : undefined,
-              target,
-              { config, format, tooltip }
+            tooltip: tips(joined(bar.name, bar.key), () =>
+              barTooltip(
+                { id: bar.name, name: nameOf(bar.name), key: bar.key },
+                series.includes(bar.key) ? entries.get(bar.name) : undefined,
+                target,
+                { config, format, tooltip }
+              )
             ),
             opacity: (presence[bar.name] ?? 0) * (lanePresence[bar.key] ?? 0),
           })

@@ -25,6 +25,7 @@ import {
   keyOf,
   joined,
   entryTicks,
+  useTooltips,
   floored,
   gridAxis,
   facing,
@@ -2600,6 +2601,38 @@ describe("helpers", () => {
       spec: { domain: [2.5, 3.5], ticks: [3] },
     })
     expect(gridAxis(0).spec.domain).toEqual([-0.5, 0.5])
+  })
+
+  test("useTooltips builds a tooltip once per key until what it reads changes", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    let tips: ReturnType<typeof useTooltips> | undefined
+    function Probe({ data }: { data: object }) {
+      tips = useTooltips([data])
+      return null
+    }
+    const data = {}
+    await act(async () => root.render(<Probe data={data} />))
+    const first = tips!
+    let built = 0
+    const build = () => (built++, () => ({ items: [] }))
+    const a = first("a", build)
+    expect(first("a", build)).toBe(a)
+    // A key without a tooltip is cached as one, not built again.
+    expect(first("b", () => (built++, undefined))).toBeUndefined()
+    expect(first("b", () => (built++, undefined))).toBeUndefined()
+    expect(built).toBe(2)
+    // Another render with the same data keeps the cache and the function.
+    await act(async () => root.render(<Probe data={data} />))
+    expect(tips).toBe(first)
+    expect(tips!("a", build)).toBe(a)
+    // New data starts over.
+    await act(async () => root.render(<Probe data={{}} />))
+    expect(tips!("a", build)).not.toBe(a)
+    expect(built).toBe(3)
+
+    await act(async () => root.unmount())
+    host.remove()
   })
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {

@@ -22,6 +22,7 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -122,6 +123,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const place = usePlaces(names, entries, fields, sizes)
 
   const reading = { config, fields, radius, format, tooltip }
+  const tips = useTooltips([data, lon, lat, value, series, id, config, format, tooltip])
   const behind = new Map(entries.map((d, i) => [names[i], d]))
   const dots = points3D<Dot>()
     .camera(orthographic(camera))
@@ -142,7 +144,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
         p,
         place(p.name),
         sizes[p.name] / (peak || 1),
-        behind.get(p.name),
+        tips(p.name, () => dotTooltip(place(p.name), behind.get(p.name), reading)),
         opacity[p.name] ?? 0,
         reading
       )
@@ -199,7 +201,7 @@ function dotMark<T extends Record<string, unknown>>(
   p: TransformedPoint<Dot>,
   place: Place,
   share: number,
-  entry: T | undefined,
+  tooltip: Mark3D["tooltip"],
   presence: number,
   reading: Reading<T>
 ) {
@@ -211,7 +213,7 @@ function dotMark<T extends Record<string, unknown>>(
     fill: faded(colorOf(place.key), presence),
     stroke: faded("var(--background)", presence),
     groups: [p.name],
-    tooltip: dotTooltip(place, entry, reading),
+    tooltip,
   }
 }
 

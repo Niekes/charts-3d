@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { points3D, sort, type AxesSpec, type Point3D } from "d3-3d"
+import { points3D, sort, type AxesSpec, type Point2D, type Point3D } from "d3-3d"
 
 import {
   Axes3D,
@@ -15,8 +15,10 @@ import {
   useTweenAxes,
   worldBox,
   colorOf,
+  type Mark3D,
   type Tooltip3D,
   type World,
+  useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -75,52 +77,39 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const {
-    fields,
-    names,
-    entries,
-    axes,
-    target,
-    presence: opacity,
-    key: at,
-  } = usePoints(all, x, y, z, id)
+  const { fields, names, entries, axes, target, presence, key: at } = usePoints(all, x, y, z, id)
   // The positions glide entry by entry; a gone point stands in place.
   const values = useTween(target)
   const read = (name: string, axis: keyof AxesSpec) => values[at(axis, name)]
   const radii = usePointRadii(names, radius)
   const key = useConfigKeys(entries, series, Object.keys(config)[0], radii)
+  const tips = useTooltips([all, x, y, z, id, series, config, format, titles, tooltip])
 
   // The axes of the data the chart glides into; their ends glide along.
   const spec = useTweenAxes(axes)
   const world = worldBox(spec)
   const placed = usePointPlaces(names, radii, read, world)
 
+  const says = (name: string) =>
+    tips(name, () =>
+      pointTooltip(
+        entries.get(name),
+        series ? (config[key(name)]?.label ?? key(name)) : undefined,
+        fields,
+        { format, titles, tooltip }
+      )
+    )
   const points = points3D<{ name: string } & Point3D>()
     .camera(camera)
     .x((p) => p.x)
     .y((p) => p.y)
     .z((p) => p.z)
-
   const marks = points
     .data(placed)
     .sort(sort)
-    .map((p) => ({
-      key: p.name,
-      shape: "circle" as const,
-      points: [p.projected],
-      r: radii[p.name],
-      fill: faded(colorOf(key(p.name)), opacity[p.name] ?? 0),
-      // Its group is the point alone, so hovering highlights that point only.
-      groups: [p.name],
-      // Ringed by the background, so that points in front stand out.
-      stroke: faded("var(--background)", opacity[p.name] ?? 0),
-      tooltip: pointTooltip(
-        entries.get(p.name),
-        series ? (config[key(p.name)]?.label ?? key(p.name)) : undefined,
-        fields,
-        { format, titles, tooltip }
-      ),
-    }))
+    .map((p) =>
+      pointMark(p, radii[p.name], colorOf(key(p.name)), presence[p.name] ?? 0, says(p.name))
+    )
 
   return (
     <>
@@ -128,6 +117,31 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/**
+ * The mark of a point: a circle of radius `r` in `color`, faded to its
+ * presence and ringed by the background, so that points in front stand out.
+ * Its group is the point alone, so hovering highlights that point only.
+ */
+function pointMark(
+  p: { name: string; projected: Point2D },
+  r: number,
+  color: string,
+  presence: number,
+  tooltip: Mark3D["tooltip"]
+): Mark3D {
+  const [fill, stroke] = [faded(color, presence), faded("var(--background)", presence)]
+  return {
+    key: p.name,
+    shape: "circle",
+    points: [p.projected],
+    r,
+    fill,
+    groups: [p.name],
+    stroke,
+    tooltip,
+  }
 }
 
 /**
