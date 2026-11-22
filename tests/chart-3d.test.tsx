@@ -4017,8 +4017,8 @@ describe("finite", () => {
 })
 
 describe("keyOf", () => {
-  test("a value names its config key as the string it reads as, a 0 too", () => {
-    expect(["a", 0, 7, " b "].map((v) => keyOf(v, "first"))).toEqual(["a", "0", "7", " b "])
+  test("a value names its config key as the string it reads as, a 0 too, without the spaces around it", () => {
+    expect(["a", 0, 7, " b "].map((v) => keyOf(v, "first"))).toEqual(["a", "0", "7", "b"])
   })
 
   test('a missing or blank value names the fallback, never "undefined" or "null"', () => {

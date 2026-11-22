@@ -298,6 +298,13 @@ describe("RoutesChart3D legs of their own color", () => {
     expect(new Set(by(" sea "))).toEqual(new Set(["var(--color-sea)"]))
   })
 
+  test("a series and a leg read a padded value the same way: the spaces are no part of the key", () => {
+    const padded = journey.map(({ by: _, ...stop }) => ({ ...stop, s: " b " }))
+    expect(new Set(serverMarks(chart(padded, { series: "s" })).fills)).toEqual(
+      new Set(["var(--color-b)"])
+    )
+  })
+
   test("the title of the tooltip names what the color means: the label of the leg, its key without one", async () => {
     const view = await mount(chart(journey, { leg: "by", id: "id" }))
     const { quads, stops } = marks(view.host)

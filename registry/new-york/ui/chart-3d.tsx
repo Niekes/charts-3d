@@ -3023,11 +3023,12 @@ function finite(value: unknown) {
 
 /**
  * The config key a field of the data names, as `series` reads it: the value
- * as a string, or `fallback` where it is missing or blank, never
- * "undefined" or "null".
+ * as a string without the spaces around it, as padded CSV holds it, or
+ * `fallback` where it is missing or blank, never "undefined" or "null".
  */
 function keyOf(value: unknown, fallback: string) {
-  return value == null || String(value).trim() === "" ? fallback : String(value)
+  const key = value == null ? "" : String(value).trim()
+  return key || fallback
 }
 
 /**
