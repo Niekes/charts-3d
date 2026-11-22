@@ -1035,8 +1035,9 @@ function useOrbit(
     onPointerMove: (e) => {
       const d = drag.current
       if (!d) return touching.current ? onDragStart() : onHover(e)
-      // A drag moves only while its modifier is held: the platform one turning, Alt panning.
-      if (d.rotate ? !platformMod(e) : !e.altKey) return release()
+      // A drag moves only while its button and its modifier are held: the platform one turning,
+      // Alt panning. A press let go off the chart before the capture leaves no pointerup here.
+      if (!(e.buttons & 1) || (d.rotate ? !platformMod(e) : !e.altKey)) return release()
       const dx = e.clientX - d.x
       const dy = e.clientY - d.y
       // A press that wanders a few pixels is still a click on a bar.

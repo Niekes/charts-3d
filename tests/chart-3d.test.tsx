@@ -312,6 +312,8 @@ const pointer = (
     clientX,
     clientY,
     relatedTarget: relatedTarget ?? null,
+    // A move with the main button held, as a drag sends it; a hover reads no buttons.
+    buttons: type === "pointermove" ? 1 : 0,
     ...init,
   })
 
@@ -451,6 +453,27 @@ describe("shortcuts", () => {
     await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true }))
     await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true }))
     expect(view(chart.host).yaw).toBeCloseTo(Math.PI / 72 + (46 * Math.PI) / 460)
+
+    await chart.unmount()
+  })
+
+  test("a drag let go beyond the chart before it turned does not turn it later without a button", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={{}}>
+        <Camera />
+      </ChartContainer3D>
+    )
+    chart.svg.setPointerCapture = vi.fn()
+    const yaw = view(chart.host).yaw
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    // Let go off the chart a pixel on: not captured yet, the svg never hears the release.
+    document.body.dispatchEvent(pointer("pointerup", 151, 150, undefined, { ctrlKey: true }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true, buttons: 0 }))
+    expect(view(chart.host).yaw).toBe(yaw)
+    // A new press turns it as ever.
+    await chart.send(pointer("pointerdown", 150, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    await chart.send(pointer("pointermove", 196, 150, undefined, { ctrlKey: true, buttons: 1 }))
+    expect(view(chart.host).yaw).toBeCloseTo(yaw + (46 * Math.PI) / 230)
 
     await chart.unmount()
   })
@@ -3245,7 +3268,7 @@ describe("focus", () => {
     )
     chart.svg.setPointerCapture = vi.fn()
     const press = (type: string, clientX: number) =>
-      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true })
+      new MouseEvent(type, { bubbles: true, clientX, clientY: 125, ctrlKey: true, buttons: 1 })
 
     await chart.send(move(25, 125))
     expect(chart.host.textContent).toContain("tip-a")
