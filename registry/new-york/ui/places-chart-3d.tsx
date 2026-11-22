@@ -251,17 +251,21 @@ function dotTooltip<T extends Record<string, unknown>>(
 /**
  * Where every dot heads, as numbers to glide: its lon and lat, remembered in
  * `known` with its config key. The lon is turned the short way round from
- * where the dot was, so over the antimeridian a dot glides 2°, not 358°.
+ * where the dot is on screen, `shown`, or else was headed, so over the
+ * antimeridian a dot glides 2°, not 358°, and one sent on mid-glide turns
+ * from where it is.
  */
 function headings<T extends Record<string, unknown>>(
   known: Map<string, Place>,
+  shown: Record<string, number>,
   names: string[],
   data: T[],
   { lon, lat, series }: Pick<Fields<T>, "lon" | "lat" | "series">,
   fallback: string
 ) {
   data.forEach((d, i) => {
-    const [to, was] = [Number(d[lon]), known.get(names[i])?.lon ?? Number(d[lon])]
+    const to = Number(d[lon])
+    const was = shown[`${names[i]}\nlon`] ?? known.get(names[i])?.lon ?? to
     known.set(names[i], {
       lon: was + ((((to - was) % 360) + 540) % 360) - 180,
       lat: Number(d[lat]),
@@ -292,14 +296,17 @@ function usePlaces<T extends Record<string, unknown>>(
   alive: Record<string, number>
 ) {
   const known = React.useRef(new Map<string, Place>())
+  // Where the dots were drawn the render before, so new data turns them from there.
+  const shown = React.useRef<Record<string, number>>({})
   const { lon, lat, series } = fields
   // Once per change of the data, so the camera turning compares nothing.
   const target = React.useMemo(
-    () => headings(known.current, names, data, { lon, lat, series }, fallback),
+    () => headings(known.current, shown.current, names, data, { lon, lat, series }, fallback),
     [data, names, lon, lat, series, fallback]
   )
   // A dot that moves glides there; a new one starts where it is, a gone one stays.
   const at = useTween(target)
+  shown.current = at
   const live = new Set(names)
   for (const name of known.current.keys()) {
     if (!(name in alive) && !live.has(name)) known.current.delete(name)

@@ -102,6 +102,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GlobeChart3D`: when `step` changes, the tiles of the old grid fade out at
   their own size, where they swelled to the new one and covered their
   neighbours while they left.
+- `PlacesChart3D`: a dot sent to a new place mid-glide turns the short way
+  round from where it is on screen, where it measured from the place it was
+  headed for and could circle most of the globe the long way.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

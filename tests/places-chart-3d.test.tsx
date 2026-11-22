@@ -417,6 +417,38 @@ describe("PlacesChart3D transitions", () => {
     host.remove()
   })
 
+  test("a dot sent on mid-glide turns the short way from where it is, not from where it was headed", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (lon: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={facing(0, 0)}>
+            <PlacesChart3D
+              data={[{ lon, lat: 0, name: "Ship" }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const cx = () =>
+      Number(host.querySelector('[data-slot="chart-3d-marks"] circle')?.getAttribute("cx"))
+
+    await render(0)
+    await render(179)
+    await act(() => vi.advanceTimersByTime(20))
+    // Barely off 0°, it is sent to 100° west: the short way is west, left of the middle.
+    await render(-100)
+    await act(() => vi.advanceTimersByTime(100))
+    expect(cx()).toBeLessThan(320)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a new value while a dot leaves: it fades out, never black", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
