@@ -2023,6 +2023,13 @@ ${colorConfig
   )
 }
 
+/**
+ * A number as the tooltip says it: to three decimals, as `toLocaleString`
+ * does, but below 1 to three significant digits, so 0.0004 is not 0.
+ */
+const rounded = (value: number) =>
+  value.toLocaleString(undefined, Math.abs(value) < 1 ? { maximumSignificantDigits: 3 } : {})
+
 function ChartTooltip3D({ tip }: { tip: Tip3D }) {
   const { tooltip, ref, place } = tip
   // Before the browser paints it, so a new tooltip never shows where the last one was.
@@ -2044,7 +2051,7 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
           )}
           <span className="text-muted-foreground">{item.label}</span>
           <span className="ml-auto font-mono font-medium text-foreground tabular-nums">
-            {typeof item.value === "number" ? item.value.toLocaleString() : item.value}
+            {typeof item.value === "number" ? rounded(item.value) : item.value}
           </span>
         </div>
       ))}

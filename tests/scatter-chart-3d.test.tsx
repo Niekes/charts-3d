@@ -82,13 +82,13 @@ describe("ScatterChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
-  test("the tooltip of a point shows its values rounded", async () => {
+  test("the tooltip of a point shows its values rounded, keeping a small one", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
     await act(async () =>
       root.render(
         <ChartContainer3D config={config}>
-          <ScatterChart3D data={[{ x: 1 / 3, y: 2, z: 3 }]} x="x" y="y" z="z" />
+          <ScatterChart3D data={[{ x: 1 / 3, y: 0.0004, z: 1234.56789 }]} x="x" y="y" z="z" />
         </ChartContainer3D>
       )
     )
@@ -99,8 +99,12 @@ describe("ScatterChart3D", () => {
     await act(() =>
       svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
     )
-    expect(host.textContent).toContain((1 / 3).toLocaleString())
-    expect(host.textContent).not.toContain("0.3333333")
+    const tip = host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent
+    expect(tip).toContain("0.333")
+    expect(tip).not.toContain("0.3333")
+    // A small number keeps its first digits instead of rounding to 0.
+    expect(tip).toContain("0.0004")
+    expect(tip).toContain((1234.568).toLocaleString())
 
     await act(async () => root.unmount())
     host.remove()

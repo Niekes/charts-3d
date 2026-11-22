@@ -92,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A drag let go beyond the chart before it turned anything no longer turns
   the camera later, when the pointer comes back with the modifier but no
   button held: a drag ends with its button.
+- The tooltip says a number below 1 to three significant digits, so 0.0004
+  no longer reads 0; from 1 on it keeps three decimals, as before.
 - The tooltip and the focus under a pointer that rests follow new data and
   a turn of the camera: the mark under the pointer is hit again whenever the
   marks change, where the tooltip of a mark that had changed or left went on
