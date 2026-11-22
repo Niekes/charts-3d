@@ -291,7 +291,7 @@ function tileValues<T extends Record<string, unknown>>(
   return new Map([...tiles.values()].map((t) => [t.id, t]))
 }
 
-/** The center of the tile between `lo` and `hi` that holds `v`; the last tile holds the far edge and beyond. */
+/** The center of the tile between `lo` and `hi` that holds `v`; the last tile holds the far edge, a latitude of 90 - a longitude of 180 has wrapped to -180. */
 function snap(v: number, lo: number, hi: number, step: number) {
   const index = Math.min(Math.max(0, Math.floor((v - lo) / step)), Math.round((hi - lo) / step) - 1)
   return lo + (index + 0.5) * step

@@ -217,7 +217,7 @@ function dotTooltip<T extends Record<string, unknown>>(
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
   // A missing value is no measured 0, and a negative one stands as it is.
-  const raw = fields.value && entry[fields.value]
+  const raw = fields.value ? entry[fields.value] : undefined
   const value = finite(raw) ? Number(raw) : undefined
   // The place of the entry, not the one the dot glides through.
   const [lon, lat] = [Number(entry[fields.lon]), Number(entry[fields.lat])]

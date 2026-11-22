@@ -843,6 +843,8 @@ describe("GlobeChart3D step", () => {
     expect(html(190)).toBe(html(-170))
     expect(html(360 + 15)).toBe(html(15))
     expect(html(-180 - 15)).toBe(html(165))
+    // 180 and -180 are one meridian, and one tile.
+    expect(html(180)).toBe(html(-180))
   })
 
   test("a step that does not divide 180 - 0, below 0, NaN, Infinity, wider than 180, 7, 40 - draws the tiles of the default", () => {

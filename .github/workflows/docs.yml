@@ -22,7 +22,9 @@ jobs:
       # The docs show the API of their release: until a maintainer approves
       # the staged version, npm installs the one before. Re-run once it is out.
       - name: Wait for the release on npm
-        run: npm view "@niekes/charts-3d@${GITHUB_REF_NAME#v}" version
+        run: |
+          [ "$GITHUB_REF_TYPE" = tag ] || { echo "Run the docs on a release tag, not on $GITHUB_REF_NAME."; exit 1; }
+          npm view "@niekes/charts-3d@${GITHUB_REF_NAME#v}" version
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
