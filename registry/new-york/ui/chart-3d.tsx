@@ -2906,7 +2906,9 @@ function ringSink() {
  * and `geoPath`, so the core carries no d3-geo; `earth` sets the projection
  * to the camera and draws through a sink that collects every ring, cut at
  * the horizon, as a polygon. `path` and `sink` come along for a chart that
- * draws regions of its own: `sink.marks(() => path(feature), key, fill)`.
+ * draws regions of its own: `sink.marks(() => path(feature), key, fill)`,
+ * and `ground(feature, key)` draws one feature as land, for a chart that
+ * paints the land of a region in an order of its own.
  */
 function earth<
   Feature,
@@ -2920,13 +2922,13 @@ function earth<
 ) {
   const sink = ringSink()
   const path = geoPath(geoView(camera, projection), sink)
+  const ground = (feature: Feature, key: string) =>
+    sink.marks(() => path(feature), key, "var(--chart-3d-land, var(--border))")
   const marks = [
     ...sink.marks(() => path({ type: "Sphere" }), "ocean", "var(--chart-3d-ocean, var(--muted))"),
-    ...land.features.flatMap((feature, i) =>
-      sink.marks(() => path(feature), `land-${i}`, "var(--chart-3d-land, var(--border))")
-    ),
+    ...land.features.flatMap((feature, i) => ground(feature, `land-${i}`)),
   ]
-  return { marks, path, sink }
+  return { marks, path, sink, ground }
 }
 
 /**

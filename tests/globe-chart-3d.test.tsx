@@ -389,6 +389,31 @@ describe("GlobeChart3D hover", () => {
     await chart.unmount()
   })
 
+  test.each([undefined, null])(
+    "an entry whose label is %s is titled by its series, not by the word",
+    async (name) => {
+      const chart = await mount(
+        <ChartContainer3D config={config}>
+          <GlobeChart3D
+            data={[{ lon: 20, lat: 50, population: 10, name }]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            value="population"
+            label="name"
+            step={30}
+          />
+        </ChartContainer3D>
+      )
+      const { x, y } = prism(chart.svg)
+      await chart.send("pointermove", { clientX: x, clientY: y })
+      const tip = chart.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent!
+      expect(tip).toContain("Population")
+      expect(tip).not.toContain(String(name))
+      await chart.unmount()
+    }
+  )
+
   test("hovering a tile lights its faces together, never the land, which says nothing; nothing else changes; leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>

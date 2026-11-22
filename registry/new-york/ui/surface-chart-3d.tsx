@@ -253,16 +253,20 @@ function useGrid(
 ) {
   return React.useMemo(() => {
     // Named places span the box exactly; the indices keep half a cell of room.
+    const columns = max(raw, (row) => row.length) ?? 0
     const sides = {
-      x: gridAxis(max(raw, (row) => row.length) ?? 0, {
+      x: gridAxis(columns, {
         at: x,
         ends: domain.x,
         padded: !(x || domain.x),
       }),
       z: gridAxis(raw.length, { at: z, ends: domain.z, padded: !(z || domain.z) }),
     }
+    // A short row is as long as the longest: its missing corners are NaN, at the floor.
     const placed = raw.map((row, r) =>
-      r in sides.z.places ? row.map((y, c) => (c in sides.x.places ? y : NaN)) : []
+      r in sides.z.places
+        ? Array.from({ length: columns }, (_, c) => (c in sides.x.places ? (row[c] ?? NaN) : NaN))
+        : []
     )
     const grid = cleanGrid(placed)
     const target = gridValues(grid.data, sides)

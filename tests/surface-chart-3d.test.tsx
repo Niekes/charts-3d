@@ -213,6 +213,8 @@ describe("SurfaceChart3D places", () => {
     )
     expect(quads(html)).toHaveLength(2)
     expect(html).not.toContain("NaN")
+    // The cell with the missing corner is seen, not faded out to nothing.
+    expect(html).not.toContain(" 0%, transparent")
   })
 
   test("a column or row without a finite place drops out, its neighbours join", () => {

@@ -45,6 +45,19 @@ const oceanOf = (html: string) => html.match(new RegExp(`fill="${literal(OCEAN)}
 const regions = (html: string, key = "population") =>
   html.match(new RegExp(`fill="[^"]*var\\(--color-${key}\\)`, "g")) ?? []
 
+// South Africa around Lesotho, in the middle of the view at yaw and tilt 0: the hole is the enclave, wound the other way.
+const [outer, enclave] = [square("za", -20, -20, 40), square("ls", -5, -5, 10)]
+const around: GeoJSON.Feature = {
+  ...outer,
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      (outer.geometry as GeoJSON.Polygon).coordinates[0],
+      [...(enclave.geometry as GeoJSON.Polygon).coordinates[0]].reverse(),
+    ],
+  },
+}
+
 describe("ChoroplethChart3D", () => {
   test("a region under an opaque color is drawn once: its land ring is left out, the other regions keep theirs", () => {
     const html = renderToString(
@@ -112,9 +125,9 @@ describe("ChoroplethChart3D", () => {
     // without an id remain.
     expect(landOf(html)).toHaveLength(2)
     expect(oceanOf(html)).toHaveLength(1)
-    // The regions a and c, over the land.
+    // The regions a and c, over the land without an id, which lies under every region.
     expect(regions(html)).toHaveLength(2)
-    expect(html.lastIndexOf(LAND)).toBeLessThan(html.indexOf("var(--color-population)"))
+    expect(html.indexOf(LAND)).toBeLessThan(html.indexOf("var(--color-population)"))
     expect(html).not.toContain("NaN")
   })
 
@@ -139,18 +152,6 @@ describe("ChoroplethChart3D", () => {
   })
 
   test("a region inside another is painted after it, whatever the order of the data, and the hole it lies in is not filled", () => {
-    // South Africa around Lesotho: the hole is the enclave, wound the other way.
-    const [outer, enclave] = [square("za", -20, -20, 40), square("ls", -5, -5, 10)]
-    const around: GeoJSON.Feature = {
-      ...outer,
-      geometry: {
-        type: "Polygon",
-        coordinates: [
-          (outer.geometry as GeoJSON.Polygon).coordinates[0],
-          [...(enclave.geometry as GeoJSON.Polygon).coordinates[0]].reverse(),
-        ],
-      },
-    }
     const html = renderToString(
       <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
         <ChoroplethChart3D
@@ -168,6 +169,20 @@ describe("ChoroplethChart3D", () => {
     expect(regions(html, "population")).toHaveLength(1)
     expect(regions(html, "quake")).toHaveLength(1)
     expect(html.indexOf("var(--color-population)")).toBeLessThan(html.indexOf("var(--color-quake)"))
+
+    // Without an entry of its own, the enclave's land lies over the region around it, where the pointer finds it.
+    const alone = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[{ code: "za", n: 2 }]}
+          land={{ type: "FeatureCollection", features: [enclave, around] }}
+          id="code"
+          value="n"
+        />
+      </ChartContainer3D>
+    )
+    expect(landOf(alone)).toHaveLength(1)
+    expect(alone.indexOf("var(--color-population)")).toBeLessThan(alone.indexOf(`fill="${LAND}"`))
   })
 })
 
@@ -186,6 +201,27 @@ describe("ChoroplethChart3D hover", () => {
     )
     return { rings, x, y }
   }
+
+  test("a region inside another without an entry says nothing, where it named the region around it", async () => {
+    const chart = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <ChoroplethChart3D
+          data={[{ code: "za", n: 2, name: "South Africa" }]}
+          land={{ type: "FeatureCollection", features: [enclave, around] }}
+          id="code"
+          value="n"
+          label="name"
+        />
+      </ChartContainer3D>
+    )
+    // Lesotho, in the middle of the view box.
+    await chart.send("pointermove", { clientX: 320, clientY: 200 })
+    expect(chart.host.querySelector('[data-slot="chart-3d-tooltip"]')).toBeNull()
+    // South Africa around it still says itself: 12° east, between the two borders.
+    await chart.send("pointermove", { clientX: 350, clientY: 200 })
+    expect(chart.host.textContent).toContain("South Africa")
+    await chart.unmount()
+  })
 
   test("a region under the pointer names its series and its value, formatted; label names it after its entry instead; a value that is not a number is missing, not 0", async () => {
     const chart = await mount(
@@ -227,6 +263,29 @@ describe("ChoroplethChart3D hover", () => {
     expect(tip.textContent).toBe("Alpha")
     await named.unmount()
   })
+
+  test.each([undefined, null])(
+    "a region whose label is %s is titled by its series, not by the word",
+    async (name) => {
+      const chart = await mount(
+        <ChartContainer3D config={config}>
+          <ChoroplethChart3D
+            data={[{ code: "a", n: 5, name }]}
+            land={land}
+            id="code"
+            value="n"
+            label="name"
+          />
+        </ChartContainer3D>
+      )
+      const a = region(chart.svg)
+      await chart.send("pointermove", { clientX: a.x, clientY: a.y })
+      const tip = chart.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent!
+      expect(tip).toContain("Population")
+      expect(tip).not.toContain(String(name))
+      await chart.unmount()
+    }
+  )
 
   test("a series without a config entry is named by its key", async () => {
     const chart = await mount(

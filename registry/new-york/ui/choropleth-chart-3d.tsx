@@ -98,50 +98,83 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   const presence = useTween(present, 0)
 
   // A region under an opaque color is drawn once: its land ring is left out.
-  const opaque = new Set(
-    Object.entries(presence).flatMap(([pid, o]) =>
-      o >= 1 ? [(JSON.parse(pid) as [string])[0]] : []
-    )
-  )
+  const opaque = opaqueOf(presence)
+  // A feature without an id is never colored: it is scenery, under every region.
   const {
     marks: scenery,
     path,
     sink,
+    ground,
   } = earth(
-    { features: land.features.filter((f) => f.id === undefined || !opaque.has(String(f.id))) },
+    { features: land.features.filter((f) => f.id === undefined) },
     camera,
     geoOrthographic(),
     geoPath
   )
-  // A feature without an id is never colored; a region may be several, as a
-  // mainland and its islands.
+  // A region may be several features, as a mainland and its islands.
   const features = group(
     land.features.filter((f) => f.id !== undefined),
     (f) => String(f.id)
   )
-  const painted = Object.entries(presence).sort(([a], [b]) => largerFirst(a, b))
-  const overlays = painted.flatMap(([pid, opacity]) => {
-    const [rid, key] = JSON.parse(pid) as [string, string]
-    // An entry naming a region the land has not draws nothing.
-    const parts = features.get(rid) ?? []
+  const colors = group(Object.entries(presence), ([pid]) => (JSON.parse(pid) as [string])[0])
+  const paint = (part: GeoJSON.Feature, key: string, fill: string) =>
+    sink.marks(() => path(part), key, fill)
+  // Every region of the land, its land and then its colors, the larger first: a region inside
+  // another - Lesotho in South Africa - lies over it, colored or not. An entry naming a
+  // region the land has not draws nothing.
+  const regionMarks = [...features.keys()].sort(largerFirst).flatMap((rid) => {
+    const parts = features.get(rid)!
+    const soil = opaque.has(rid)
+      ? []
+      : parts.flatMap((part, i) => ground(part, `ground-${rid}-${i}`))
     // A region still fading out has no entry, so it says nothing.
     const region = regions.get(rid)
-    const says = region?.key === key ? regionTooltip(region, reading) : undefined
-    // Its group is the region alone, so hovering highlights every ring of it.
-    return parts.flatMap((part, i) =>
-      sink
-        .marks(() => path(part), `region-${rid}-${key}-${i}`, faded(colorOf(key), opacity))
-        .map((mark) => ({ ...mark, groups: [rid], tooltip: says }))
-    )
+    const says = (key: string) => (region?.key === key ? regionTooltip(region, reading) : undefined)
+    return [...soil, ...overlaysOf(rid, parts, colors.get(rid) ?? [], paint, says)]
   })
 
-  return <Marks3D marks={[...scenery, ...overlays]} />
+  return <Marks3D marks={[...scenery, ...regionMarks]} />
+}
+
+/** The regions whose color has fully come in, by the presence of every region and series. */
+function opaqueOf(presence: Record<string, number>) {
+  return new Set(
+    Object.entries(presence).flatMap(([pid, o]) =>
+      o >= 1 ? [(JSON.parse(pid) as [string])[0]] : []
+    )
+  )
 }
 
 /**
- * Orders the presence ids of two regions, the larger region first, so a
- * region inside another - Lesotho in South Africa - is painted on top, where
- * the pointer finds it.
+ * The colors of the region `rid`, its `parts` painted in the series of each
+ * of its `colors` - a presence id and how far it has come - faded as it
+ * enters or leaves. Its group is the region alone, so hovering highlights
+ * every ring of it.
+ */
+function overlaysOf(
+  rid: string,
+  parts: GeoJSON.Feature[],
+  colors: [string, number][],
+  paint: (part: GeoJSON.Feature, key: string, fill: string) => Mark3D[],
+  says: (key: string) => Mark3D["tooltip"]
+) {
+  return colors.flatMap(([pid, opacity]) => {
+    const key = (JSON.parse(pid) as [string, string])[1]
+    const tooltip = says(key)
+    return parts.flatMap((part, i) =>
+      paint(part, `region-${rid}-${key}-${i}`, faded(colorOf(key), opacity)).map((mark) => ({
+        ...mark,
+        groups: [rid],
+        tooltip,
+      }))
+    )
+  })
+}
+
+/**
+ * Orders two regions by their ids, the larger region first, so a region
+ * inside another - Lesotho in South Africa - is painted on top, where the
+ * pointer finds it.
  */
 function useLargerFirst(land: GeoJSON.FeatureCollection) {
   const areas = React.useMemo(() => {
@@ -151,8 +184,8 @@ function useLargerFirst(land: GeoJSON.FeatureCollection) {
       areas.set(String(f.id), (areas.get(String(f.id)) ?? 0) + geoArea(f))
     return areas
   }, [land])
-  const size = (pid: string) => areas.get((JSON.parse(pid) as [string])[0]) ?? 0
-  return (a: string, b: string) => size(b) - size(a)
+  // Every id the chart orders is that of a feature of `land`, so every one has an area.
+  return (a: string, b: string) => areas.get(b)! - areas.get(a)!
 }
 
 /**
@@ -221,7 +254,8 @@ function regionValues<T extends Record<string, unknown>>(
       key: fields.series ? String(d[fields.series]) : fallback,
       value: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entry: d,
-      name: fields.label ? String(d[fields.label]) : undefined,
+      // An entry without a label is named by its series, never "undefined".
+      name: fields.label && d[fields.label] != null ? String(d[fields.label]) : undefined,
     })
   }
   return regions

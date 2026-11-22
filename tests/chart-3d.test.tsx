@@ -3634,7 +3634,7 @@ describe("geo helpers", () => {
         sink.closePath()
       }
     const land = { features: [{ type: "Feature" }, { type: "Point" }, { type: "Feature" }] }
-    const { marks, path, sink } = earth(land, camera, projection, geoPath)
+    const { marks, path, sink, ground } = earth(land, camera, projection, geoPath)
     expect(calls).toEqual([
       ["rotate", [180, 90]],
       ["scale", 100 * GLOBE_RADIUS],
@@ -3656,6 +3656,8 @@ describe("geo helpers", () => {
     expect(sink.marks(() => path({ type: "Feature" }), "r", "red")).toEqual([
       { key: "r-0", points: marks[1].points, fill: "red" },
     ])
+    // ...and the land of a region in an order of its own, as land.
+    expect(ground({ type: "Feature" }, "g")).toEqual([{ ...marks[1], key: "g-0" }])
     // A hole is a ring wound the other way than the largest, the outer one: it is left out, not filled.
     const holed = () => {
       sink.moveTo(1, 1)
