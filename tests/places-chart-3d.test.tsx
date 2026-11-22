@@ -468,8 +468,8 @@ describe("PlacesChart3D transitions", () => {
         )
       )
     const fills = () =>
-      [...host.querySelectorAll('[data-slot="chart-3d-marks"] circle')].map(
-        (c) => c.getAttribute("fill")!
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] circle')].map((c) =>
+        c.getAttribute("fill")!
       )
 
     await render("city")

@@ -3360,7 +3360,9 @@ function pointTooltip<T extends Record<string, unknown>>(
  * reorders; a value that is not a finite number stands as 0. Each glides by name:
  * `values` from 0, `rows` - the place of every entry - to where it stands, and
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
- * still among them. `labels` name the ticks: the entry at a tick of x, through
+ * still among them; so does every series, `lanes` its place along z and
+ * `lanePresence` how far it has come, so a series that is turned off flattens
+ * and fades away while the others glide to their new places. `labels` name the ticks: the entry at a tick of x, through
  * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
  * tick of z. Every entry is keyed by its id - its name, made unique where a
  * name repeats - and `nameOf` reads the name back; `entries` holds the entry
@@ -3395,6 +3397,13 @@ function useSeries<T extends Record<string, unknown>>({
       present: Object.fromEntries(ids.map((id) => [id, 1])),
     }
   }, [data, index, series])
+  const lanes = React.useMemo(
+    () => ({
+      at: Object.fromEntries(series.map((key, j) => [key, j])),
+      present: Object.fromEntries(series.map((key) => [key, 1])),
+    }),
+    [series]
+  )
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
     y: format.y,
@@ -3407,6 +3416,8 @@ function useSeries<T extends Record<string, unknown>>({
     values: useTween(target, 0),
     rows: useTween(order),
     presence: useTween(present, 0),
+    lanes: useTween(lanes.at),
+    lanePresence: useTween(lanes.present, 0),
     labels,
     nameOf,
   }

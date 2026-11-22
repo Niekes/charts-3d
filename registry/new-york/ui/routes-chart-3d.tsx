@@ -186,7 +186,6 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
   )
 }
 
-
 /** A stop of a route: the point it glides as, which lies over its place, how far it has come, from 0 to 1, and whether it is on its way. */
 type Stop = { name: string; seen: number; moves: boolean; at: Point3D }
 

@@ -108,6 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PlacesChart3D`: a dot whose series changes fades out in the old color as
   it fades in in the new one, as a tile of the globe and a region of the
   choropleth do, where its color switched at once.
+- `BarChart3D`, `AreaChart3D`: a series that `keys` or the config drops
+  flattens and fades away, and the series that stay glide to their new rows,
+  where the dropped one vanished at once and the others jumped past their
+  place; a series that comes fades in as it grows, where it popped in. A
+  series on its way out says nothing on hover. `useSeries` returns `lanes`
+  and `lanePresence`, the place of every series along z and how far it has
+  come.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

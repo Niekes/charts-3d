@@ -459,6 +459,33 @@ describe("AreaChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("a series that leaves flattens and fades away, and the ones that stay glide to their new rows", async () => {
+    // From the side the screen follows the z of the box: a row of series is a place on x.
+    const side = { yaw: Math.PI / 2, tilt: 0.3 }
+    const view = await mount(chart(data, { keys: ["a", "b"] }, side))
+    const of = (key: string) => marks(view.host).filter((m) => m.series === key)
+    const left = (key: string) => Math.min(...of(key).flatMap((m) => m.corners.map(([x]) => x)))
+    await act(() => vi.advanceTimersByTime(700))
+    const from = left("b")
+    await view.render(chart(data, { keys: ["b"] }, side))
+    await act(() => vi.advanceTimersByTime(100))
+    // Mid-glide the ribbon of a is still there, faded, and b is on its way, not past its end.
+    expect(of("a").length).toBeGreaterThan(0)
+    expect(of("a").every((m) => m.fill.includes("transparent"))).toBe(true)
+    const mid = left("b")
+    await act(() => vi.advanceTimersByTime(700))
+    const to = left("b")
+    expect(of("a")).toHaveLength(0)
+    expect(Math.min(from, to) <= mid && mid <= Math.max(from, to)).toBe(true)
+
+    // A series that comes fades in as it rises.
+    await view.render(chart(data, { keys: ["b", "a"] }, side))
+    await act(() => vi.advanceTimersByTime(16))
+    expect(of("a").length).toBeGreaterThan(0)
+    expect(of("a").every((m) => m.fill.includes("transparent"))).toBe(true)
+    await view.unmount()
+  })
+
   test("a face of the top keeps its mark when an entry is inserted before it", async () => {
     const view = await mount(chart(flat.slice(1), { keys: ["a"] }))
     const segment = async (el: Element) => {
@@ -531,8 +558,13 @@ describe("AreaChart3D transitions", () => {
     // value of b to show, so the line of b leaves it out instead of breaking.
     await view.render(chart(data.slice(0, 2), { keys: ["b"] }))
     await act(() => vi.advanceTimersByTime(300))
-    expect(marks(view.host).map((m) => m.series)).toEqual(["b", "b", "b"])
-    expect(marks(view.host).some((m) => m.el.getAttribute("d")!.includes("NaN"))).toBe(false)
+    // The ribbon of b, and the one of a flattening and fading away.
+    const drawn = marks(view.host)
+    expect(drawn.filter((m) => m.series === "b")).toHaveLength(3)
+    expect(drawn.filter((m) => m.series === "a").every((m) => m.fill.includes("transparent"))).toBe(
+      true
+    )
+    expect(drawn.some((m) => m.el.getAttribute("d")!.includes("NaN"))).toBe(false)
     await view.unmount()
   })
 
