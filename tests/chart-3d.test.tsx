@@ -23,6 +23,7 @@ import {
   faded,
   finite,
   keyOf,
+  joined,
   floored,
   gridAxis,
   facing,
@@ -2517,7 +2518,9 @@ describe("helpers", () => {
     const tooltip = { items: [] }
     const marks = cubeMarks("c", cube.faces, "red", tooltip)
 
-    expect(marks.map((m) => m.key).sort()).toEqual(["c-front", "c-left", "c-top"])
+    expect(marks.map((m) => m.key).sort()).toEqual(
+      ["front", "left", "top"].map((face) => joined("c", face))
+    )
     for (const mark of marks) {
       expect(mark.fill).toMatch(/^color-mix\(in oklch, red \d+%, black\)$/)
       expect(mark.points).toHaveLength(4)
@@ -2618,7 +2621,12 @@ describe("helpers", () => {
     )
     // The series are the keys of the config; a value that is not a number stands as 0.
     expect(read!.series).toEqual(["a", "b"])
-    expect(read!.target).toEqual({ "x-a": 1, "x-b": 0, "y-a": 2, "y-b": 3 })
+    expect(read!.target).toEqual({
+      [joined("x", "a")]: 1,
+      [joined("x", "b")]: 0,
+      [joined("y", "a")]: 2,
+      [joined("y", "b")]: 3,
+    })
     expect(read!.values).toEqual(read!.target)
     expect(read!.rows).toEqual({ x: 0, y: 1 })
     expect([...read!.entries]).toEqual([
@@ -4036,6 +4044,13 @@ describe("finite", () => {
   test("what Number alone reads as 0, or not as a number, is none", () => {
     const none = [null, undefined, "", " ", false, true, "abc", NaN, Infinity, new Date(NaN)]
     expect(none.filter(finite)).toEqual([])
+  })
+})
+
+describe("joined", () => {
+  test("keeps the parts apart where a hyphen would run them together", () => {
+    expect(joined("a", "b-c")).not.toBe(joined("a-b", "c"))
+    expect(joined("a", "b")).toBe(joined("a", "b"))
   })
 })
 

@@ -23,6 +23,7 @@ import {
   type Mark3D,
   type Tooltip3D,
   type World,
+  joined,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -96,7 +97,7 @@ export function BarChart3D<T extends Record<string, unknown>>({
       <Marks3D
         marks={bars.flatMap((bar) =>
           barMarks({
-            id: `${bar.name}-${bar.key}`,
+            id: joined(bar.name, bar.key),
             faces: bar.faces,
             color: colorOf(bar.key),
             // A series turned off says nothing, as an entry that left.
@@ -145,7 +146,7 @@ function barCells(
 ) {
   return Object.entries(rows).flatMap(([name, x]) =>
     Object.entries(lanes).flatMap(([key, j]) => {
-      const value = values[`${name}-${key}`]
+      const value = values[joined(name, key)]
       return value === undefined ? [] : [{ name, x, j, key, value }]
     })
   )
@@ -198,7 +199,7 @@ function barTooltip<T extends Record<string, unknown>>(
   }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = target[`${id}-${key}`]
+  const value = target[joined(id, key)]
   return () =>
     tooltip(
       {

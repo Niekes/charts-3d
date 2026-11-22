@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `joined(...parts)`, one key of several parts, such as an entry and its
+  series, joined by a character no name holds.
 - `keyOf(value, fallback)`, the config key a field of the data names: the
   value as a string, or `fallback` where it is missing or blank.
 - `earth` also returns `ground(feature, key)`, which draws one feature as
@@ -94,6 +96,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button held: a drag ends with its button.
 - The tooltip says a number below 1 to three significant digits, so 0.0004
   no longer reads 0; from 1 on it keeps three decimals, as before.
+- `BarChart3D`, `AreaChart3D`: names and series with a hyphen keep their
+  values apart - the entry "a" of the series "b-c" and the entry "a-b" of
+  "c" drew the same bar. The keys of the marks of the bar, the area, the
+  line and the routes chart join their parts with `joined`.
 - The tooltip and the focus under a pointer that rests follow new data and
   a turn of the camera: the mark under the pointer is hit again whenever the
   marks change, where the tooltip of a mark that had changed or left went on

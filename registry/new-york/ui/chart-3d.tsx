@@ -3405,7 +3405,7 @@ function useSeries<T extends Record<string, unknown>>({
       ids,
       target: Object.fromEntries(
         data.flatMap((d, i) =>
-          series.map((key) => [`${ids[i]}-${key}`, finite(d[key]) ? Number(d[key]) : 0])
+          series.map((key) => [joined(ids[i], key), finite(d[key]) ? Number(d[key]) : 0])
         )
       ),
       order: Object.fromEntries(ids.map((id, i) => [id, i])),
@@ -3460,6 +3460,13 @@ function uniqueIds(names: string[]) {
 /** The name of the entry of `id`, as its data names it. */
 const nameOf = (id: string) => id.split(REPEAT)[0]
 
+/**
+ * One key of several parts, such as an entry and its series: joined by a
+ * character no name holds, where a hyphen would make "a" and "b-c" the key of
+ * "a-b" and "c".
+ */
+const joined = (...parts: string[]) => parts.join("\u0001")
+
 /** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
 function cubeMarks(
   id: string,
@@ -3471,7 +3478,7 @@ function cubeMarks(
   return faces
     .filter((face) => face.ccw)
     .map((face) => ({
-      key: `${id}-${face.face}`,
+      key: joined(id, face.face),
       points: face.map((p) => p.projected),
       fill: shade(face, color),
       tooltip,
@@ -3595,6 +3602,7 @@ export {
   faded,
   finite,
   keyOf,
+  joined,
   nonNegative,
   useSeries,
   usePoints,

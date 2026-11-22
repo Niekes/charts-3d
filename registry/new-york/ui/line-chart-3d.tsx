@@ -19,6 +19,7 @@ import {
   worldBox,
   type Mark3D,
   type Tooltip3D,
+  joined,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type LineChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -175,14 +176,14 @@ function elbowMarks(
   return [
     ...at.slice(1).map((b, i) => ({
       ...mark,
-      key: `${elbow.name}-${i < elbow.own ? "before" : "after"}`,
+      key: joined(elbow.name, i < elbow.own ? "before" : "after"),
       points: segment(at[i], b, WIDTH),
     })),
     { ...mark, shape: "circle" as const, key: elbow.name, points: [at[elbow.own]], r: WIDTH / 2 },
     {
       ...mark,
       shape: "circle" as const,
-      key: `${elbow.name}-dot`,
+      key: joined(elbow.name, "dot"),
       points: [at[elbow.own]],
       r: WIDTH,
       whenLit: true,

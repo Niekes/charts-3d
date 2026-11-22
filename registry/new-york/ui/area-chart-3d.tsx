@@ -29,6 +29,7 @@ import {
   type ChartConfig,
   type Mark3D,
   type Tooltip3D,
+  joined,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -152,7 +153,7 @@ function linePoints(
   const own = Object.entries(rows)
     .sort(([, a], [, b]) => a - b)
     .flatMap(([name, x]) => {
-      const value = values[`${name}-${key}`]
+      const value = values[joined(name, key)]
       return value === undefined ? [] : [{ name, x, value, seen: presence[name] ?? 0 }]
     })
   let anchor = own.find((p) => p.seen === 1)
@@ -245,7 +246,7 @@ function ribbonMarks(
   const spans = (f: RibbonFace) =>
     f.face === "top" ? [line[f.segment].name, line[f.segment + 1].name] : []
   return faces.map((f) => {
-    const id = f.face === "top" ? `${key}-top-${line[f.segment].name}` : `${key}-${f.face}`
+    const id = f.face === "top" ? joined(key, "top", line[f.segment].name) : joined(key, f.face)
     return {
       key: id,
       points: f.map((p) => p.projected),
@@ -291,7 +292,7 @@ function ribbonTooltip<T extends Record<string, unknown>>(
         title: config[key]?.label ?? key,
         // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
         items: names.flatMap((name, i) => {
-          const value = target[`${name}-${key}`]
+          const value = target[joined(name, key)]
           if (!finite(spanned[i][key])) return []
           return [
             { label: (format.x ?? String)(nameOf(name)), value: format.y?.(value) ?? value, color },

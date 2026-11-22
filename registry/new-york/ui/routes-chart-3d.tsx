@@ -28,6 +28,7 @@ import {
   type Mark3D,
   type Symbol3D,
   type Tooltip3D,
+  joined,
 } from "@/registry/new-york/ui/chart-3d"
 
 export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -263,7 +264,7 @@ function pieces(
       return Array.from({ length: count }, (_, k) =>
         piece(
           [onGlobe(along(k / count)), onGlobe(along((k + 1) / count))],
-          `${from.name}-${to.name}-${k}`,
+          joined(from.name, to.name, String(k)),
           from.moves || to.moves ? 1 : Math.max(from.seen, to.seen),
           [from.name, to.name],
           to.name

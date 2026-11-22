@@ -1003,6 +1003,23 @@ describe("BarChart3D entries of the same name", () => {
     expect(faces(render(twice))).toHaveLength(faces(three).length)
   })
 
+  test("names and series with a hyphen draw the bars of their own values", () => {
+    const render = (names: [string, string]) =>
+      renderToString(
+        <ChartContainer3D config={{ "b-c": { color: "red" }, c: { color: "blue" } }}>
+          <BarChart3D
+            data={[
+              { name: names[0], "b-c": 1, c: 0 },
+              { name: names[1], "b-c": 0, c: 5 },
+            ]}
+            index="name"
+          />
+        </ChartContainer3D>
+      )
+    // "a" with "b-c" and "a-b" with "c" both read "a-b-c" when joined with a hyphen.
+    expect(faces(render(["a", "a-b"]))).toEqual(faces(render(["p", "q"])))
+  })
+
   test("a bar of a repeated name says that name, and the entry behind it", async () => {
     const seen: (typeof twice)[number][] = []
     const view = await mount(
