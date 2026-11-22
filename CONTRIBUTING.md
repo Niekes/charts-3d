@@ -109,7 +109,9 @@ prerendered pages from `build/client/charts-3d/` to the root of
 Pages are deployed to GitHub Pages from the tag of every release: the release
 workflow runs the docs workflow on it, so the docs show the API on npm, and the
 release commit pins their install commands to the release. The `github-pages`
-environment has to allow deployments from `v*` tags.
+environment has to allow deployments from `v*` tags. The docs wait for the
+release on npm: their run fails until a maintainer approves the staged
+version, and is re-run then.
 
 ## Releases
 

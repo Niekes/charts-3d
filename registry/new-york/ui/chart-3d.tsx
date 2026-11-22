@@ -462,7 +462,7 @@ export type ChartContainer3DProps = {
    * leave the chart, it flips to the other side, on each axis alone.
    * @defaultValue "top-right"
    */
-  tooltip?: "top-left" | "top-right" | "bottom-left" | "bottom-right"
+  placement?: "top-left" | "top-right" | "bottom-left" | "bottom-right"
 }
 
 function ChartContainer3D({
@@ -478,13 +478,13 @@ function ChartContainer3D({
   shortcuts = true,
   keymap = {},
   gizmo = "bottom-left",
-  tooltip = "top-right",
+  placement = "top-right",
   children,
   "aria-label": ariaLabel,
   ...props
 }: React.ComponentProps<"div"> & ChartContainer3DProps) {
   const chartId = chartIdOf(id, React.useId())
-  const drawing = useScene(requested, width, height, tooltip)
+  const drawing = useScene(requested, width, height, placement)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
   const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { heading, ms })
@@ -601,7 +601,7 @@ function useScene(requested: Renderer3D, width: number, height: number, placemen
 }
 
 type Tip3D = ReturnType<typeof useTip>
-type Placement3D = NonNullable<ChartContainer3DProps["tooltip"]>
+type Placement3D = NonNullable<ChartContainer3DProps["placement"]>
 
 // The room between the pointer and its tooltip, in pixels, and the shift of
 // the tooltip on an axis: before the pointer by its own size and the room, or after it.

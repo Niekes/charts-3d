@@ -825,6 +825,26 @@ describe("GlobeChart3D values that are no numbers", () => {
 })
 
 describe("GlobeChart3D step", () => {
+  test("a longitude beyond -180..180 wraps round to its tile, as 190 is -170", () => {
+    const html = (lon: number) =>
+      renderToString(
+        <ChartContainer3D config={config} defaultView={{ yaw: Math.PI, tilt: 0 }}>
+          <GlobeChart3D
+            data={[{ lon, lat: 0, population: 3 }]}
+            land={none}
+            lon="lon"
+            lat="lat"
+            value="population"
+            step={10}
+          />
+        </ChartContainer3D>
+      )
+    expect(faces(html(-170)).length).toBeGreaterThan(0)
+    expect(html(190)).toBe(html(-170))
+    expect(html(360 + 15)).toBe(html(15))
+    expect(html(-180 - 15)).toBe(html(165))
+  })
+
   test("a step that does not divide 180 - 0, below 0, NaN, Infinity, wider than 180, 7, 40 - draws the tiles of the default", () => {
     const html = (step?: number) =>
       renderToString(

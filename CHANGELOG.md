@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart: `format={{ value: fn }}` in place of `format={fn}`. A prop means
   one thing in every chart that takes it, listed under Props on the
   `chart-3d` page (ADR-0012).
+- **Breaking:** `placement` on `ChartContainer3D` is the corner the tooltip
+  sits at, `placement="bottom-left"` in place of `tooltip="bottom-left"`:
+  `tooltip` is what a mark says, on every chart (ADR-0012).
 - **Breaking:** `Mark3D` names its shape: a mark is a polygon unless `shape`
   says `"circle"` or `"symbol"`, and the core draws each through an
   exhaustive switch on every renderer. A chart of your own that hands
@@ -70,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `facing` is on the semver side of the Stability list: a page hands it to
   `view`. `uniqueIds` joins the core helpers.
 - The docs follow the release: the release workflow deploys them from its
-  tag, and its commit pins their install commands to it.
+  tag once the version is on npm, and its commit pins their install
+  commands to it.
 
 ### Removed
 
@@ -81,9 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `BarChart3D`, `AreaChart3D` and `GlobeChart3D`: a missing value stands as
-  0 but says no value in its tooltip, where it said 0, as the choropleth;
-  the globe tells a negative value as it is, where it said 0.
+- `BarChart3D`, `AreaChart3D`, `GlobeChart3D` and `PlacesChart3D`: a
+  missing value stands as 0 but says no value in its tooltip, where it said
+  0, as the choropleth; the globe and the places chart tell a negative value
+  as it is, where they said 0.
+- `GlobeChart3D`: a longitude beyond -180..180, as data from 0 to 360 has,
+  wraps round to its tile, where every one east of 180 piled up on the last.
 - `BarChart3D`, `AreaChart3D` and `PlacesChart3D` draw more than about
   120,000 values, where the chart threw "Maximum call stack size exceeded".
 - `ChoroplethChart3D`: a region of several features of one `id`, as a

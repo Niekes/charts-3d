@@ -216,7 +216,9 @@ function dotTooltip<T extends Record<string, unknown>>(
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {
   if (!entry) return undefined
-  const value = fields.value ? nonNegative(entry[fields.value]) : 0
+  // A missing value is no measured 0, and a negative one stands as it is.
+  const raw = fields.value && entry[fields.value]
+  const value = finite(raw) ? Number(raw) : undefined
   // The place of the entry, not the one the dot glides through.
   const [lon, lat] = [Number(entry[fields.lon]), Number(entry[fields.lat])]
   return () =>
@@ -224,7 +226,7 @@ function dotTooltip<T extends Record<string, unknown>>(
       {
         title: fields.id ? String(entry[fields.id]) : (config[key]?.label ?? key),
         items: [
-          ...(fields.value
+          ...(value !== undefined
             ? [
                 {
                   label: fields.value,

@@ -456,6 +456,24 @@ describe("PlacesChart3D transitions", () => {
     expect(host.textContent).toMatch(/people\s*50/)
     await leave()
 
+    // A value that goes missing, or below 0, shrinks the dot away; on its
+    // way it says no value, or the one it has - never a measured 0.
+    for (const [people, said] of [
+      [null, /people/],
+      [-5, /people\s*-5/],
+    ] as const) {
+      await render([{ lon: 15, lat: 15, people: 100, name: "Rome" }])
+      await act(() => vi.advanceTimersByTime(800))
+      await render([{ lon: 15, lat: 15, people, name: "Rome" }])
+      await act(() => vi.advanceTimersByTime(300))
+      await point()
+      const tooltip = host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent!
+      expect(tooltip).not.toMatch(/people\s*0/)
+      if (people === null) expect(tooltip).not.toMatch(said)
+      else expect(tooltip).toMatch(said)
+      await leave()
+    }
+
     await render([])
     await act(() => vi.advanceTimersByTime(300))
     await point()

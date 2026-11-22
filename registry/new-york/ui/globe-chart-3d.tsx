@@ -273,7 +273,9 @@ function tileValues<T extends Record<string, unknown>>(
   for (const d of data) {
     // An entry without a place on the globe has no tile.
     if (!finite(d[fields.lon]) || !finite(d[fields.lat])) continue
-    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
+    // A longitude beyond -180..180, as data from 0 to 360 has, wraps round to its tile.
+    const lon = ((((Number(d[fields.lon]) + 180) % 360) + 360) % 360) - 180
+    const lat = Number(d[fields.lat])
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
     const entries = tiles.get(center)?.entries ?? []
