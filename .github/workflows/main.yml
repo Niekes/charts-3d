@@ -78,7 +78,7 @@ jobs:
           npm pack --dry-run --ignore-scripts
       # Both badges in one commit, so no second push races the first.
       - name: Update the coverage and fallow health badges
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           npm run coverage
           npm run coverage:badge

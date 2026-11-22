@@ -58,7 +58,7 @@ const files = readdirSync(join(ROOT, UI))
   .filter((entry) => entry.endsWith(".tsx"))
   .sort()
 const registry = JSON.parse(read("registry.json"))
-// The release commit pins the core to its own tag, `master` leaves it unpinned.
+// The release commit pins the core to its own tag, `main` leaves it unpinned.
 const RELEASE_DEPENDENCY = `${CORE_DEPENDENCY}#v${JSON.parse(read("package.json")).version}`
 const items = new Map(registry.items.map((item) => [item.name, item]))
 const core = items.get(CORE)

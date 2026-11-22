@@ -2,7 +2,7 @@ name: Docs
 
 # The release workflow runs this on the tag of every release, so the docs
 # show the API that is on npm and install the release. Run it by hand on a
-# tag, never on `master`: the github-pages environment has to allow `v*` tags.
+# tag, never on `main`: the github-pages environment has to allow `v*` tags.
 on:
   workflow_dispatch:
 

@@ -36,12 +36,12 @@ For non-skill agents, treat the task map below as the local onboarding source: r
 
 A release is a pull request that bumps the version in `package.json` and
 updates `CHANGELOG.md` (for example the `release/0.3.0` branch). Merging it
-into `master` triggers `.github/workflows/release.yml`, which stages the new
+into `main` triggers `.github/workflows/release.yml`, which stages the new
 version on npm - but only when `package.json` changed and the version is not
 on npm yet - and, if it is missing, tags the pinned release commit and creates
 the `vX.Y.Z` release on GitHub, then deploys the docs from that tag, their
 install commands pinned to it - a run that fails until the version is
-approved on npm and is re-run then. It runs from `master` alone, one release at a
+approved on npm and is re-run then. It runs from `main` alone, one release at a
 time, and a pushed tag counts as released. The version goes live once a
 maintainer approves it with 2FA. Never run `npm publish`, `npm stage approve` or push a
 version tag by hand.
@@ -168,8 +168,8 @@ The rules that `scripts/check-template.mjs` enforces:
 - a chart depends on `niekes/charts-3d/chart-3d` in the registry and leaves
   the npm dependencies to the core, unless it alone needs one: then its item
   declares it, as the globe declares `d3-geo`, and it lands only where that
-  chart installs. On `master` the dependency is unpinned; only the release
-  commit, which the release workflow makes beside `master`, pins it to
+  chart installs. On `main` the dependency is unpinned; only the release
+  commit, which the release workflow makes beside `main`, pins it to
   `#v<version>`, the version in `package.json`;
 - a chart projects its data with a d3-3d generator (`points3D`, `cubes3D`,
   `gridPlanes3D`, ...), imported from `d3-3d` and called, and sorts the
