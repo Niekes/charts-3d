@@ -484,7 +484,8 @@ describe("LineChart3D transitions", () => {
     // The same points to draw; a search per point along its line took ten times as long on one.
     const [short, long] = [await fastest(1000), await fastest(1)]
     expect(long).toBeLessThan(short * 3)
-  })
+    // Seven renders of 3,000 points take longer than the default 5 s on a shared CI runner.
+  }, 30_000)
 
   test("without id a point is named by its place in the data: new values glide, the line stays whole", async () => {
     const view = await mount(chart([p, q, r]))
