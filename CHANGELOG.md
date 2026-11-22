@@ -87,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `LineChart3D`, `RoutesChart3D`: thousands of points that arrive at once,
+  as data that loads into an empty chart, find where they enter from in one
+  sweep per line, where a search per point froze the page for seconds.
+- `ChoroplethChart3D`: a numeric code names its region whatever its leading
+  zeros, so `40`, as parsed data holds it, colors Austria, `"040"` in
+  world-atlas, where it colored nothing.
 - `ChoroplethChart3D`: a region inside another without an entry of its own,
   as Lesotho in South Africa, lies over the color of the region around it,
   where the pointer finds it, instead of under it, naming the outer region.

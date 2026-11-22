@@ -31,7 +31,8 @@ export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<st
   /**
    * The field that identifies an entry by its region: its value, as a string,
    * is the `id` of the region of the land the entry colors - for world-atlas
-   * the ISO 3166-1 numeric code, `"276"` for Germany.
+   * the ISO 3166-1 numeric code, `"276"` for Germany. A numeric code matches
+   * whatever its leading zeros: `40` and `"040"` both name Austria.
    */
   id: keyof T & string
   /**
@@ -114,7 +115,7 @@ export function ChoroplethChart3D<T extends Record<string, unknown>>({
   // A region may be several features, as a mainland and its islands.
   const features = group(
     land.features.filter((f) => f.id !== undefined),
-    (f) => String(f.id)
+    (f) => regionOf(f.id)
   )
   const colors = group(Object.entries(presence), ([pid]) => (JSON.parse(pid) as [string])[0])
   const paint = (part: GeoJSON.Feature, key: string, fill: string) =>
@@ -172,6 +173,13 @@ function overlaysOf(
 }
 
 /**
+ * The id of a region as the chart matches it: a numeric code without its
+ * leading zeros, as the zero-padded `"040"` of world-atlas and the `40` that
+ * parsed data holds are one region, Austria; any other id as it is.
+ */
+const regionOf = (id: unknown) => String(id).replace(/^0+(?=\d+$)/, "")
+
+/**
  * Orders two regions by their ids, the larger region first, so a region
  * inside another - Lesotho in South Africa - is painted on top, where the
  * pointer finds it.
@@ -181,7 +189,7 @@ function useLargerFirst(land: GeoJSON.FeatureCollection) {
     // A region of several features is as large as all of them.
     const areas = new Map<string, number>()
     for (const f of land.features)
-      areas.set(String(f.id), (areas.get(String(f.id)) ?? 0) + geoArea(f))
+      areas.set(regionOf(f.id), (areas.get(regionOf(f.id)) ?? 0) + geoArea(f))
     return areas
   }, [land])
   // Every id the chart orders is that of a feature of `land`, so every one has an area.
@@ -248,7 +256,7 @@ function regionValues<T extends Record<string, unknown>>(
 ) {
   const regions = new Map<string, Region<T>>()
   for (const d of data) {
-    const rid = String(d[fields.id])
+    const rid = regionOf(d[fields.id])
     regions.set(rid, {
       rid,
       key: fields.series ? String(d[fields.series]) : fallback,
