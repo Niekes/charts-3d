@@ -210,9 +210,10 @@ How the charts draw, so that a new one draws the same way:
   values as the ticks name them through `format`, and handed to the chart's
   `tooltip` prop with that data, so the reader can say otherwise. A mark
   carries it as a function the core calls when the pointer lands on it,
-  never built per frame: the chart builds it through the core's
-  `useTooltips`, keyed by the mark and kept until what it reads changes, so
-  the hover sees the same function at every frame. A mark whose entry has
+  never built per frame: the chart keeps it through the core's
+  `useTooltips`, keyed by the mark, until what it reads changes, so the
+  hover sees the same function at every frame (the globe keeps one per tile
+  in a memo of its own). A mark whose entry has
   left the data says nothing (ADR-0006).
 - **Labels.** Text beside a mark, such as the name of a node, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the side of it the

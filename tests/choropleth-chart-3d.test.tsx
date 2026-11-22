@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Renderer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Renderer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 import { ChoroplethChart3D } from "@/registry/new-york/ui/choropleth-chart-3d"
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
@@ -386,19 +386,22 @@ describe("ChoroplethChart3D hover", () => {
 
   test("tooltip makes what a region says of what it would say and the entry behind it, and null says nothing", async () => {
     const data = [{ code: "a", n: 5, capital: "Alpha City" }]
-    const chart = await mount(
+    let built = 0
+    const tooltip = (tip: Tooltip3D, { entry }: { entry: (typeof data)[number] }) => (
+      built++,
+      { ...tip, title: entry.capital }
+    )
+    const choropleth = () => (
       <ChartContainer3D config={config}>
-        <ChoroplethChart3D
-          data={data}
-          land={land}
-          id="code"
-          value="n"
-          tooltip={(tip, { entry }) => ({ ...tip, title: entry.capital })}
-        />
+        <ChoroplethChart3D data={data} land={land} id="code" value="n" tooltip={tooltip} />
       </ChartContainer3D>
     )
+    const chart = await mount(choropleth())
     const a = region(chart.svg)
     await chart.send("pointermove", { clientX: a.x, clientY: a.y })
+    // A frame renders the chart again with the same props: what the region says is not built again.
+    await chart.render(choropleth())
+    expect(built).toBe(1)
     // The items stay what the region would say.
     expect(chart.host.textContent).toContain("Alpha City")
     expect(chart.host.textContent).toMatch(/n\s*5/)
@@ -544,7 +547,8 @@ async function mount(element: ReactElement) {
     await act(async () => root.unmount())
     host.remove()
   }
-  return { host, svg, send, unmount }
+  const render = (next: ReactElement) => act(async () => root.render(next))
+  return { host, svg, send, render, unmount }
 }
 
 describe("a missing series", () => {

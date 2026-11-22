@@ -428,18 +428,21 @@ describe("RoutesChart3D hover", () => {
 
   test("tooltip makes what a route says from the default and the entries of its stops", async () => {
     const seen: Stop[][] = []
-    const view = await mount(
-      chart(route.slice(0, 2), {
-        id: "id",
-        tooltip: (tip, { entries }) => {
-          seen.push(entries)
-          return { ...tip, title: "Route", items: tip.items.slice(0, 1) }
-        },
-      })
-    )
+    const rows = route.slice(0, 2)
+    const props: Partial<RoutesChart3DProps<Stop>> = {
+      id: "id",
+      tooltip: (tip, { entries }) => {
+        seen.push(entries)
+        return { ...tip, title: "Route", items: tip.items.slice(0, 1) }
+      },
+    }
+    const view = await mount(chart(rows, props))
     const { quads, stops } = marks(view.host)
     await view.point(middle(quads[Math.floor(quads.length / 2)].corners))
     expect(seen).toEqual([route.slice(0, 2)])
+    // A frame renders the chart again with the same props: what the leg says is not built again.
+    await view.render(chart(rows, props))
+    expect(seen).toHaveLength(1)
     expect(view.tip()).toBe("RouteLisbon39, -9")
     await view.render(chart(route.slice(0, 2), { tooltip: () => null }))
     await view.point(stops[0].at)

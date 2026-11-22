@@ -273,18 +273,21 @@ describe("LineChart3D hover", () => {
 
   test("tooltip makes what a line says from the default and the entry behind the point", async () => {
     const seen: Entry[] = []
-    const view = await mount(
-      chart(two.slice(0, 1), {
-        series: "s",
-        titles: { y: "height" },
-        format: { y: (v) => `${v}m` },
-        tooltip: (tip, { entry }) => {
-          seen.push(entry)
-          return { ...tip, items: tip.items.slice(1, 2) }
-        },
-      })
-    )
+    const rows = two.slice(0, 1)
+    const props: Partial<LineChart3DProps<Entry>> = {
+      series: "s",
+      titles: { y: "height" },
+      format: { y: (v: number) => `${v}m` },
+      tooltip: (tip, { entry }) => {
+        seen.push(entry)
+        return { ...tip, items: tip.items.slice(1, 2) }
+      },
+    }
+    const view = await mount(chart(rows, props))
     await view.point(marks(view.host).dots[0].at)
+    expect(seen).toEqual([two[0]])
+    // A frame renders the chart again with the same props: what the point says is not built again.
+    await view.render(chart(rows, props))
     expect(seen).toEqual([two[0]])
     expect(view.tip()).toBe("Bheight2m")
     await view.render(chart(two.slice(0, 1), { tooltip: () => null }))

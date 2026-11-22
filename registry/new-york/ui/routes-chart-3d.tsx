@@ -119,7 +119,7 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
   // A stop that comes, goes or moves travels the great circle, at an even pace.
   const runs = useRuns(named, series && "route", presence, target, overGlobe)
   const reading = { config, entries, fields, tooltip }
-  const says = useTooltips([data, lon, lat, id, series, leg, config, tooltip])
+  const tooltips = useTooltips([data, lon, lat, id, series, leg, config, tooltip])
   const came = useCame(presence)
   const lists = runs.map((run) => pieces(run, legOf))
   // A route ends with its last run: one after a gap goes on from there.
@@ -139,7 +139,7 @@ export function RoutesChart3D<T extends Record<string, unknown>>({
     .map((piece) =>
       pieceMark(
         piece,
-        says(joined(piece.key, piece.colorKey), () => routeTooltip(piece, reading))
+        tooltips(joined(piece.key, piece.colorKey), () => routeTooltip(piece, reading))
       )
     )
 

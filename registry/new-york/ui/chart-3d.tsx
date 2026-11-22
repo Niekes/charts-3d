@@ -3496,8 +3496,8 @@ const nameOf = (id: string) => id.split(REPEAT)[0]
 
 /**
  * One key of several parts, such as an entry and its series: joined by a
- * character no name holds, where a hyphen would make "a" and "b-c" the key of
- * "a-b" and "c".
+ * control character no name of the data is expected to hold, where a hyphen
+ * would make "a" and "b-c" the key of "a-b" and "c".
  */
 const joined = (...parts: string[]) => parts.join("\u0001")
 

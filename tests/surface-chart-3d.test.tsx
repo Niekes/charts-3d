@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
 import { SurfaceChart3D, type SurfaceChart3DProps } from "@/registry/new-york/ui/surface-chart-3d"
 
 const config = { low: { color: "blue" }, high: { color: "red" } }
@@ -268,24 +268,27 @@ describe("SurfaceChart3D tooltip", () => {
       await act(async () => root.unmount())
       host.remove()
     }
-    return { host, unmount }
+    const render = (next: ReactElement) => act(async () => root.render(next))
+    return { host, render, unmount }
   }
 
   test("tooltip makes what a cell says from the default and the row, column and value behind it", async () => {
     const seen: { row: number; column: number; value: number }[] = []
-    const view = await hovered(
+    const tooltip = (tip: Tooltip3D, cell: (typeof seen)[number]) => {
+      seen.push(cell)
+      return { ...tip, title: `${cell.row},${cell.column}` }
+    }
+    const surface = () => (
       <ChartContainer3D config={config}>
-        <SurfaceChart3D
-          data={data}
-          tooltip={(tip, cell) => {
-            seen.push(cell)
-            return { ...tip, title: `${cell.row},${cell.column}` }
-          }}
-        />
+        <SurfaceChart3D data={data} tooltip={tooltip} />
       </ChartContainer3D>
     )
+    const view = await hovered(surface())
     // The one cell spans the four heights, so its value is their mean.
     expect(seen).toEqual([{ row: 0, column: 0, value: 2.5 }])
+    // A frame renders the chart again with the same props: what the cell says is not built again.
+    await view.render(surface())
+    expect(seen).toHaveLength(1)
     expect(tip(view.host)).toBe("0,0value2.5")
     await view.unmount()
   })
@@ -325,6 +328,34 @@ describe("SurfaceChart3D tooltip", () => {
       </ChartContainer3D>
     )
     expect(tip(view.host)).toBe("height2.5 m")
+    await view.unmount()
+  })
+
+  test("a cell under a resting pointer builds its tooltip once while the surface glides", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const seen: { row: number; column: number }[] = []
+    const tooltip = (tip: Tooltip3D, cell: { row: number; column: number }) => (
+      seen.push(cell),
+      tip
+    )
+    const grid = (corner: number) => [
+      [0, 1, 2, 3],
+      [1, 2, 3, 4],
+      [2, 3, 4, 9],
+      [3, 4, 5, corner],
+    ]
+    const surface = (data: number[][]) => (
+      <ChartContainer3D config={config}>
+        <SurfaceChart3D data={data} tooltip={tooltip} />
+      </ChartContainer3D>
+    )
+    const view = await hovered(surface(grid(6)))
+    expect(seen).toHaveLength(1)
+    // New data far from the cell: it is said again once, not at every frame of the glide.
+    await view.render(surface(grid(7)))
+    for (let i = 0; i < 5; i++) await act(() => vi.advanceTimersByTime(50))
+    expect(seen.length).toBeLessThanOrEqual(2)
     await view.unmount()
   })
 

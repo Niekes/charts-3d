@@ -202,13 +202,13 @@ function useLargerFirst(land: GeoJSON.FeatureCollection) {
 /**
  * What a region says on hover, made when the pointer lands on it: its name,
  * or the label of its series, over its value in the series color, labelled
- * by the field - or what `tooltip` makes of that. It speaks in the color
- * `of` its own series alone; a region still fading out has no entry, so it
- * says nothing.
+ * by the field - or what `tooltip` makes of that. Only the overlay of its
+ * own `series` speaks; a region still fading out has no entry, so it says
+ * nothing.
  */
 function regionTooltip<T extends Record<string, unknown>>(
   region: Region<T> | undefined,
-  of: string,
+  series: string,
   {
     config,
     value: field,
@@ -216,7 +216,7 @@ function regionTooltip<T extends Record<string, unknown>>(
     tooltip = (tip) => tip,
   }: { config: ChartConfig } & Pick<ChoroplethChart3DProps<T>, "value" | "format" | "tooltip">
 ): Mark3D["tooltip"] {
-  if (region?.key !== of) return undefined
+  if (region?.key !== series) return undefined
   const { key, value, name, entry } = region
   return () =>
     tooltip(

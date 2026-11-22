@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `entryTicks(count)`, about ten ticks on whole entries, which the bar and
   the area chart lay along x.
 - `joined(...parts)`, one key of several parts, such as an entry and its
-  series, joined by a character no name holds.
+  series, joined by a control character no name is expected to hold.
 - `keyOf(value, fallback)`, the config key a field of the data names: the
   value as a string, or `fallback` where it is missing or blank.
 - `earth` also returns `ground(feature, key)`, which draws one feature as
@@ -106,12 +106,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer reads 0; from 1 on it keeps three decimals, as before.
 - `BarChart3D`, `AreaChart3D`: names and series with a hyphen keep their
   values apart - the entry "a" of the series "b-c" and the entry "a-b" of
-  "c" drew the same bar. The keys of the marks of the bar, the area, the
-  line and the routes chart join their parts with `joined`.
+  "c" drew the same bar. The keys of the marks of the bar, the bar field,
+  the area, the line and the routes chart join their parts with `joined`.
 - A mark under a pointer that rests no longer builds its tooltip again at
   every frame of the camera or of a glide, nor renders the container with
-  it: every chart keeps its tooltips through `useTooltips`, and `tooltip`
-  runs once until the data, the config or a prop it reads changes.
+  it: the charts keep their tooltips through `useTooltips` - the globe kept
+  its own already - and `tooltip` runs once until the data, the config or a
+  prop it reads changes.
 - The tooltip and the focus under a pointer that rests follow new data and
   a turn of the camera: the mark under the pointer is hit again whenever the
   marks change, where the tooltip of a mark that had changed or left went on
