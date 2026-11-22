@@ -9,6 +9,7 @@ import {
   earth,
   faded,
   finite,
+  keyOf,
   useChart3D,
   useTween,
   colorOf,
@@ -259,7 +260,7 @@ function regionValues<T extends Record<string, unknown>>(
     const rid = regionOf(d[fields.id])
     regions.set(rid, {
       rid,
-      key: fields.series ? String(d[fields.series]) : fallback,
+      key: fields.series ? keyOf(d[fields.series], fallback) : fallback,
       value: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entry: d,
       // An entry without a label is named by its series, never "undefined".

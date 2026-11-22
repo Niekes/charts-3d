@@ -18,6 +18,7 @@ import {
   earth,
   faded,
   finite,
+  keyOf,
   nonNegative,
   globe,
   orthographic,
@@ -277,7 +278,7 @@ function tileValues<T extends Record<string, unknown>>(
     const lon = ((((Number(d[fields.lon]) + 180) % 360) + 360) % 360) - 180
     const lat = Number(d[fields.lat])
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
-    const key = fields.series ? String(d[fields.series]) : fallback
+    const key = fields.series ? keyOf(d[fields.series], fallback) : fallback
     const entries = tiles.get(center)?.entries ?? []
     entries.push(d)
     tiles.set(center, {

@@ -214,6 +214,30 @@ describe("PlacesChart3D hover", () => {
     await chart.unmount()
   })
 
+  test.each([null, undefined])(
+    'a place whose id is %s is titled by its series, never "null" or "undefined"',
+    async (name) => {
+      const chart = await mount(
+        <ChartContainer3D config={config}>
+          <PlacesChart3D
+            data={[{ lon: 15, lat: 15, name, kind: "capital" }]}
+            land={land}
+            lon="lon"
+            lat="lat"
+            series="kind"
+            id="name"
+          />
+        </ChartContainer3D>
+      )
+      const { x, y } = dot(chart.svg, "capital")
+      await chart.send("pointermove", { clientX: x, clientY: y })
+      const text = chart.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent!
+      expect(text).toContain("Capital")
+      expect(text).not.toMatch(/null|undefined/)
+      await chart.unmount()
+    }
+  )
+
   test("tooltip makes what a dot says of what it would say and the entry behind it, and null says nothing", async () => {
     const chart = await mount(
       <ChartContainer3D config={config}>
@@ -602,5 +626,27 @@ describe("PlacesChart3D values that are no numbers", () => {
     expect(html(Infinity)).not.toContain("NaN")
     expect(html(Infinity)).toBe(html(0))
     expect(html(-Infinity)).toBe(html(0))
+  })
+})
+
+describe("a missing series", () => {
+  test("a place without its series takes the first color of the config, never --color-undefined", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+        <PlacesChart3D
+          data={[
+            { lon: 10, lat: 10, kind: "capital" },
+            { lon: -10, lat: 10 },
+          ]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          series="kind"
+        />
+      </ChartContainer3D>
+    )
+    expect(html).not.toContain("--color-undefined")
+    expect(html).toContain("var(--color-city)")
+    expect(html).toContain("var(--color-capital)")
   })
 })

@@ -174,7 +174,8 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
       data.map((entry) => ({
         entry,
         name: id && String(entry[id]),
-        route: series && String(entry[series]),
+        // The raw value: the core reads it as the key of its line, with the fallback.
+        route: series && entry[series],
         leg: legKey(leg && entry[leg]),
         ...(finite(entry[lon]) && finite(entry[lat])
           ? globe(Number(entry[lon]), Number(entry[lat]))
@@ -538,7 +539,8 @@ function routeTooltip<T extends Record<string, unknown>>(
       {
         title: named || series ? (config[colorKey]?.label ?? colorKey) : undefined,
         items: stops.map((d) => ({
-          label: id ? String(d[id]) : `${lat}, ${lon}`,
+          // A stop without a name is named by the fields of its place, never "null".
+          label: id && d[id] != null ? String(d[id]) : `${lat}, ${lon}`,
           value: `${Number(d[lat])}, ${Number(d[lon])}`,
           color: colorOf(colorKey),
         })),
