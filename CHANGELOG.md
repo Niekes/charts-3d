@@ -101,13 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feature.
 - `GlobeChart3D`: when `step` changes, the tiles of the old grid fade out at
   their own size, where they swelled to the new one and covered their
-  neighbours while they left.
+  neighbours while they left, and near the horizon, where the margin of the
+  new grid hid them early.
 - `PlacesChart3D`: a dot sent to a new place mid-glide turns the short way
   round from where it is on screen, where it measured from the place it was
   headed for and could circle most of the globe the long way.
 - `PlacesChart3D`: a dot whose series changes fades out in the old color as
   it fades in in the new one, as a tile of the globe and a region of the
-  choropleth do, where its color switched at once.
+  choropleth do, where its color switched at once; the two glide together
+  where its place changes too.
 - `BarChart3D`, `AreaChart3D`: a series that `keys` or the config drops
   flattens and fades away, and the series that stay glide to their new rows,
   where the dropped one vanished at once and the others jumped past their
