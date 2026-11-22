@@ -273,7 +273,9 @@ function tileValues<T extends Record<string, unknown>>(
   for (const d of data) {
     // An entry without a place on the globe has no tile.
     if (!finite(d[fields.lon]) || !finite(d[fields.lat])) continue
-    const [lon, lat] = [Number(d[fields.lon]), Number(d[fields.lat])]
+    // A longitude beyond -180..180, as data from 0 to 360 has, wraps round to its tile.
+    const lon = ((((Number(d[fields.lon]) + 180) % 360) + 360) % 360) - 180
+    const lat = Number(d[fields.lat])
     const center = `${snap(lon, -180, 180, step)},${snap(lat, -90, 90, step)}`
     const key = fields.series ? String(d[fields.series]) : fallback
     const entries = tiles.get(center)?.entries ?? []
@@ -289,7 +291,7 @@ function tileValues<T extends Record<string, unknown>>(
   return new Map([...tiles.values()].map((t) => [t.id, t]))
 }
 
-/** The center of the tile between `lo` and `hi` that holds `v`; the last tile holds the far edge and beyond. */
+/** The center of the tile between `lo` and `hi` that holds `v`; the last tile holds the far edge, a latitude of 90 - a longitude of 180 has wrapped to -180. */
 function snap(v: number, lo: number, hi: number, step: number) {
   const index = Math.min(Math.max(0, Math.floor((v - lo) / step)), Math.round((hi - lo) / step) - 1)
   return lo + (index + 0.5) * step

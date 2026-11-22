@@ -15,8 +15,8 @@ position is geometry and moves at once; only a flip glides, through
 `translate`, and jumps where the reader asks for reduced motion - as with
 the axis labels, geometry follows at once and only a change of side moves.
 The tooltip comes and goes with the hover at once, no fade, no linger.
-`Tooltip3D.at` is gone: nothing reads an anchor. The placement is a prop
-because a user asked for it (behaviour is a prop, ADR-0004); the gap to the
+`Tooltip3D.at` is gone: nothing reads an anchor. The placement is a prop,
+`placement` on the container, because a user asked for it (behaviour is a prop, ADR-0004); the gap to the
 pointer stays fixed.
 
 Considered options: the mark's anchor (rejected: the tooltip jumps between

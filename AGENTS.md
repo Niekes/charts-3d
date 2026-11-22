@@ -40,7 +40,8 @@ into `master` triggers `.github/workflows/release.yml`, which stages the new
 version on npm - but only when `package.json` changed and the version is not
 on npm yet - and, if it is missing, tags the pinned release commit and creates
 the `vX.Y.Z` release on GitHub, then deploys the docs from that tag, their
-install commands pinned to it. It runs from `master` alone, one release at a
+install commands pinned to it - a run that fails until the version is
+approved on npm and is re-run then. It runs from `master` alone, one release at a
 time, and a pushed tag counts as released. The version goes live once a
 maintainer approves it with 2FA. Never run `npm publish`, `npm stage approve` or push a
 version tag by hand.

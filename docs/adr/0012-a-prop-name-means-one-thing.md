@@ -27,6 +27,9 @@ chart reads an idea through the name the others give it.
   has axes - the `x` of a category axis takes the category - and by field
   where it has none, `value`. The globe, the places and the choropleth chart
   took a single function in 0.7.
+- **`tooltip` is what a mark says**, on every chart; **`placement` is the
+  corner the tooltip sits at**, on the container, which took it as `tooltip`
+  in 0.7.
 
 Considered options: one name for the field that names an entry (rejected:
 identity, title and category are three ideas - the choropleth needs identity

@@ -1732,9 +1732,12 @@ describe("tooltip", () => {
     await chart.unmount()
   })
 
-  test("tooltip sets the placement, which flips the same way", async () => {
+  test("placement sets the corner, which flips the same way; tooltip is what a mark says, not a corner", async () => {
     size(120, 60)
-    const chart = await tooltipAt({ tooltip: "bottom-left" })
+    // @ts-expect-error A prop means one thing: on the container a corner is the placement.
+    const corner: Partial<ChartContainer3DProps> = { tooltip: "bottom-left" }
+    expect(corner).toBeDefined()
+    const chart = await tooltipAt({ placement: "bottom-left" })
     expect(await chart.move(300, 200)).toMatchObject({ placement: "bottom-left" })
     expect(await chart.move(50, 200)).toMatchObject({ placement: "bottom-right" })
     expect(await chart.move(300, 380)).toMatchObject({ placement: "top-left" })
