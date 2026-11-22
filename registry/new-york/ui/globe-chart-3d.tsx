@@ -140,9 +140,9 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
 
   const eye = orthographic(camera)
   const ids = Object.keys(heights)
-  const shapes = useShapes(ids, step)
+  const shapes = useShapes(ids)
   const tooltips = useTileTooltips(tiles, { config, fields, format, tooltip })
-  const near = nearTiles(ids, shapes, step, eye)
+  const near = nearTiles(ids, shapes, eye)
   const prisms = polygons3D<Point3D>()
     .camera(eye)
     .data<Face>(prismFaces(near, shapes, heights, ceiling, eye.scale()))
@@ -189,25 +189,30 @@ function useTiles<T extends Record<string, unknown>>(
   }, [data, lon, lat, value, series, label, step, fallback])
 }
 
-/** Where a tile stands: the config key of its color, its center and its corners on the globe. */
-type Shape = { key: string; center: Point3D; ground: Point3D[] }
+/**
+ * Where a tile stands: the config key of its color, its center and its
+ * corners on the globe, and `reach`, how far a corner lies at most in front
+ * of its center - half a tile of its own step, in the world box.
+ */
+type Shape = { key: string; center: Point3D; ground: Point3D[]; reach: number }
 
 /**
  * The shape of every tile `ids` names, read from its id once and not at
- * every frame the camera turns - the gone ones too, while they shrink - and
- * forgotten with the tile, so the memory stays the size of the globe.
+ * every frame the camera turns - the gone ones too, while they shrink, at the
+ * step they were made at - and forgotten with the tile, so the memory stays
+ * the size of the globe.
  */
-function useShapes(ids: string[], step: number) {
-  const memory = React.useRef({ step, shapes: new Map<string, Shape>() })
-  if (memory.current.step !== step) memory.current = { step, shapes: new Map() }
-  const { shapes } = memory.current
+function useShapes(ids: string[]) {
+  const shapes = React.useRef(new Map<string, Shape>()).current
   for (const id of ids) {
     if (shapes.has(id)) continue
-    const { lon, lat, key } = tile(id)
+    const { lon, lat, step, key } = tile(id)
     shapes.set(id, {
       key,
       center: globe(lon, lat, GLOBE_RADIUS),
       ground: corners(lon, lat, step, GLOBE_RADIUS),
+      // y points down, so the north is negative.
+      reach: -globe(0, step / 2, GLOBE_RADIUS).y,
     })
   }
   if (shapes.size > ids.length) {
@@ -242,19 +247,16 @@ function useTileTooltips<T extends Record<string, unknown>>(
 
 /**
  * The ids of the tiles whose center lies in front of the center plane of the
- * globe, or less than half a tile behind it: every face of any other tile is
- * behind the plane too, and projecting those only to cull them cost half the
- * frame.
+ * globe, or less than half a tile of its own step behind it - one of an old
+ * grid fading out too: every face of any other tile is behind the plane too,
+ * and projecting those only to cull them cost half the frame.
  */
-function nearTiles(ids: string[], shapes: Map<string, Shape>, step: number, eye: Camera3DInstance) {
-  // Half a tile in the world box - y points down, so the north is negative:
-  // a corner lies at most this far in front of its center.
-  const edge = -globe(0, step / 2, GLOBE_RADIUS).y
+function nearTiles(ids: string[], shapes: Map<string, Shape>, eye: Camera3DInstance) {
   const centers = ids.map((id) => ({ id, ...shapes.get(id)!.center }))
   return points3D<{ id: string } & Point3D>()
     .camera(eye)
     .data(centers)
-    .filter((p) => p.rotated.z > -edge)
+    .filter((p) => p.rotated.z > -shapes.get(p.id)!.reach)
     .map((p) => p.id)
 }
 
@@ -282,7 +284,8 @@ function tileValues<T extends Record<string, unknown>>(
     const entries = tiles.get(center)?.entries ?? []
     entries.push(d)
     tiles.set(center, {
-      id: `${center},${key}`,
+      // The step too: a tile of another grid is another tile, which leaves at its own size.
+      id: `${step},${center},${key}`,
       value: nonNegative(d[fields.value]),
       read: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entries,
@@ -299,10 +302,10 @@ function snap(v: number, lo: number, hi: number, step: number) {
   return lo + (index + 0.5) * step
 }
 
-/** The center and the config key of a tile that rises, read back from its id. */
+/** The center, the step and the config key of a tile that rises, read back from its id. */
 function tile(id: string) {
-  const [lon, lat, ...key] = id.split(",")
-  return { lon: Number(lon), lat: Number(lat), key: key.join(",") }
+  const [step, lon, lat, ...key] = id.split(",")
+  return { lon: Number(lon), lat: Number(lat), step: Number(step), key: key.join(",") }
 }
 
 /**

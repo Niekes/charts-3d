@@ -89,6 +89,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The tooltip and the focus under a pointer that rests follow new data and
+  a turn of the camera: the mark under the pointer is hit again whenever the
+  marks change, where the tooltip of a mark that had changed or left went on
+  saying its old values until the pointer moved.
+- `keyOf` drops the spaces around a value, as `leg` of `RoutesChart3D`
+  already did: a padded `series`, such as `" b "` from a CSV, colors its
+  config key `b`, where it was a key of its own without a color.
+- `ChoroplethChart3D`: a feature whose `id` is null is scenery, as one
+  without an id, where an entry whose id was missing colored every such
+  feature.
+- `GlobeChart3D`: when `step` changes, the tiles of the old grid fade out at
+  their own size, where they swelled to the new one and covered their
+  neighbours while they left, and near the horizon, where the margin of the
+  new grid hid them early.
+- `PlacesChart3D`: a dot sent to a new place mid-glide turns the short way
+  round from where it is on screen, where it measured from the place it was
+  headed for and could circle most of the globe the long way.
+- `PlacesChart3D`: a dot whose series changes fades out in the old color as
+  it fades in in the new one, as a tile of the globe and a region of the
+  choropleth do, where its color switched at once; the two glide together
+  where its place changes too.
+- `BarChart3D`, `AreaChart3D`: a series that `keys` or the config drops
+  flattens and fades away, and the series that stay glide to their new rows,
+  where the dropped one vanished at once and the others jumped past their
+  place; a series that comes fades in as it grows, where it popped in. A
+  series on its way out says nothing on hover. `useSeries` returns `lanes`
+  and `lanePresence`, the place of every series along z and how far it has
+  come.
+- `LineChart3D`, `RoutesChart3D`: a point or a stop that loses its x, y or
+  z - its lon or lat - folds into its neighbour and fades out before the
+  line breaks there, as one that leaves the data does, where the line broke
+  at once and both of its segments vanished.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.

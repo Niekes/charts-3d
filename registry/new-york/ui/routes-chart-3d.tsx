@@ -14,6 +14,7 @@ import {
   faded,
   finite,
   globe,
+  keyOf,
   orthographic,
   placeAt,
   placeOf,
@@ -176,7 +177,7 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
         name: id && String(entry[id]),
         // The raw value: the core reads it as the key of its line, with the fallback.
         route: series && entry[series],
-        leg: legKey(leg && entry[leg]),
+        leg: keyOf(leg && entry[leg], ""),
         ...(finite(entry[lon]) && finite(entry[lat])
           ? globe(Number(entry[lon]), Number(entry[lat]))
           : undefined),
@@ -184,9 +185,6 @@ function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T
     [data, lon, lat, id, series, leg]
   )
 }
-
-/** The config key a value of the `leg` field names: any value read as text, and none, "", for a missing or a blank one. */
-const legKey = (value: unknown) => (value == null ? "" : String(value).trim())
 
 /** A stop of a route: the point it glides as, which lies over its place, how far it has come, from 0 to 1, and whether it is on its way. */
 type Stop = { name: string; seen: number; moves: boolean; at: Point3D }

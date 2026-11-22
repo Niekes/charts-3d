@@ -1759,6 +1759,66 @@ describe("tooltip", () => {
 
     await chart.unmount()
   })
+
+  describe("under a pointer that rests", () => {
+    const chartOf = (marks: Mark3D[]) => (
+      <ChartContainer3D config={{}}>
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    const said = (host: HTMLElement) =>
+      host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? null
+    const lit = (host: HTMLElement) =>
+      [...host.querySelectorAll("path")].filter((p) => p.getAttribute("fill")?.includes("focus"))
+        .length
+
+    test("new data under the pointer says the new data", async () => {
+      const chart = await mount(chartOf([{ ...column("old", 0, 320), groups: ["a"] }]))
+      await chart.send(pointer("pointermove", 100, 200))
+      expect(said(chart.host)).toBe("old1")
+      await chart.render(chartOf([{ ...column("new", 0, 320), groups: ["a"] }]))
+      expect(said(chart.host)).toBe("new1")
+      await chart.unmount()
+    })
+
+    test("a mark that leaves from under the pointer takes its tooltip and its focus along", async () => {
+      const chart = await mount(chartOf([{ ...column("gone", 0, 320), groups: ["a"] }]))
+      await chart.send(pointer("pointermove", 100, 200))
+      expect(lit(chart.host)).toBe(1)
+      await chart.render(chartOf([]))
+      expect(said(chart.host)).toBeNull()
+      await chart.render(chartOf([{ ...column("back", 400, 640), groups: ["a"] }]))
+      expect(lit(chart.host)).toBe(0)
+      await chart.unmount()
+    })
+
+    test("a mark that moves under the pointer shows its tooltip", async () => {
+      const chart = await mount(chartOf([column("far", 400, 640)]))
+      await chart.send(pointer("pointermove", 100, 200))
+      expect(said(chart.host)).toBeNull()
+      await chart.render(chartOf([column("near", 0, 320)]))
+      expect(said(chart.host)).toBe("near1")
+      await chart.unmount()
+    })
+
+    test("once the pointer leaves, or a drag turns the chart, new data shows no tooltip", async () => {
+      const chart = await mount(chartOf([column("a", 0, 640)]))
+      chart.svg.setPointerCapture = () => {}
+      await chart.send(pointer("pointermove", 100, 200))
+      await chart.send(pointer("pointerout", 100, 200, chart.host))
+      expect(said(chart.host)).toBeNull()
+      await chart.render(chartOf([column("b", 0, 640)]))
+      expect(said(chart.host)).toBeNull()
+      // A drag with the platform modifier hides the tooltip while it turns.
+      await chart.send(pointer("pointermove", 100, 200))
+      await chart.send(pointer("pointerdown", 100, 200, undefined, { ctrlKey: true }))
+      await chart.send(pointer("pointermove", 150, 200, undefined, { ctrlKey: true }))
+      expect(said(chart.host)).toBeNull()
+      await chart.render(chartOf([column("c", 0, 640)]))
+      expect(said(chart.host)).toBeNull()
+      await chart.unmount()
+    })
+  })
 })
 
 describe("Labels3D", () => {
@@ -3957,8 +4017,8 @@ describe("finite", () => {
 })
 
 describe("keyOf", () => {
-  test("a value names its config key as the string it reads as, a 0 too", () => {
-    expect(["a", 0, 7, " b "].map((v) => keyOf(v, "first"))).toEqual(["a", "0", "7", " b "])
+  test("a value names its config key as the string it reads as, a 0 too, without the spaces around it", () => {
+    expect(["a", 0, 7, " b "].map((v) => keyOf(v, "first"))).toEqual(["a", "0", "7", "b"])
   })
 
   test('a missing or blank value names the fallback, never "undefined" or "null"', () => {

@@ -72,13 +72,14 @@ export function BarChart3D<T extends Record<string, unknown>>({
   // grows from the floor, and a gone one shrinks back into it. The rows glide
   // to their new cells when the data reorders; a gone row stands in its cell
   // while its bars shrink and fade away, so a flat bar never pops.
-  const { series, target, entries, values, rows, presence, labels, nameOf } = useSeries({
-    data,
-    index,
-    keys,
-    format,
-  })
-  const cells = barCells(rows, series, values)
+  const { series, target, entries, values, rows, presence, lanes, lanePresence, labels, nameOf } =
+    useSeries({
+      data,
+      index,
+      keys,
+      format,
+    })
+  const cells = barCells(rows, lanes, values)
 
   const box = barBox(data.length, series.length, Object.values(target))
   // Every axis glides with the bars: the value ends with the heights, the row
@@ -98,13 +99,14 @@ export function BarChart3D<T extends Record<string, unknown>>({
             id: `${bar.name}-${bar.key}`,
             faces: bar.faces,
             color: colorOf(bar.key),
+            // A series turned off says nothing, as an entry that left.
             tooltip: barTooltip(
               { id: bar.name, name: nameOf(bar.name), key: bar.key },
-              entries.get(bar.name),
+              series.includes(bar.key) ? entries.get(bar.name) : undefined,
               target,
               { config, format, tooltip }
             ),
-            opacity: presence[bar.name] ?? 0,
+            opacity: (presence[bar.name] ?? 0) * (lanePresence[bar.key] ?? 0),
           })
         )}
       />
@@ -131,13 +133,18 @@ function barShapes(
 }
 
 /**
- * The cell of every bar, the rows still gliding away among them: the row
- * position along x, the series `key` along z, with the tweened value. A cell
- * only one of the tweens still knows is on its way out and stays unseen.
+ * The cell of every bar, the rows and the series still gliding away among
+ * them: the row position along x, the place `j` of the series `key` along z,
+ * with the tweened value. A cell only one of the tweens still knows is on its
+ * way out and stays unseen.
  */
-function barCells(rows: Record<string, number>, series: string[], values: Record<string, number>) {
+function barCells(
+  rows: Record<string, number>,
+  lanes: Record<string, number>,
+  values: Record<string, number>
+) {
   return Object.entries(rows).flatMap(([name, x]) =>
-    series.flatMap((key, j) => {
+    Object.entries(lanes).flatMap(([key, j]) => {
       const value = values[`${name}-${key}`]
       return value === undefined ? [] : [{ name, x, j, key, value }]
     })

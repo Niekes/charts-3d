@@ -729,6 +729,52 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("a series that leaves shrinks and fades away, and the ones that stay glide to their new rows", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    // Seen from the side, z runs along the screen: a row of series is a place on x.
+    const render = async (keys: string[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={{ yaw: Math.PI / 2, tilt: 0.3 }}>
+            <BarChart3D data={[{ name: "x", a: 4, b: 3 }]} index="name" keys={keys} />
+          </ChartContainer3D>
+        )
+      )
+    const faces = (key: string) => [...host.querySelectorAll(`path[fill*="var(--color-${key})"]`)]
+    const left = (key: string) =>
+      Math.min(
+        ...faces(key).flatMap((f) =>
+          [...f.getAttribute("d")!.matchAll(/(-?[\d.]+),/g)].map((m) => Number(m[1]))
+        )
+      )
+
+    await render(["a", "b"])
+    await act(() => vi.advanceTimersByTime(700))
+    const from = left("b")
+    await render(["b"])
+    await act(() => vi.advanceTimersByTime(100))
+    // Mid-glide the bar of a is still there, faded, and b is on its way, not past its end.
+    expect(faces("a").length).toBeGreaterThan(0)
+    expect(faces("a").every((f) => f.getAttribute("fill")!.includes("transparent"))).toBe(true)
+    const mid = left("b")
+    await act(() => vi.advanceTimersByTime(700))
+    const to = left("b")
+    expect(faces("a")).toHaveLength(0)
+    // On its way, strictly: a jump to its new row would stand at the end already.
+    expect(Math.min(from, to) + 1 < mid && mid < Math.max(from, to) - 1).toBe(true)
+
+    // A series that comes fades in as it grows.
+    await render(["b", "a"])
+    await act(() => vi.advanceTimersByTime(16))
+    expect(faces("a").length).toBeGreaterThan(0)
+    expect(faces("a").every((f) => f.getAttribute("fill")!.includes("transparent"))).toBe(true)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a bar that keeps its value keeps its height smooth, and a tick that stays glides as the same label", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))

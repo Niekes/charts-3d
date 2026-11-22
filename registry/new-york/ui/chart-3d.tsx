@@ -593,18 +593,23 @@ function useScene(
 ) {
   const scene = React.useRef<Mark3D[]>([])
   const sets = React.useRef(new Map<string, { marks: Mark3D[]; node: Element }>())
-  const place = React.useCallback((id: string, set?: { marks: Mark3D[]; node: Element }) => {
-    if (set) sets.current.set(id, set)
-    else sets.current.delete(id)
-    scene.current = [...sets.current.values()]
-      .sort((a, b) => (a.node.compareDocumentPosition(b.node) & PRECEDING ? 1 : -1))
-      .flatMap((s) => s.marks)
-  }, [])
   const tip = useTip(placement)
   const focus = useFocus()
   const renderer = useRenderer(requested)
   const { canvas, repaint } = useCanvas(scene, width, palette)
-  const { hover, hide, leave } = useHover(scene, width, height, tip, focus)
+  const { hover, hide, leave, recheck } = useHover(scene, width, height, tip, focus)
+  const place = React.useCallback(
+    (id: string, set?: { marks: Mark3D[]; node: Element }) => {
+      if (set) sets.current.set(id, set)
+      else sets.current.delete(id)
+      scene.current = [...sets.current.values()]
+        .sort((a, b) => (a.node.compareDocumentPosition(b.node) & PRECEDING ? 1 : -1))
+        .flatMap((s) => s.marks)
+      // New marks under a pointer that rests: the tooltip says what lies there now.
+      recheck()
+    },
+    [recheck]
+  )
   return { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus }
 }
 
@@ -1331,7 +1336,9 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
  * tooltip only when the pointer moves onto another mark, or onto new data
  * under the same one, and the focus only when the groups change, so a move
  * within a mark of a chart at rest does not render it again; off the mark and
- * when the pointer leaves the chart, `leave` drops both. A finger lifting
+ * when the pointer leaves the chart, `leave` drops both. New marks under a
+ * pointer that rests - new data, a turn by a key - are hit again by `recheck`,
+ * so the tooltip never says what has left from under it. A finger lifting
  * leaves the chart too: what it tapped stays until a tap elsewhere, on the
  * chart or off it. While a drag turns the chart under the captured pointer,
  * `hide` drops the tooltip and keeps the focus, so a flow does not flash away
@@ -1346,22 +1353,31 @@ function useHover(
 ) {
   const hovered = React.useRef<Mark3D>(undefined)
   const svg = React.useRef<SVGSVGElement>(null)
+  // The pointer in the view box while it rests on the chart, not in a drag: new marks are hit there.
+  const resting = React.useRef<Point2D | null>(null)
   const { set } = tip
   const clear = React.useCallback(() => {
+    resting.current = null
     hovered.current = undefined
     focus.set(undefined)
     set(null)
   }, [focus, set])
   useTapElsewhere(svg, clear)
-  const show = (mark?: Mark3D) => {
-    // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
-    focus.set(mark?.groups)
-    // The tooltip decides what shows: the same one says the same, new data under the same mark another.
-    if (mark?.tooltip === hovered.current?.tooltip) return
-    hovered.current = mark
-    const tooltip = mark?.tooltip
-    tip.set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
-  }
+  const show = React.useCallback(
+    (mark?: Mark3D) => {
+      // Also within one mark, whose groups new data can change; the store ignores the groups it holds.
+      focus.set(mark?.groups)
+      // The tooltip decides what shows: the same one says the same, new data under the same mark another.
+      if (mark?.tooltip === hovered.current?.tooltip) return
+      hovered.current = mark
+      const tooltip = mark?.tooltip
+      set((typeof tooltip === "function" ? tooltip() : tooltip) ?? null)
+    },
+    [focus, set]
+  )
+  const recheck = React.useCallback(() => {
+    if (resting.current) show(hit(scene.current, resting.current))
+  }, [scene, show])
 
   return {
     hover: (e: React.PointerEvent<SVGSVGElement>) => {
@@ -1372,16 +1388,22 @@ function useHover(
       tip.follow({ x, y, width: rect.width, height: rect.height })
       // The pointer in the view box the way the wheel and the pinch read it.
       const at = inViewBox(e.currentTarget, e.clientX, e.clientY)
-      show(hit(scene.current, { x: at.x + width / 2, y: at.y + height / 2 }))
+      resting.current = { x: at.x + width / 2, y: at.y + height / 2 }
+      show(hit(scene.current, resting.current))
     },
     hide: () => {
+      resting.current = null
       hovered.current = undefined
       tip.set(null)
     },
     leave: (e: React.PointerEvent) => {
-      // A pinch dropped the tooltip already: lifting its fingers drops the focus too.
-      if (e.pointerType !== "touch" || !hovered.current) show(undefined)
+      // A pinch dropped the tooltip already: lifting its fingers drops the focus too. What a
+      // finger tapped stays, and keeps saying what lies there.
+      if (e.pointerType === "touch" && hovered.current) return
+      resting.current = null
+      show(undefined)
     },
+    recheck,
   }
 }
 
@@ -3001,11 +3023,12 @@ function finite(value: unknown) {
 
 /**
  * The config key a field of the data names, as `series` reads it: the value
- * as a string, or `fallback` where it is missing or blank, never
- * "undefined" or "null".
+ * as a string without the spaces around it, as padded CSV holds it, or
+ * `fallback` where it is missing or blank, never "undefined" or "null".
  */
 function keyOf(value: unknown, fallback: string) {
-  return value == null || String(value).trim() === "" ? fallback : String(value)
+  const key = value == null ? "" : String(value).trim()
+  return key || fallback
 }
 
 /**
@@ -3103,7 +3126,11 @@ function useRuns<T extends Record<string, unknown>>(
   const shown = React.useRef<Record<string, number>>({})
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
   const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
-  const runs = runsOf((known.current = withGone(live, known.current, alive)))
+  // A point that has lost its place is drawn while it fades out: it folds into its neighbour first.
+  const runs = runsOf(
+    (known.current = withGone(live, known.current, alive)),
+    (name) => name in presence
+  )
   const places = useTween(target, neighbour(runs), toward && pointwise(toward))
   shown.current = places
   // A point the glide does not know yet is on its way in with the next render,
@@ -3242,12 +3269,15 @@ function withGone(
   ])
 }
 
-/** The names of the points of every run, in order: a run per line, and a new one after a gap in it. */
-function runsOf(joints: Map<string, Joint>) {
+/**
+ * The names of the points of every run, in order: a run per line, and a new
+ * one after a gap in it - once the point there is no longer `held` on screen.
+ */
+function runsOf(joints: Map<string, Joint>, held: (name: string) => boolean) {
   const open = new Map<string, string[]>()
   const runs: { line: string; names: string[] }[] = []
   for (const [name, { line, gap }] of joints) {
-    if (gap) open.delete(line)
+    if (gap && !held(name)) open.delete(line)
     else {
       if (!open.has(line)) runs.push({ line, names: open.set(line, []).get(line)! })
       open.get(line)!.push(name)
@@ -3337,7 +3367,9 @@ function pointTooltip<T extends Record<string, unknown>>(
  * reorders; a value that is not a finite number stands as 0. Each glides by name:
  * `values` from 0, `rows` - the place of every entry - to where it stands, and
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
- * still among them. `labels` name the ticks: the entry at a tick of x, through
+ * still among them; so does every series, `lanes` its place along z and
+ * `lanePresence` how far it has come, so a series that is turned off flattens
+ * and fades away while the others glide to their new places. `labels` name the ticks: the entry at a tick of x, through
  * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
  * tick of z. Every entry is keyed by its id - its name, made unique where a
  * name repeats - and `nameOf` reads the name back; `entries` holds the entry
@@ -3372,6 +3404,13 @@ function useSeries<T extends Record<string, unknown>>({
       present: Object.fromEntries(ids.map((id) => [id, 1])),
     }
   }, [data, index, series])
+  const lanes = React.useMemo(
+    () => ({
+      at: Object.fromEntries(series.map((key, j) => [key, j])),
+      present: Object.fromEntries(series.map((key) => [key, 1])),
+    }),
+    [series]
+  )
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
     y: format.y,
@@ -3384,6 +3423,8 @@ function useSeries<T extends Record<string, unknown>>({
     values: useTween(target, 0),
     rows: useTween(order),
     presence: useTween(present, 0),
+    lanes: useTween(lanes.at),
+    lanePresence: useTween(lanes.present, 0),
     labels,
     nameOf,
   }

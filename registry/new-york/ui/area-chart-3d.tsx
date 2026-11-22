@@ -18,6 +18,7 @@ import {
   intoWorld,
   pad,
   useSeries,
+  faded,
   shade,
   useChart3D,
   useTween,
@@ -78,12 +79,8 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   const { config, camera } = useChart3D()
   // The rows glide to their new places, and an entry that comes or goes
   // unfolds from its neighbour as far as its presence.
-  const { series, target, entries, values, rows, presence, labels, nameOf } = useSeries({
-    data,
-    index,
-    keys,
-    format,
-  })
+  const { series, target, entries, values, rows, presence, lanes, lanePresence, labels, nameOf } =
+    useSeries({ data, index, keys, format })
   const spec = useTweenAxes(areaAxes(data.length, series.length, Object.values(target)))
   // The box deepens with the series, so a ribbon stays a ribbon, and glides
   // there with the axes.
@@ -93,8 +90,9 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   // The x axis keeps half a row beyond the first and the last entry.
   const ends = [spec.x.domain[0] + 0.5, spec.x.domain[1] - 0.5]
   const toward = Math.sign(camera.viewDirection().x)
-  const marks = series
-    .flatMap((key, j) => {
+  // Every series still on screen: one turned off flattens and fades away in its lane.
+  const marks = Object.entries(lanes)
+    .flatMap(([key, j]) => {
       const line = linePoints(rows, values, presence, key, ends)
       if (!line.length) return []
       const z = [j - RIBBON / 2, j + RIBBON / 2]
@@ -105,8 +103,11 @@ export function AreaChart3D<T extends Record<string, unknown>>({
     // painted back to front exactly.
     .sort((a, b) => sort(a.faces[4], b.faces[4]))
     .flatMap(({ key, line, faces }) =>
-      ribbonMarks(key, painted(faces, toward), line, (names) =>
-        ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
+      ribbonMarks(key, painted(faces, toward), line, lanePresence[key] ?? 0, (names) =>
+        // A series turned off says nothing, as an entry that left.
+        series.includes(key)
+          ? ribbonTooltip(key, names, { config, entries, target, nameOf }, { format, tooltip })
+          : undefined
       )
     )
 
@@ -225,7 +226,8 @@ function painted(faces: RibbonFace[], toward: number) {
 }
 
 /**
- * The marks of one ribbon, shaded in the color of its series. Each face is a
+ * The marks of one ribbon, shaded in the color of its series and faded to
+ * `opacity`, as the series comes or goes. Each face is a
  * group of its own, so hovering highlights the face under the pointer alone.
  * A segment of the top is keyed by the entry it starts at, so it keeps its
  * mark when entries come or go before it. Every face says what `tooltip`
@@ -236,6 +238,7 @@ function ribbonMarks(
   key: string,
   faces: RibbonFace[],
   line: LinePoint[],
+  opacity: number,
   tooltip: (names: string[]) => Mark3D["tooltip"]
 ): Mark3D[] {
   const color = colorOf(key)
@@ -246,7 +249,7 @@ function ribbonMarks(
     return {
       key: id,
       points: f.map((p) => p.projected),
-      fill: shade(f, color),
+      fill: faded(shade(f, color), opacity),
       groups: [id],
       tooltip: tooltip(spans(f)),
     }

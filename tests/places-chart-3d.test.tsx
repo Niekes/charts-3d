@@ -417,6 +417,116 @@ describe("PlacesChart3D transitions", () => {
     host.remove()
   })
 
+  test("a dot sent on mid-glide turns the short way from where it is, not from where it was headed", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (lon: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={facing(0, 0)}>
+            <PlacesChart3D
+              data={[{ lon, lat: 0, name: "Ship" }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const cx = () =>
+      Number(host.querySelector('[data-slot="chart-3d-marks"] circle')?.getAttribute("cx"))
+
+    await render(0)
+    await render(179)
+    await act(() => vi.advanceTimersByTime(20))
+    // Barely off 0°, it is sent to 100° west: the short way is west, left of the middle.
+    await render(-100)
+    await act(() => vi.advanceTimersByTime(100))
+    expect(cx()).toBeLessThan(320)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a dot whose series changes fades from the old color into the new one, as a tile of the globe does", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (type: string) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <PlacesChart3D
+              data={[{ lon: 15, lat: 15, name: "Rome", type }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+              series="type"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const fills = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] circle')].map((c) =>
+        c.getAttribute("fill")!
+      )
+
+    await render("city")
+    await act(() => vi.advanceTimersByTime(700))
+    await render("capital")
+    await act(() => vi.advanceTimersByTime(300))
+    // Mid-glide both colors are there, both faded.
+    const mid = fills()
+    expect(mid.some((f) => f.includes("--color-city") && f.includes("transparent"))).toBe(true)
+    expect(mid.some((f) => f.includes("--color-capital") && f.includes("transparent"))).toBe(true)
+    await act(() => vi.advanceTimersByTime(500))
+    expect(fills()).toEqual(["var(--color-capital)"])
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a dot that changes its series and its place at once glides there in both colors", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (lon: number, type: string) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={facing(45, 0)}>
+            <PlacesChart3D
+              data={[{ lon, lat: 0, name: "Ship", type }]}
+              land={none}
+              lon="lon"
+              lat="lat"
+              id="name"
+              series="type"
+            />
+          </ChartContainer3D>
+        )
+      )
+    const cxs = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] circle')].map((c) =>
+        Number(c.getAttribute("cx"))
+      )
+
+    await render(0, "city")
+    await act(() => vi.advanceTimersByTime(700))
+    const [from] = cxs()
+    await render(90, "capital")
+    await act(() => vi.advanceTimersByTime(300))
+    // Both dots, the one fading out and the one fading in, are on their way together.
+    const mid = cxs()
+    expect(mid).toHaveLength(2)
+    expect(mid[0]).toBeCloseTo(mid[1], 1)
+    await act(() => vi.advanceTimersByTime(500))
+    const [to] = cxs()
+    expect(from + 10 < mid[0] && mid[0] < to - 10).toBe(true)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a new value while a dot leaves: it fades out, never black", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)

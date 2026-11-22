@@ -298,6 +298,13 @@ describe("RoutesChart3D legs of their own color", () => {
     expect(new Set(by(" sea "))).toEqual(new Set(["var(--color-sea)"]))
   })
 
+  test("a series and a leg read a padded value the same way: the spaces are no part of the key", () => {
+    const padded = journey.map(({ by: _, ...stop }) => ({ ...stop, s: " b " }))
+    expect(new Set(serverMarks(chart(padded, { series: "s" })).fills)).toEqual(
+      new Set(["var(--color-b)"])
+    )
+  })
+
   test("the title of the tooltip names what the color means: the label of the leg, its key without one", async () => {
     const view = await mount(chart(journey, { leg: "by", id: "id" }))
     const { quads, stops } = marks(view.host)
@@ -459,6 +466,21 @@ describe("RoutesChart3D transitions", () => {
   const east = { id: "east", lon: 40, lat: 0 }
   const xs = (m: ReturnType<typeof marks>) => m.stops.map((s) => s.at[0]).sort((a, b) => a - b)
   const reach = (m: ReturnType<typeof marks>) => m.quads.flatMap((q) => q.corners.map((c) => c[0]))
+
+  test("a stop that loses its place folds into its neighbour before the route breaks there", async () => {
+    const view = await mount(chart([west, mid, east], { id: "id" }))
+    await glide(700)
+    await view.render(chart([west, { ...mid, lat: null }, east], { id: "id" }))
+    await glide(300)
+    // Mid-glide the route still runs through the stop on its way out, its legs drawn.
+    expect(marks(view.host).stops).toHaveLength(3)
+    expect(marks(view.host).quads.length).toBeGreaterThan(0)
+    await glide(500)
+    // Done: the route breaks at the stop without a place, two stops with no leg between.
+    expect(marks(view.host).quads).toHaveLength(0)
+    expect(marks(view.host).stops).toHaveLength(2)
+    await view.unmount()
+  })
 
   test("a stop added at the end grows its leg from the stop before it, along the great circle", async () => {
     const view = await mount(chart([west, mid], { id: "id" }))

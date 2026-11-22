@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import {
   ChartContainer3D,
+  facing,
   useChart3D,
   type Mark3D,
   type Renderer3D,
@@ -582,6 +583,82 @@ describe("GlobeChart3D transitions", () => {
     expect(transparent("population")).toHaveLength(0)
     expect(faces("population").length).toBeLessThanOrEqual(4)
     expect(Math.abs(lift("population") - tall)).toBeLessThan(20)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a tile that leaves as the step changes keeps its size: the old grid fades out as it was", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, number | string>[], step: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="n"
+              series="type"
+              step={step}
+            />
+          </ChartContainer3D>
+        )
+      )
+    /** How wide the tiles of `key` span on screen. */
+    const width = (key: string) => {
+      const xs = [...host.querySelectorAll('[data-slot="chart-3d-marks"] path')]
+        .filter((p) => p.getAttribute("fill")!.includes(`--color-${key}`))
+        .flatMap((p) => [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),/g)].map((m) => +m[1]))
+      return Math.max(...xs) - Math.min(...xs)
+    }
+
+    await render([{ lon: 5, lat: 5, n: 10, type: "population" }], 10)
+    await act(() => vi.advanceTimersByTime(700))
+    const before = width("population")
+    await render([{ lon: 60, lat: 5, n: 10, type: "quake" }], 30)
+    await act(() => vi.advanceTimersByTime(100))
+    // Mid-fade, the tile of the old step is as wide as it was, not three times.
+    expect(width("population")).toBeLessThan(before * 1.5)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
+  test("a tile of the old step near the horizon fades out, not hidden by the margin of the new step", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    // The tile of 30° around 105° E lies 8° behind the horizon of a camera on 7° E: its
+    // western side, 7° in front, faces the camera.
+    const render = (data: Record<string, number | string>[], step: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={facing(7, 0)}>
+            <GlobeChart3D
+              data={data}
+              land={none}
+              lon="lon"
+              lat="lat"
+              value="n"
+              series="type"
+              step={step}
+            />
+          </ChartContainer3D>
+        )
+      )
+    const shown = () =>
+      [...host.querySelectorAll('[data-slot="chart-3d-marks"] path')].filter((p) =>
+        p.getAttribute("fill")!.includes("--color-population")
+      ).length
+
+    await render([{ lon: 100, lat: 10, n: 10, type: "population" }], 30)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(shown()).toBeGreaterThan(0)
+    await render([{ lon: 0, lat: 0, n: 10, type: "quake" }], 10)
+    await act(() => vi.advanceTimersByTime(100))
+    expect(shown()).toBeGreaterThan(0)
 
     await act(async () => root.unmount())
     host.remove()
