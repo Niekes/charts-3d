@@ -285,7 +285,8 @@ function tileValues<T extends Record<string, unknown>>(
       value: nonNegative(d[fields.value]),
       read: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entries,
-      name: fields.label ? String(d[fields.label]) : undefined,
+      // An entry without a label is named by its series, never "undefined".
+      name: fields.label && d[fields.label] != null ? String(d[fields.label]) : undefined,
     })
   }
   return new Map([...tiles.values()].map((t) => [t.id, t]))

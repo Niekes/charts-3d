@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `earth` also returns `ground(feature, key)`, which draws one feature as
+  land, for a chart that paints the land of a region in an order of its own.
 - `LineChart3D`, lines through the chart box: the entries of `data` at their
   fields `x`, `y` and `z`, joined in the order of the data - a trajectory, a
   spiral, a walk - one line per value of `series`. A line is as wide on the
@@ -85,6 +87,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ChoroplethChart3D`: a region inside another without an entry of its own,
+  as Lesotho in South Africa, lies over the color of the region around it,
+  where the pointer finds it, instead of under it, naming the outer region.
+- `SurfaceChart3D`: the cell of a short row's missing corner stands at the
+  floor and shows, where it was invisible and lit up white on hover.
+- `GlobeChart3D` and `ChoroplethChart3D`: an entry whose `label` is missing
+  or null is titled by its series, where the tooltip said "undefined" or
+  "null".
 - `BarChart3D`, `AreaChart3D`, `GlobeChart3D` and `PlacesChart3D`: a
   missing value stands as 0 but says no value in its tooltip, where it said
   0, as the choropleth; the globe and the places chart tell a negative value
