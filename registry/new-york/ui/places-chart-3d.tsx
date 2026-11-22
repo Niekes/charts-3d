@@ -265,7 +265,7 @@ function headings<T extends Record<string, unknown>>(
     known.set(names[i], {
       lon: was + ((((to - was) % 360) + 540) % 360) - 180,
       lat: Number(d[lat]),
-      key: series ? keyOf(d[series], fallback) : fallback,
+      key: keyOf(series && d[series], fallback),
     })
   })
   return Object.fromEntries(

@@ -3212,7 +3212,7 @@ function liveJoints<T extends Record<string, unknown>>(
   return new Map(
     named.map(({ d, name, placed }): [string, Joint] => [
       name,
-      { line: series ? keyOf(d[series], fallback) : fallback, gap: !placed },
+      { line: keyOf(series && d[series], fallback), gap: !placed },
     ])
   )
 }
@@ -3287,9 +3287,7 @@ function useConfigKeys<T extends Record<string, unknown>>(
   alive: Record<string, number>
 ) {
   const known = React.useRef(new Map<string, string>())
-  entries.forEach((d, name) =>
-    known.current.set(name, field ? keyOf(d[field], fallback) : fallback)
-  )
+  entries.forEach((d, name) => known.current.set(name, keyOf(field && d[field], fallback)))
   for (const name of known.current.keys()) {
     if (!(name in alive) && !entries.has(name)) known.current.delete(name)
   }

@@ -260,7 +260,7 @@ function regionValues<T extends Record<string, unknown>>(
     const rid = regionOf(d[fields.id])
     regions.set(rid, {
       rid,
-      key: fields.series ? keyOf(d[fields.series], fallback) : fallback,
+      key: keyOf(fields.series && d[fields.series], fallback),
       value: finite(d[fields.value]) ? Number(d[fields.value]) : undefined,
       entry: d,
       // An entry without a label is named by its series, never "undefined".
