@@ -75,6 +75,27 @@ describe("ChoroplethChart3D", () => {
     expect(regions(html).length).toBeGreaterThanOrEqual(1)
   })
 
+  test('a numeric code names its region whatever its leading zeros: 40 and "040" are one region, "0" stays "0"', () => {
+    const html = (data: Record<string, unknown>[]) =>
+      renderToString(
+        <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+          <ChoroplethChart3D
+            data={data}
+            land={{
+              type: "FeatureCollection",
+              features: [square("040", 0, 0), square("0", -45, 0)],
+            }}
+            id="code"
+            value="n"
+          />
+        </ChartContainer3D>
+      )
+    expect(regions(html([{ code: 40 }]))).toHaveLength(1)
+    expect(regions(html([{ code: "0040" }]))).toHaveLength(1)
+    expect(regions(html([{ code: 0 }]))).toHaveLength(1)
+    expect(regions(html([{ code: 4 }]))).toHaveLength(0)
+  })
+
   test("a region of several features, a mainland and its island, colors every one of them", () => {
     const html = renderToString(
       <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>

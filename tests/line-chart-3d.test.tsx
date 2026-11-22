@@ -462,6 +462,30 @@ describe("LineChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("points that arrive at once find where they enter from as fast on one long line as on many short ones", async () => {
+    const arrive = async (lines: number) => {
+      const view = await mount(chart([], { series: "s" }))
+      const data = Array.from({ length: 3000 }, (_, i) => ({
+        x: i % 50,
+        y: (i * 7) % 13,
+        z: i % 31,
+        s: String(i % lines),
+      }))
+      const start = performance.now()
+      await view.render(chart(data, { series: "s" }))
+      const took = performance.now() - start
+      await view.unmount()
+      return took
+    }
+    await arrive(1000)
+    // The fastest of three, so a pause of the runner counts on neither side.
+    const fastest = async (lines: number) =>
+      Math.min(await arrive(lines), await arrive(lines), await arrive(lines))
+    // The same points to draw; a search per point along its line took ten times as long on one.
+    const [short, long] = [await fastest(1000), await fastest(1)]
+    expect(long).toBeLessThan(short * 3)
+  })
+
   test("without id a point is named by its place in the data: new values glide, the line stays whole", async () => {
     const view = await mount(chart([p, q, r]))
     const from = marks(view.host).dots.map((d) => d.at.join())

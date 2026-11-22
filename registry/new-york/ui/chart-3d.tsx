@@ -3148,16 +3148,35 @@ function pointwise(toward: (from: Point3D, to: Point3D, share: number) => Point3
  * its run has none.
  */
 function neighbour(runs: { names: string[] }[]) {
-  let where: Map<string, { names: string[]; i: number }> | undefined
+  // One sweep per record of numbers, not a search per key: thousands of new points stay linear.
+  const sweeps = new Map<Record<string, number>, Map<string, string>>()
   return (key: string, among: Record<string, number>) => {
-    where ??= new Map(runs.flatMap(({ names }) => names.map((name, i) => [name, { names, i }])))
-    const [axis, spot] = [key[0] as keyof AxesSpec, where.get(key.slice(1))]
-    const has = (name: string) => positionKey(axis, name) in among
+    let near = sweeps.get(among)
+    if (!near) sweeps.set(among, (near = nearest(runs, among)))
     // A point the runs have dropped already has no run to find a neighbour in.
-    const near =
-      spot?.names.slice(0, spot.i).reverse().find(has) ?? spot?.names.slice(spot.i + 1).find(has)
-    return near === undefined ? undefined : among[positionKey(axis, near)]
+    const at = near.get(key)
+    return at === undefined ? undefined : among[at]
   }
+}
+
+/**
+ * The key of the nearest point `among` the numbers for the key of every
+ * point of `runs`, on each axis: the one before it, or the first of its run.
+ * A key is never among the numbers it enters from or heads for, so the first
+ * of its run, where none comes before it, lies after it.
+ */
+function nearest(runs: { names: string[] }[], among: Record<string, number>) {
+  const near = new Map<string, string>()
+  for (const { names } of runs)
+    for (const axis of AXES) {
+      const keys = names.map((name) => positionKey(axis, name))
+      let before = keys.find((k) => k in among)
+      for (const k of keys) {
+        if (before !== undefined) near.set(k, before)
+        if (k in among) before = k
+      }
+    }
+  return near
 }
 
 /** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */
