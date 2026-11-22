@@ -467,6 +467,21 @@ describe("RoutesChart3D transitions", () => {
   const xs = (m: ReturnType<typeof marks>) => m.stops.map((s) => s.at[0]).sort((a, b) => a - b)
   const reach = (m: ReturnType<typeof marks>) => m.quads.flatMap((q) => q.corners.map((c) => c[0]))
 
+  test("a stop that loses its place folds into its neighbour before the route breaks there", async () => {
+    const view = await mount(chart([west, mid, east], { id: "id" }))
+    await glide(700)
+    await view.render(chart([west, { ...mid, lat: null }, east], { id: "id" }))
+    await glide(300)
+    // Mid-glide the route still runs through the stop on its way out, its legs drawn.
+    expect(marks(view.host).stops).toHaveLength(3)
+    expect(marks(view.host).quads.length).toBeGreaterThan(0)
+    await glide(500)
+    // Done: the route breaks at the stop without a place, two stops with no leg between.
+    expect(marks(view.host).quads).toHaveLength(0)
+    expect(marks(view.host).stops).toHaveLength(2)
+    await view.unmount()
+  })
+
   test("a stop added at the end grows its leg from the stop before it, along the great circle", async () => {
     const view = await mount(chart([west, mid], { id: "id" }))
     const [first, second] = xs(marks(view.host))

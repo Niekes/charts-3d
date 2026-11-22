@@ -339,6 +339,22 @@ describe("LineChart3D transitions", () => {
     await view.unmount()
   })
 
+  test("a point that loses its value folds into its neighbour before the line breaks there", async () => {
+    const view = await mount(chart([p, q, r], { id: "id" }))
+    await glide(700)
+    const whole = marks(view.host).all.length
+    await view.render(chart([p, { ...q, y: null }, r], { id: "id" }))
+    await glide(300)
+    // Mid-glide the line still runs through the point on its way out: nothing has gone yet.
+    expect(marks(view.host).all).toHaveLength(whole)
+    expect(marks(view.host).fills.some(faded)).toBe(true)
+    await glide(500)
+    // Done: the line breaks at the entry without a place, two points with nothing between.
+    expect(marks(view.host).quads).toHaveLength(0)
+    expect(view.host.innerHTML).not.toContain("NaN")
+    await view.unmount()
+  })
+
   test("a point added at the end unfolds from the point before it, fading in, and the axes follow", async () => {
     const view = await mount(chart([p, q], { id: "id" }))
     await view.render(chart([p, q, r], { id: "id" }))

@@ -3126,7 +3126,11 @@ function useRuns<T extends Record<string, unknown>>(
   const shown = React.useRef<Record<string, number>>({})
   const live = React.useMemo(() => liveJoints(named, series, fallback), [named, series, fallback])
   const alive = (name: string) => name in presence || positionKey("x", name) in shown.current
-  const runs = runsOf((known.current = withGone(live, known.current, alive)))
+  // A point that has lost its place is drawn while it fades out: it folds into its neighbour first.
+  const runs = runsOf(
+    (known.current = withGone(live, known.current, alive)),
+    (name) => name in presence
+  )
   const places = useTween(target, neighbour(runs), toward && pointwise(toward))
   shown.current = places
   // A point the glide does not know yet is on its way in with the next render,
@@ -3265,12 +3269,15 @@ function withGone(
   ])
 }
 
-/** The names of the points of every run, in order: a run per line, and a new one after a gap in it. */
-function runsOf(joints: Map<string, Joint>) {
+/**
+ * The names of the points of every run, in order: a run per line, and a new
+ * one after a gap in it - once the point there is no longer `held` on screen.
+ */
+function runsOf(joints: Map<string, Joint>, held: (name: string) => boolean) {
   const open = new Map<string, string[]>()
   const runs: { line: string; names: string[] }[] = []
   for (const [name, { line, gap }] of joints) {
-    if (gap) open.delete(line)
+    if (gap && !held(name)) open.delete(line)
     else {
       if (!open.has(line)) runs.push({ line, names: open.set(line, []).get(line)! })
       open.get(line)!.push(name)

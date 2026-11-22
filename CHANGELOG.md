@@ -115,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   series on its way out says nothing on hover. `useSeries` returns `lanes`
   and `lanePresence`, the place of every series along z and how far it has
   come.
+- `LineChart3D`, `RoutesChart3D`: a point or a stop that loses its x, y or
+  z - its lon or lat - folds into its neighbour and fades out before the
+  line breaks there, as one that leaves the data does, where the line broke
+  at once and both of its segments vanished.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.
