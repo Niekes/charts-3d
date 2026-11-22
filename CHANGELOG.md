@@ -89,6 +89,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The tooltip and the focus under a pointer that rests follow new data and
+  a turn of the camera: the mark under the pointer is hit again whenever the
+  marks change, where the tooltip of a mark that had changed or left went on
+  saying its old values until the pointer moved.
+- `keyOf` drops the spaces around a value, as `leg` of `RoutesChart3D`
+  already did: a padded `series`, such as `" b "` from a CSV, colors its
+  config key `b`, where it was a key of its own without a color.
 - The canvas renderer follows new colors in `config`: a mark it painted in
   the old color of a key, where SVG already showed the new one, until the
   theme changed.
