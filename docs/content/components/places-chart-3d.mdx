@@ -66,6 +66,23 @@ demos start on `"svg"`, and the many demo on `"canvas"`.
   </Tab>
 </Tabs>
 
+## Start at a place
+
+The globe starts at the default view of the container, which looks at the
+Atlantic, at 30° west and 30° north. Hand the container
+`defaultView={facing(lon, lat)}`, in degrees, and the camera starts over
+that place - here Germany - and a reset returns it there. `facing` is an
+export of [chart-3d](/docs/components/chart-3d#view):
+
+```tsx
+<ChartContainer3D config={chartConfig} defaultView={facing(10, 51)}>
+  <PlacesChart3D data={places} land={land} lon="lon" lat="lat" value="metro" />
+</ChartContainer3D>
+```
+
+To turn the globe to a place later, as a tour does, give it a heading with
+`view`, see [chart-3d](/docs/components/chart-3d#view).
+
 ## Update
 
 Press the button: every dot glides from the people of its metro area to the

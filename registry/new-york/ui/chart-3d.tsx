@@ -2842,9 +2842,10 @@ function placeOf({ x, y, z }: Point3D): [number, number] {
 
 /**
  * The view that looks at the place at `lon` and `lat`, in degrees: the
- * place lies in the middle of the globe. A page hands it to the `view` of
- * the container, so the camera turns to a place, since a chart may not do
- * trigonometry of its own, and neither should a page have to.
+ * place lies in the middle of the globe. A page hands it to the `defaultView`
+ * or the `view` of the container, so the camera starts at or turns to a
+ * place, since a chart may not do trigonometry of its own, and neither
+ * should a page have to.
  */
 function facing(lon: number, lat: number): View3D {
   return { yaw: (-lon * Math.PI) / 180, tilt: (lat * Math.PI) / 180 }
