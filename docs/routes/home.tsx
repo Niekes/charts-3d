@@ -19,7 +19,7 @@ export function meta() {
   ]
 }
 
-const add = "shadcn@latest add niekes/charts-3d/bar-chart-3d"
+const add = "shadcn@latest add niekes/charts-3d/bar-chart-3d#v1.0.0"
 const commands = {
   npm: `npx ${add}`,
   pnpm: `pnpm dlx ${add}`,

@@ -24,7 +24,7 @@
       "type": "registry:ui",
       "title": "Area Chart 3D",
       "description": "Areas pushed back into ribbons, one per series.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/area-chart-3d.tsx",
@@ -38,7 +38,7 @@
       "type": "registry:ui",
       "title": "Bar Chart 3D",
       "description": "Bars on a floor, one row per entry and one per series.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/bar-chart-3d.tsx",
@@ -52,7 +52,7 @@
       "type": "registry:ui",
       "title": "Bar Field Chart 3D",
       "description": "A field of bars over a grid of values, colored by height.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/bar-field-chart-3d.tsx",
@@ -66,7 +66,7 @@
       "type": "registry:ui",
       "title": "Choropleth Chart 3D",
       "description": "The regions of the land on a globe, each in the color of its class.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "dependencies": ["d3-geo@^3.1.2"],
       "devDependencies": ["@types/d3-geo", "@types/geojson"],
       "files": [
@@ -82,7 +82,7 @@
       "type": "registry:ui",
       "title": "Globe Chart 3D",
       "description": "A globe of tiles on the land, each rising to its value.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "dependencies": ["d3-geo@^3.1.2"],
       "devDependencies": ["@types/d3-geo", "@types/geojson"],
       "files": [
@@ -98,7 +98,7 @@
       "type": "registry:ui",
       "title": "Line Chart 3D",
       "description": "Lines through a box, a point of the data after another.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/line-chart-3d.tsx",
@@ -112,7 +112,7 @@
       "type": "registry:ui",
       "title": "Places Chart 3D",
       "description": "Dots on the land of a globe, one per place, sized by value.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "dependencies": ["d3-geo@^3.1.2"],
       "devDependencies": ["@types/d3-geo", "@types/geojson"],
       "files": [
@@ -128,7 +128,7 @@
       "type": "registry:ui",
       "title": "Routes Chart 3D",
       "description": "Routes over a globe, from stop to stop along the great circle.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "dependencies": ["d3-geo@^3.1.2"],
       "devDependencies": ["@types/d3-geo", "@types/geojson"],
       "files": [
@@ -144,7 +144,7 @@
       "type": "registry:ui",
       "title": "Scatter Chart 3D",
       "description": "Points in a box, colored by series.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/scatter-chart-3d.tsx",
@@ -158,7 +158,7 @@
       "type": "registry:ui",
       "title": "Surface Chart 3D",
       "description": "A shaded surface over a grid of heights.",
-      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "registryDependencies": ["niekes/charts-3d/chart-3d#v1.0.0"],
       "files": [
         {
           "path": "registry/new-york/ui/surface-chart-3d.tsx",
