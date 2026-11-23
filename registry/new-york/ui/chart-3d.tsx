@@ -2578,21 +2578,26 @@ function edgeLabels(
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
   hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
-  // tick, bends to its label where that slid, and hides where the label does.
+  // tick, follows its label where that moved, and hides where the label does.
   const line: AxisLine = { key: id, from: start, to: end, opacity: chosen ? 1 : 0 }
-  const marks = edge.map((tick, i) => tickMark(ticks[i], tick.projected, n))
+  // A mark out to the second row that would run through a label of the first stays short instead.
+  const first = rows === 2 ? ranged.filter((l) => l.shift === ZERO) : []
+  const marks = edge.map((tick, i) => {
+    const mark = tickMark(ticks[i], tick.projected, n, ticks[i].shift)
+    const cut = first.some((l) => through(l, mark.from, mark.to))
+    return cut ? tickMark(ticks[i], tick.projected, n, ZERO) : mark
+  })
   return { chosen, ticks, title: head, line, marks }
 }
 
 /**
  * The mark of the tick at `at`: it reaches `MARK` out along the normal `n` and
- * bends as far along the edge as its `label` slid, in a curve that leaves the
- * tick and meets the label square to the edge. A second row moves out, not
- * along, so its mark stays straight; neighbours slide in order, so marks never cross.
+ * on by `shift`, as far as its `label` moved - straight out to a second row,
+ * and in a curve that leaves the tick and meets the label square to the edge
+ * where the label slid along it. Neighbours slide in order, so marks never cross.
  */
-function tickMark(label: AxisLabel, at: Point2D, n: Point2D): AxisLine {
-  const slid = label.shift.y * n.x - label.shift.x * n.y
-  const to = { x: at.x + n.x * MARK - n.y * slid, y: at.y + n.y * MARK + n.x * slid }
+function tickMark(label: AxisLabel, at: Point2D, n: Point2D, shift: Point2D): AxisLine {
+  const to = { x: at.x + n.x * MARK + shift.x, y: at.y + n.y * MARK + shift.y }
   const half = MARK / 2
   return {
     key: label.key,
@@ -2694,6 +2699,20 @@ function fit(ticks: AxisLabel[], normal: Point2D, row: Point2D) {
   while (stride < ticks.length && !clear(ticks, stride, stride)) stride *= 2
   ticks.forEach((t, i) => (t.opacity = i % stride ? 0 : 1))
   return 1
+}
+
+/** Whether the line from `a` to `b` runs through the box of `label`. */
+function through({ at, shift, w, h }: AxisLabel, a: Point2D, b: Point2D) {
+  let [lo, hi] = [0, 1]
+  for (const [k, r] of [["x", w / 2] as const, ["y", h / 2] as const]) {
+    const [c, d] = [at[k] + shift[k], b[k] - a[k]]
+    if (!d && Math.abs(a[k] - c) >= r) return false
+    if (!d) continue
+    const [t0, t1] = [(c - r - a[k]) / d, (c + r - a[k]) / d]
+    lo = Math.max(lo, Math.min(t0, t1))
+    hi = Math.min(hi, Math.max(t0, t1))
+  }
+  return lo < hi
 }
 
 /** Whether every label from every `every`-th keeps `PAD` apart from the one `step` after it. */
