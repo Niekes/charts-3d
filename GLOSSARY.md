@@ -282,6 +282,11 @@ with `+` and `-`, to the middle of the chart. On a touch screen two fingers
 pinch, and the point between them stays. The wheel alone scrolls the page.
 _Avoid_: dolly, scale, zoom to the centre (the wheel)
 
+**Default view**:
+The view the camera starts at and a reset returns it to. Unlike a
+heading, changing it moves nothing: only the next reset goes to the new one.
+_Avoid_: home, initial view, start position
+
 **Heading**:
 A view the page gives the camera to head for: the camera glides there when
 the heading changes, and the reader turns on from it.
