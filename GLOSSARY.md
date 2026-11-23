@@ -45,8 +45,13 @@ gliding end, never at a tick beyond it.
 _Avoid_: axis border, box edge line
 
 **Tick mark**:
-A short line at a tick, pointing away from the box.
-_Avoid_: tick stroke, tick
+A short line from a tick toward its label, pointing away from the box.
+Where the label moved to make room, the tick mark follows it: in a smooth
+curve where it slid along the edge, straight out where it took a second
+row, unless its way out would run through a tick label of the first row:
+then it stays short. A tick mark never crosses another, nor a tick label of
+its own edge.
+_Avoid_: tick stroke, tick, leader line
 
 **Axis title**:
 The name of an axis: along its edge, never upside down, beyond the tick

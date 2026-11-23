@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A tick mark follows its label where the label moved to make room: in a
+  curve where it slid along the edge, straight out where it took a second
+  row - unless that way runs through a tick label of the first row, where
+  the mark stays short.
+
 ## [1.0.0] - 2026-11-23
 
 ### Added

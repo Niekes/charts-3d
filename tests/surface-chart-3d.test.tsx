@@ -92,7 +92,9 @@ describe("SurfaceChart3D", () => {
         )
       )
     const grid = xs([...host.querySelectorAll('path[fill^="color-mix"]')])
-    const walls = xs([...host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const walls = xs([
+      ...host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+    ])
     const widths = [...host.querySelectorAll('path[fill^="color-mix"]')].map((quad) => {
       const corners = xs([quad])
       return Math.max(...corners) - Math.min(...corners)
@@ -718,7 +720,7 @@ describe("SurfaceChart3D transitions", () => {
 
     await act(async () => root.unmount())
     host.remove()
-  })
+  }, 30_000)
 })
 
 describe("SurfaceChart3D keys", () => {

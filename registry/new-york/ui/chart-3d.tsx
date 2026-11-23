@@ -2431,6 +2431,8 @@ type AxisLine = {
   key: string
   from: Point2D
   to: Point2D
+  /** The control points of the curve of a tick mark; the line of an axis is straight. */
+  via?: [Point2D, Point2D]
   opacity: number
 }
 
@@ -2576,15 +2578,37 @@ function edgeLabels(
   // The edges the axis does not sit on keep their labels in place, unseen, to fade them in.
   hideOffRange([...ticks, ...(head ? [head] : [])], range, chosen)
   // The axis line runs its edge between its outermost ticks; a mark points out from every
-  // tick, as far out as its label is clear of it, and hides where the label does.
+  // tick, follows its label where that moved, and hides where the label does.
   const line: AxisLine = { key: id, from: start, to: end, opacity: chosen ? 1 : 0 }
-  const marks = edge.map((tick, i) => ({
-    key: ticks[i].key,
-    from: tick.projected,
-    to: { x: tick.projected.x + n.x * MARK, y: tick.projected.y + n.y * MARK },
-    opacity: ticks[i].opacity,
-  }))
+  // A mark out to the second row that would run through a label of the first stays short instead.
+  const first = rows === 2 ? ranged.filter((l) => l.shift === ZERO) : []
+  const marks = edge.map((tick, i) => {
+    const mark = tickMark(ticks[i], tick.projected, n, ticks[i].shift)
+    const cut = first.some((l) => through(l, mark.from, mark.to))
+    return cut ? tickMark(ticks[i], tick.projected, n, ZERO) : mark
+  })
   return { chosen, ticks, title: head, line, marks }
+}
+
+/**
+ * The mark of the tick at `at`: it reaches `MARK` out along the normal `n` and
+ * on by `shift`, as far as its `label` moved - straight out to a second row,
+ * and in a curve that leaves the tick and meets the label square to the edge
+ * where the label slid along it. Neighbours slide in order, so marks never cross.
+ */
+function tickMark(label: AxisLabel, at: Point2D, n: Point2D, shift: Point2D): AxisLine {
+  const to = { x: at.x + n.x * MARK + shift.x, y: at.y + n.y * MARK + shift.y }
+  const half = MARK / 2
+  return {
+    key: label.key,
+    from: at,
+    to,
+    via: [
+      { x: at.x + n.x * half, y: at.y + n.y * half },
+      { x: to.x - n.x * half, y: to.y - n.y * half },
+    ],
+    opacity: label.opacity,
+  }
 }
 
 /**
@@ -2675,6 +2699,20 @@ function fit(ticks: AxisLabel[], normal: Point2D, row: Point2D) {
   while (stride < ticks.length && !clear(ticks, stride, stride)) stride *= 2
   ticks.forEach((t, i) => (t.opacity = i % stride ? 0 : 1))
   return 1
+}
+
+/** Whether the line from `a` to `b` runs through the box of `label`. */
+function through({ at, shift, w, h }: AxisLabel, a: Point2D, b: Point2D) {
+  let [lo, hi] = [0, 1]
+  for (const [k, r] of [["x", w / 2] as const, ["y", h / 2] as const]) {
+    const [c, d] = [at[k] + shift[k], b[k] - a[k]]
+    if (!d && Math.abs(a[k] - c) >= r) return false
+    if (!d) continue
+    const [t0, t1] = [(c - r - a[k]) / d, (c + r - a[k]) / d]
+    lo = Math.max(lo, Math.min(t0, t1))
+    hi = Math.min(hi, Math.max(t0, t1))
+  }
+  return lo < hi
 }
 
 /** Whether every label from every `every`-th keeps `PAD` apart from the one `step` after it. */
@@ -2794,7 +2832,7 @@ function textWidth(text: React.ReactNode, size: number) {
  * once; a change of edge fades it in a transition.
  */
 function AxisLine3D({
-  line: { from, to, opacity },
+  line: { from, to, via, opacity },
   ink,
   width,
 }: {
@@ -2802,17 +2840,15 @@ function AxisLine3D({
   ink: string
   width: number
 }) {
-  return (
-    <line
-      x1={fixed(from.x)}
-      y1={fixed(from.y)}
-      x2={fixed(to.x)}
-      y2={fixed(to.y)}
-      strokeWidth={width}
-      style={{ opacity: Math.round(opacity * 100) / 100 }}
-      className={cn("transition-opacity duration-300 ease-out motion-reduce:transition-none", ink)}
-    />
-  )
+  const look = {
+    strokeWidth: width,
+    style: { opacity: Math.round(opacity * 100) / 100 },
+    className: cn("transition-opacity duration-300 ease-out motion-reduce:transition-none", ink),
+  }
+  const at = (p: Point2D) => `${fixed(p.x)},${fixed(p.y)}`
+  if (via)
+    return <path d={`M${at(from)}C${via.map(at).join(" ")} ${at(to)}`} fill="none" {...look} />
+  return <line x1={fixed(from.x)} y1={fixed(from.y)} x2={fixed(to.x)} y2={fixed(to.y)} {...look} />
 }
 
 /**

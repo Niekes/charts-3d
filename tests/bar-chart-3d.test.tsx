@@ -14,6 +14,18 @@ const data = [
   { name: "x", a: 1, b: -2 },
   { name: "y", a: 3, b: 0.5 },
 ]
+type Point = { x: number; y: number }
+// Names of very different widths: a wide one beside a narrow one may cover the mark of the narrow one.
+const countries = [
+  "United Kingdom",
+  "France",
+  "US",
+  "Germany",
+  "Italy",
+  "UK",
+  "Netherlands",
+  "PL",
+].map((name, i) => ({ name, a: i, b: 1 }))
 const faces = (html: string) => html.match(/<path d="[^"]*" fill="color-mix/g) ?? []
 
 describe("BarChart3D", () => {
@@ -154,7 +166,9 @@ describe("BarChart3D", () => {
         )
       )
     const barFaces = xs([...bars.host.querySelectorAll('path[fill^="color-mix"]')])
-    const walls = xs([...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const walls = xs([
+      ...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+    ])
     // Without the padding the bars stand a fifth of a cell from the walls, half
     // a cell with it.
     expect(Math.min(...barFaces) - Math.min(...walls)).toBeGreaterThan(40)
@@ -355,6 +369,36 @@ async function mount(element: ReactElement) {
   return { host, send, unmount }
 }
 
+/** The tick marks as the chart draws them: where each starts and ends, and how much of it shows. */
+function markEnds(host: HTMLElement) {
+  return [
+    ...host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] path[stroke-width="1"]'),
+  ].map((el) => {
+    const [x0, y0, ...rest] = el
+      .getAttribute("d")!
+      .match(/-?[\d.]+/g)!
+      .map(Number)
+    const to: Point = { x: rest.at(-2)!, y: rest.at(-1)! }
+    return { from: { x: x0, y: y0 }, to, opacity: Number(el.style.opacity) }
+  })
+}
+
+/**
+ * The tick mark of the label `text`: the one that starts nearest the label
+ * before it moved. Whether it slid or took a second row, the mark reaches
+ * straight out MARK, 6px, and then as far as the label moved.
+ */
+function markOf(host: HTMLElement, text: string) {
+  const label = drawn(host).find((l) => l.text === text && l.opacity === 1)!
+  const at = { x: label.x - label.dx, y: label.y - label.dy }
+  const marks = markEnds(host)
+  const near = (p: Point) => Math.hypot(p.x - at.x, p.y - at.y)
+  const mark = marks.reduce((a, b) => (near(b.from) < near(a.from) ? b : a))
+  const unmoved = { x: mark.to.x - label.dx, y: mark.to.y - label.dy }
+  expect(Math.hypot(unmoved.x - mark.from.x, unmoved.y - mark.from.y)).toBeCloseTo(6, 1)
+  return mark
+}
+
 /**
  * The labels of the box as the chart draws them: their text, how much of them
  * shows and the box they cover, guessed at 0.6em a character as the chart does.
@@ -495,6 +539,65 @@ describe("BarChart3D labels", () => {
     expect(desktop.x * mobile.x + desktop.y * mobile.y).toBeLessThan(0)
     await bars.unmount()
   })
+
+  test("bend the mark of a slid label to it, and the marks never cross", async () => {
+    const bars = await mount(chart({ yaw: (70 * Math.PI) / 180, tilt: Math.PI / 6 }))
+    const ends = ["Desktop", "Mobile"].map((text) => markOf(bars.host, text))
+    // The two labels slid apart, and their marks with them: their ends lie further apart than their ticks.
+    const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
+    expect(dist(ends[0].to, ends[1].to)).toBeGreaterThan(dist(ends[0].from, ends[1].from))
+    await bars.unmount()
+  })
+
+  test("reach the mark of a label in the second row out to it, straight", async () => {
+    const bars = await mount(
+      <ChartContainer3D config={config} defaultView={{ yaw: Math.PI / 3, tilt: Math.PI / 6 }}>
+        <BarChart3D data={countries} index="name" />
+      </ChartContainer3D>
+    )
+    const length = ({ from, to }: { from: Point; to: Point }) =>
+      Math.hypot(to.x - from.x, to.y - from.y)
+    // Germany takes the second row, and its mark passes between US and Italy out to it.
+    expect(length(markOf(bars.host, "Germany"))).toBeGreaterThan(12)
+    // US stays in the first row, its mark as long as ever.
+    expect(length(markOf(bars.host, "US"))).toBeCloseTo(6, 1)
+    await bars.unmount()
+  })
+
+  test("keep the mark of a label in the second row short where it would run through a label of the first", async () => {
+    // Level and turned by 20°, Mobile stands almost behind Desktop: its way out runs through it.
+    const bars = await mount(chart({ yaw: (20 * Math.PI) / 180, tilt: 0 }))
+    const mobile = drawn(bars.host).find((l) => l.text === "Mobile" && l.opacity > 0.5)!
+    expect(Math.hypot(mobile.dx, mobile.dy)).toBeGreaterThan(0)
+    for (const { from, to, opacity } of markEnds(bars.host))
+      if (opacity > 0.5) expect(Math.hypot(to.x - from.x, to.y - from.y)).toBeCloseTo(6, 1)
+    await bars.unmount()
+  })
+
+  test("never run a mark through a label, where labels of very different widths take two rows", async () => {
+    const failures: string[] = []
+    for (const tilt of [0, 30])
+      for (let yaw = 0; yaw < 360; yaw += 15) {
+        const view = { yaw: (yaw * Math.PI) / 180, tilt: (tilt * Math.PI) / 180 }
+        const bars = await mount(
+          <ChartContainer3D config={config} defaultView={view}>
+            <BarChart3D data={countries} index="name" />
+          </ChartContainer3D>
+        )
+        const labels = drawn(bars.host).filter((l) => l.opacity > 0.5 && l.h === 10)
+        for (const { from, to, opacity } of markEnds(bars.host)) {
+          if (opacity < 0.5) continue
+          // Points along the line between the ends of the mark, which ends 4px short of its own label.
+          for (let t = 0; t <= 1; t += 0.1) {
+            const at = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
+            const hit = labels.find((l) => apart({ ...at, w: 0, h: 0, turn: 0 }, l) < 0)
+            if (hit) failures.push(`${yaw}°/${tilt}°: a mark crosses ${hit.text}`)
+          }
+        }
+        await bars.unmount()
+      }
+    expect([...new Set(failures)]).toEqual([])
+  }, 60_000)
 
   test("stack two series in two rows where the camera looks along their axis, the title beyond", async () => {
     // Level with the box and turned by 20°, the two rows of bars stand almost behind one another.

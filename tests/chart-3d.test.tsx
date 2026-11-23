@@ -3011,7 +3011,11 @@ describe("Axes3D", () => {
     // The walls carry no gridlines of their own: each is one closed quad, and
     // the gridlines are their own lines, in the border ink, which the
     // chart-3d-axes-in keyframe fades in when they mount.
-    const walls = [...host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] path')]
+    const walls = [
+      ...host.querySelectorAll<SVGPathElement>(
+        '[data-slot="chart-3d-axes"] path[stroke-width="0.75"]'
+      ),
+    ]
     expect(walls.length).toBeGreaterThan(0)
     for (const wall of walls) expect(wall.getAttribute("d")).toMatch(/^M[^M]*Z$/)
     const gridlines = () => [
@@ -3082,7 +3086,9 @@ describe("Axes3D", () => {
         <Axes3D spec={spec} world={worldBox(spec)} />
       </ChartContainer3D>
     )
-    const walls = [...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path')]
+    const walls = [
+      ...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path[stroke-width="0.75"]'),
+    ]
     const cornerX = Math.max(
       ...walls.flatMap((wall) =>
         [...wall.getAttribute("d")!.matchAll(/([\d.-]+),[\d.-]+/g)].map(([, x]) => Number(x))
@@ -3131,12 +3137,13 @@ describe("Axes3D", () => {
         <Axes3D spec={spec} world={worldBox(spec)} />
       </ChartContainer3D>
     )
-    const corners = [...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path')].flatMap(
-      (wall) =>
-        [...wall.getAttribute("d")!.matchAll(/([\d.-]+),([\d.-]+)/g)].map(([, x, y]) => [
-          Number(x),
-          Number(y),
-        ])
+    const corners = [
+      ...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path[stroke-width="0.75"]'),
+    ].flatMap((wall) =>
+      [...wall.getAttribute("d")!.matchAll(/([\d.-]+),([\d.-]+)/g)].map(([, x, y]) => [
+        Number(x),
+        Number(y),
+      ])
     )
     const [xs, ys] = [0, 1].map((i) => corners.map((corner) => corner[i]))
     const ends = [...chart.svg.querySelectorAll<SVGLineElement>('line[stroke-width="1.5"]')]
@@ -3222,9 +3229,9 @@ describe("Axes3D", () => {
     expect(shown.filter((label) => label.startsWith("x"))).toEqual(["x2", "x4", "x6", "x8", "x10"])
     // The mark of a label that gives way hides with it: of the five labels of
     // x that show, the six of y and the one of z, twelve marks are left.
-    const marks = chart.host.querySelectorAll('[data-slot="chart-3d-axes"] line[stroke-width="1"]')
+    const marks = chart.host.querySelectorAll('[data-slot="chart-3d-axes"] path[stroke-width="1"]')
     expect(
-      [...marks].filter((mark) => Number((mark as SVGLineElement).style.opacity) > 0.5)
+      [...marks].filter((mark) => Number((mark as SVGPathElement).style.opacity) > 0.5)
     ).toHaveLength(12)
     await chart.unmount()
   })
@@ -3255,15 +3262,18 @@ describe("Axes3D", () => {
       </ChartContainer3D>
     )
     const marks = () => [
-      ...chart.host.querySelectorAll<SVGLineElement>(
-        '[data-slot="chart-3d-axes"] line[stroke-width="1"]'
+      ...chart.host.querySelectorAll<SVGPathElement>(
+        '[data-slot="chart-3d-axes"] path[stroke-width="1"]'
       ),
     ]
     const shown = () => marks().filter((mark) => Number(mark.style.opacity) > 0.5)
-    const of = (mark: SVGLineElement) => ({
-      from: { x: Number(mark.getAttribute("x1")), y: Number(mark.getAttribute("y1")) },
-      to: { x: Number(mark.getAttribute("x2")), y: Number(mark.getAttribute("y2")) },
-    })
+    const of = (mark: SVGPathElement) => {
+      const [x0, y0, ...rest] = mark
+        .getAttribute("d")!
+        .match(/-?[\d.]+/g)!
+        .map(Number)
+      return { from: { x: x0, y: y0 }, to: { x: rest.at(-2)!, y: rest.at(-1)! } }
+    }
     const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
       Math.hypot(a.x - b.x, a.y - b.y)
 
@@ -3279,7 +3289,9 @@ describe("Axes3D", () => {
     // The marks point out of the box, and every label stands clear of them,
     // as far out as the mark reaches and the space the label needs.
     const walls = [
-      ...chart.host.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-axes"] > path'),
+      ...chart.host.querySelectorAll<SVGPathElement>(
+        '[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'
+      ),
     ]
     const xs = walls.flatMap((w) =>
       [...w.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
