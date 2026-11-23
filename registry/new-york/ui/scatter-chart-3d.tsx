@@ -34,6 +34,8 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
    * The field that identifies an entry, so a point follows its name through
    * updates: a new one grows, a gone one shrinks away, one that moves glides.
    * A name that repeats is, in the order of the data, a point of its own.
+   * A name is its own within its series, and read as text: derive a field
+   * for a key of several fields.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string
@@ -77,7 +79,15 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, names, entries, axes, target, presence, key: at } = usePoints(all, x, y, z, id)
+  const {
+    fields,
+    names,
+    entries,
+    axes,
+    target,
+    presence,
+    key: at,
+  } = usePoints(all, x, y, z, id, series)
   // The positions glide entry by entry; a gone point stands in place.
   const values = useTween(target)
   const read = (name: string, axis: keyof AxesSpec) => values[at(axis, name)]

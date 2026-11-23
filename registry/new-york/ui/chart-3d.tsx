@@ -3077,7 +3077,8 @@ function nonNegative(value: unknown) {
 /**
  * The entries of `data` as points in the chart box, for a chart that places
  * every entry at its fields `x`, `y` and `z`, as the scatter and the line
- * chart do. Every entry is `named` by its `id` field, or by its position in
+ * chart do. Every entry is `named` by its `id` field - within its `series`,
+ * so lines that share ids keep their points - or by its position in
  * the data, so a point keeps its name when an entry before it gains or loses
  * its place; one whose x, y or z is not a finite number is not `placed` and
  * is not among the `names` and the `entries` behind them. The `axes` hold
@@ -3092,11 +3093,15 @@ function usePoints<T extends Record<string, unknown>>(
   x: keyof T & string,
   y: keyof T & string,
   z: keyof T & string,
-  id?: keyof T & string
+  id?: keyof T & string,
+  series?: keyof T & string
 ) {
   const points = React.useMemo(() => {
     const fields = { x, y, z }
-    const names = id ? uniqueIds(data.map((d) => String(d[id]))) : data.map((_, i) => String(i))
+    const own = (d: T, name: string) => (series ? joined(keyOf(d[series], ""), name) : name)
+    const names = id
+      ? uniqueIds(data.map((d) => own(d, String(d[id]))))
+      : data.map((_, i) => String(i))
     const named = data.map((d, i) => ({
       d,
       name: names[i],
@@ -3118,7 +3123,7 @@ function usePoints<T extends Record<string, unknown>>(
       present: Object.fromEntries(placed.map((p) => [p.name, 1])),
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
-  }, [data, x, y, z, id])
+  }, [data, x, y, z, id, series])
   return { ...points, presence: useTween(points.present, 0), key: positionKey }
 }
 
