@@ -4,6 +4,12 @@ on:
   - pull_request
   - push
 
+# A newer run supersedes an older one on the same ref, so two merges in a row
+# never race to push the badges to main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typecheck:
     name: Type Check
