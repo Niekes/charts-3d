@@ -25,8 +25,81 @@ describe("BarChart3D", () => {
       </ChartContainer3D>
     )
     expect(faces(html)).toHaveLength(12)
-    expect(html).toContain("color-mix(in oklch, var(--color-b)")
+    expect(html).toContain("color-mix(in oklch, var(--color-b, currentColor)")
     expect(html).not.toContain("NaN")
+  })
+
+  test("a bar below the floor paints in the order of its footprint, as one above it: a bar behind never paints over the one before it", () => {
+    // The series in paint order, far to near.
+    const order = (row: Record<string, number>) => {
+      const html = renderToString(
+        <ChartContainer3D config={config}>
+          <BarChart3D data={[{ name: "x", ...row }]} index="name" />
+        </ChartContainer3D>
+      )
+      const painted = [
+        ...html.matchAll(/<path d="[^"]*" fill="color-mix\(in oklch, var\(--color-(\w+)/g),
+      ]
+      expect(painted).toHaveLength(6)
+      return [...new Set(painted.map((face) => face[1]))]
+    }
+    // The two bars stand in the same cells whatever their values: `a` behind `b`.
+    expect(order({ a: 10, b: 1 })).toEqual(["a", "b"])
+    // Both hang from the floor, the near one deeper, then the far one.
+    expect(order({ a: -1, b: -10 })).toEqual(["a", "b"])
+    expect(order({ a: -10, b: -1 })).toEqual(["a", "b"])
+    // One above the floor and one below it, either way round.
+    expect(order({ a: 10, b: -10 })).toEqual(["a", "b"])
+    expect(order({ a: -10, b: 10 })).toEqual(["a", "b"])
+  })
+
+  test("in perspective the bars paint by their distance from the eye: looking along the rows, a bar hides the one further out on either side", () => {
+    const five = Object.fromEntries("abcde".split("").map((key) => [key, { color: "red" }]))
+    const html = renderToString(
+      <ChartContainer3D config={five} defaultView={{ yaw: Math.PI / 2, tilt: 0.4, perspective: 3 }}>
+        <BarChart3D data={[{ name: "x", a: 1, b: 1, c: 1, d: 1, e: 1 }]} index="name" />
+      </ChartContainer3D>
+    )
+    // The series in paint order, far to near.
+    const painted = [
+      ...new Set(
+        [...html.matchAll(/<path d="[^"]*" fill="color-mix\(in oklch, var\(--color-(\w+)/g)].map(
+          (face) => face[1]
+        )
+      ),
+    ]
+    expect(painted).toHaveLength(5)
+    const at = (key: string) => painted.indexOf(key)
+    // The eye stands before the middle series, `c`: from there `b` hides part of `a` and `c`
+    // part of `b`, and on the other side `d` hides part of `e` and `c` part of `d`.
+    expect(at("a")).toBeLessThan(at("b"))
+    expect(at("b")).toBeLessThan(at("c"))
+    expect(at("e")).toBeLessThan(at("d"))
+    expect(at("d")).toBeLessThan(at("c"))
+  })
+
+  test("in perspective a face that looks left and one that looks right are lit differently, as the light comes from the left", () => {
+    // Seen nearly along z in perspective, the bars left of the eye show their right side
+    // and the bars right of it their left side: with the top and the front, four shades.
+    const shades = (perspective?: number) => {
+      const html = renderToString(
+        <ChartContainer3D config={config} defaultView={{ yaw: 0.1, tilt: 0.3, perspective }}>
+          <BarChart3D
+            data={"abcdefg".split("").map((name) => ({ name, a: 5 }))}
+            index="name"
+            keys={["a"]}
+          />
+        </ChartContainer3D>
+      )
+      return new Set(
+        [...html.matchAll(/<path d="[^"]*" fill="color-mix\(in oklch, [^)]*\) (\d+)%, black/g)].map(
+          (face) => face[1]
+        )
+      )
+    }
+    // Without perspective every bar shows the same three faces.
+    expect(shades().size).toBe(3)
+    expect(shades(4).size).toBe(4)
   })
 
   test("keys picks the series", () => {
@@ -36,7 +109,17 @@ describe("BarChart3D", () => {
       </ChartContainer3D>
     )
     expect(faces(html)).toHaveLength(6)
-    expect(html).not.toContain("var(--color-b)")
+    expect(html).not.toContain("var(--color-b, currentColor)")
+  })
+
+  test("a key listed twice in keys is one series: no empty lane, no second tick", () => {
+    const html = (keys: string[]) =>
+      renderToString(
+        <ChartContainer3D id="c" config={config}>
+          <BarChart3D data={data} index="name" keys={keys} />
+        </ChartContainer3D>
+      )
+    expect(html(["a", "a"])).toBe(html(["a"]))
   })
 
   test("an empty chart draws the box and no bars", () => {
@@ -166,15 +249,17 @@ describe("BarChart3D", () => {
     host.remove()
   })
 
-  test("a missing value stands as a flat bar, and its tooltip leaves it out instead of saying 0", async () => {
-    const view = await mount(
-      <ChartContainer3D config={config}>
-        <BarChart3D data={[{ name: "x", a: null }]} index="name" keys={["a"]} />
-      </ChartContainer3D>
-    )
-    await view.send("pointermove", lastFace(view.host))
-    expect(tip(view.host)).toBe("x")
-    await view.unmount()
+  test("a missing value draws no bar, as in the bar field: an empty cell of a sparse table stays empty", () => {
+    const html = (rows: Record<string, unknown>[]) =>
+      renderToString(
+        <ChartContainer3D config={config}>
+          <BarChart3D data={rows} index="name" />
+        </ChartContainer3D>
+      )
+    for (const missing of [null, undefined, "", "n/a", Infinity]) {
+      expect(faces(html([{ name: "x", a: 1, b: missing }]))).toHaveLength(3)
+    }
+    expect(faces(html([{ name: "x", a: null }]))).toHaveLength(0)
   })
 
   test("a tooltip of null shows none", async () => {
@@ -510,7 +595,7 @@ describe("BarChart3D transitions", () => {
           </ChartContainer3D>
         )
       )
-    const faces = () => host.querySelectorAll('path[fill*="var(--color-a)"]')
+    const faces = () => host.querySelectorAll('path[fill*="var(--color-a, currentColor)"]')
     const fading = () => host.querySelectorAll('path[fill^="color-mix(in oklab"]')
     const rightEdge = () =>
       Math.max(
@@ -629,6 +714,53 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("a bar whose value has gone missing says nothing on hover while it fades out, as one whose entry left", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (rows: { name: string; a: number | null }[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={rows} index="name" keys={["a"]} />
+          </ChartContainer3D>
+        )
+      )
+    await render([
+      { name: "x", a: 100 },
+      { name: "y", a: 50 },
+      { name: "z", a: 80 },
+    ])
+    const svg = host.querySelector("svg")!
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 400 }) as DOMRect
+    const hover = (face: Element) => {
+      const corners = face.getAttribute("d")!.slice(1, -1).split("L")
+      const [clientX, clientY] = [0, 1].map(
+        (i) => corners.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / corners.length
+      )
+      return act(() =>
+        svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
+      )
+    }
+
+    // The value of y goes missing: mid-glide its bar still stands, fading, and says nothing.
+    await render([
+      { name: "x", a: 100 },
+      { name: "y", a: null },
+      { name: "z", a: 80 },
+    ])
+    await act(() => vi.advanceTimersByTime(150))
+    const fading = [...host.querySelectorAll('path[fill^="color-mix(in oklab"]')]
+    expect(fading.length).toBeGreaterThan(0)
+    await hover(fading.at(-1)!)
+    expect(tip(host)).toBe("")
+    await hover([...host.querySelectorAll('path[fill^="color-mix(in oklch"]')].at(-1)!)
+    expect(tip(host)).toMatch(/^[xz]A(100|80)$/)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("the size of a bar eases with its cell: new rows shrink it gradually, never at once", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))
@@ -645,7 +777,7 @@ describe("BarChart3D transitions", () => {
     // span along the screen is the width of the bar.
     const extent = () => {
       const faces = [
-        ...host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]'),
+        ...host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a, currentColor)"]'),
       ].map((f) =>
         f
           .getAttribute("d")!
@@ -781,11 +913,11 @@ describe("BarChart3D transitions", () => {
     expect(ds.length).toBeGreaterThan(0)
     expect(ds.some((d) => d.includes("NaN"))).toBe(false)
     await act(() => vi.advanceTimersByTime(400))
-    expect(host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')).toHaveLength(
-      0
-    )
     expect(
-      host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-b)"]').length
+      host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a, currentColor)"]')
+    ).toHaveLength(0)
+    expect(
+      host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-b, currentColor)"]').length
     ).toBeGreaterThan(0)
 
     await act(async () => root.unmount())
@@ -805,7 +937,9 @@ describe("BarChart3D transitions", () => {
           </ChartContainer3D>
         )
       )
-    const faces = (key: string) => [...host.querySelectorAll(`path[fill*="var(--color-${key})"]`)]
+    const faces = (key: string) => [
+      ...host.querySelectorAll(`path[fill*="var(--color-${key}, currentColor)"]`),
+    ]
     const left = (key: string) =>
       Math.min(
         ...faces(key).flatMap((f) =>
@@ -838,6 +972,54 @@ describe("BarChart3D transitions", () => {
     host.remove()
   })
 
+  test("a value that goes missing fades out as its bar shrinks, and one that comes back fades in as it grows, as in the bar field", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (a: number | null) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <BarChart3D data={[{ name: "x", a, b: 3 }]} index="name" />
+          </ChartContainer3D>
+        )
+      )
+    const faces = (key: string) => [
+      ...host.querySelectorAll(`path[fill*="var(--color-${key}, currentColor)"]`),
+    ]
+    /** How much of the bar of `key` shows: the share its fill keeps, 1 where it is not faded. */
+    const seen = (key: string) =>
+      Math.max(
+        ...faces(key).map((face) => {
+          const share = face.getAttribute("fill")!.match(/ ([\d.]+)%, transparent\)$/)
+          return share ? Number(share[1]) / 100 : 1
+        })
+      )
+
+    await render(6)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(seen("a")).toBe(1)
+    // The value goes missing: near the end of the glide its bar, all but flat, is all but gone.
+    await render(null)
+    await act(() => vi.advanceTimersByTime(560))
+    expect(faces("a").length).toBeGreaterThan(0)
+    expect(seen("a")).toBeLessThan(0.1)
+    await act(() => vi.advanceTimersByTime(200))
+    expect(faces("a")).toHaveLength(0)
+    // It comes back: it grows from the floor, unseen at first, never a flat tile at full color.
+    await render(6)
+    await act(() => vi.advanceTimersByTime(16))
+    expect(faces("a").length).toBeGreaterThan(0)
+    expect(seen("a")).toBeLessThan(0.1)
+    await act(() => vi.advanceTimersByTime(700))
+    expect(seen("a")).toBe(1)
+    // The bar beside it never fades.
+    expect(seen("b")).toBe(1)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a bar that keeps its value keeps its height smooth, and a tick that stays glides as the same label", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))
@@ -852,7 +1034,9 @@ describe("BarChart3D transitions", () => {
       )
     // The screen height of the bar of `a`, from the faces it shows.
     const height = () => {
-      const faces = host.querySelectorAll('path[fill^="color-mix(in oklch, var(--color-a)"]')
+      const faces = host.querySelectorAll(
+        'path[fill^="color-mix(in oklch, var(--color-a, currentColor)"]'
+      )
       const ys = [...faces].flatMap((face) =>
         face
           .getAttribute("d")!
@@ -909,7 +1093,9 @@ describe("BarChart3D focus", () => {
       chart.send("pointermove", { clientX, clientY })
     const before = fills(svg)
     // The centroid of a face of a bar of series a.
-    const face = barFaces(svg).find((p) => p.getAttribute("fill")!.includes("var(--color-a)"))!
+    const face = barFaces(svg).find((p) =>
+      p.getAttribute("fill")!.includes("var(--color-a, currentColor)")
+    )!
     const corners = face.getAttribute("d")!.slice(1, -1).split("L")
     const [x, y] = [0, 1].map(
       (i) => corners.reduce((s, c) => s + Number(c.split(",")[i]), 0) / corners.length
@@ -1013,8 +1199,8 @@ describe("BarChart3D names that are no CSS identifiers", () => {
     const html = renderToString(chart)
     // A space in a CSS identifier is written `\20 `.
     expect(html).toContain("--color-Net\\20 sales: red;")
-    expect(html).toContain('fill="color-mix(in oklch, var(--color-Net\\20 sales)')
-    expect(html).toContain("background:var(--color-Net\\20 sales)")
+    expect(html).toContain('fill="color-mix(in oklch, var(--color-Net\\20 sales, currentColor)')
+    expect(html).toContain("background:var(--color-Net\\20 sales, currentColor)")
     expect(html).not.toContain("--color-Net sales")
   })
 })

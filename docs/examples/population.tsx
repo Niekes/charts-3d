@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react"
-
 import type { ChartConfig } from "@/components/ui/chart-3d"
 import { places } from "@/docs/examples/places"
 import { Select } from "@/docs/examples/renderer-select"

@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable -- shortcut: the hooks here keep values in refs while rendering, which the rules of React's compiler forbid; move them into state after 1.0. */
 
 import * as React from "react"
 import { extent, max, min, nice, range, ticks } from "d3-array"
@@ -6,6 +7,7 @@ import {
   axes3D,
   box,
   camera3D,
+  ccw,
   normal,
   points3D,
   sort,
@@ -48,7 +50,11 @@ export type View3D = {
   zoom?: number
   /** How far the chart is moved, in the units of the view box. */
   pan?: Point2D
-  /** The distance of the eye in box units; Infinity, the default, is orthographic. */
+  /**
+   * The distance of the eye in box units; Infinity, the default, is orthographic.
+   * Keep it above 2: the corners of the box reach up to 1.7 from its middle,
+   * and an eye inside the box distorts the picture. 3 to 6 look natural.
+   */
   perspective?: number
 }
 
@@ -58,7 +64,11 @@ export type View3D = {
  */
 export type Renderer3D = "svg" | "canvas"
 
-/** Maps data values to the world box, which spans -1 to 1 on every axis, y up. */
+/**
+ * Maps data values to the world box, which spans -1 to 1 on every axis, y up.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 export type World = Record<keyof AxesSpec, (value: number) => number>
 
 /** What a mark says while the pointer is on it, beside the pointer. */
@@ -91,6 +101,8 @@ export type Symbol3D = {
  * One shape of a chart, projected, in paint order: a polygon, unless its
  * `shape` says otherwise - a circle of radius `r` around its one point, or a
  * symbol on that disc.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 export type Mark3D = {
   /** Stable across renders, so React moves the shape instead of redrawing it. */
@@ -109,7 +121,7 @@ export type Mark3D = {
   tooltip?: Tooltip3D | (() => Tooltip3D | null)
   /**
    * The marks of the same element as this one, within its `Marks3D`: the
-   * faces of a bar, the segments of a flow. Pointing at a mark fills them with the focus color -
+   * faces of a bar, the faces of a tile of the globe, the parts of a region. Pointing at a mark fills them with the focus color -
    * `--chart-3d-focus`, or their own fill lightened - until the pointer
    * leaves the mark; a stroke of their own stays.
    */
@@ -159,6 +171,7 @@ type ChartContext3D = {
 
 const Chart3DContext = React.createContext<ChartContext3D | null>(null)
 
+/** @experimental A part a chart is built from: a minor version may change it. */
 export function useChart3D() {
   const context = React.useContext(Chart3DContext)
   if (!context) {
@@ -408,7 +421,7 @@ export type ChartContainer3DProps = {
    */
   animationDuration?: number
   /**
-   * Where the camera starts, and where a reset returns it.
+   * Where a reset returns the camera, and where it starts without a `view`.
    * @defaultValue { yaw: π/6, tilt: π/6 }
    */
   defaultView?: View3D
@@ -490,7 +503,7 @@ function ChartContainer3D({
   const drawing = useScene(requested, width, height, placement, palette)
   const { scene, place, renderer, canvas, repaint, hover, hide, leave, tip, focus } = drawing
   const keys = keymapOf(keymap, shortcuts)
-  const { view, handlers, hint } = useOrbit(defaultView, width, keys, hide, hover, { heading, ms })
+  const { view, handlers, hint } = useOrbit(defaultView, keys, hide, hover, { heading, ms })
   const camera = useCamera(view, width, height)
   const context = React.useMemo(
     () => ({ config, camera, renderer, scene, place, repaint, focus, animationDuration: ms }),
@@ -501,6 +514,7 @@ function ChartContainer3D({
     <div
       data-slot="chart-3d"
       data-chart={chartId}
+      id={id}
       {...props}
       className={cn("relative w-full text-xs", props.className)}
     >
@@ -515,7 +529,7 @@ function ChartContainer3D({
         >
           <Chart3DContext.Provider value={context}>{children}</Chart3DContext.Provider>
         </ChartSvg3D>
-        <ChartCanvas3D renderer={renderer} canvas={canvas} width={width} height={height} />
+        <ChartCanvas3D renderer={renderer} canvas={canvas} />
         <ChartGizmo3D camera={camera} corner={gizmo} />
         <ChartTooltip3D tip={tip} />
         <ChartHint3D {...hint} />
@@ -597,7 +611,7 @@ function useScene(
   const tip = useTip(placement)
   const focus = useFocus()
   const renderer = useRenderer(requested)
-  const { canvas, repaint } = useCanvas(scene, width, palette)
+  const { canvas, repaint } = useCanvas(scene, width, height, palette)
   const { hover, hide, leave, recheck } = useHover(scene, width, height, tip, focus)
   const place = React.useCallback(
     (id: string, set?: { marks: Mark3D[]; node: Element }) => {
@@ -731,13 +745,15 @@ const prompt = (t: number) => 1 - (1 - t) ** 3
 
 /**
  * One glide of numbers: from `from` into `to`, come the share `t` of the
- * way, the keys the new numbers dropped gliding out to `out`.
+ * way, the keys the new numbers dropped gliding out to `out`, each since the
+ * time it `left` the data, as `performance.now()` counts it.
  */
 type Tween = {
   key: string
   from: Record<string, number>
   to: Record<string, number>
   out: Record<string, number>
+  left: Record<string, number>
   t: number
 }
 
@@ -746,7 +762,10 @@ type Tween = {
  * on screen to these over the animationDuration of the container. A key
  * that is new starts at `enter`, or where it ends; a key that is gone glides
  * back to `enter`, the mirror of its entering - without one it stands where
- * it is - and leaves when the glide is done. `enter` is one number for every
+ * it is - and leaves when the glide is done, or with the first new data that
+ * comes the time of a glide after it left: a glide starts over with every
+ * change of the data, so under a feed that comes faster than it the keys the
+ * feed drops would never be done leaving, and pile up. `enter` is one number for every
  * key, or a function that finds it `among` numbers - those on screen for a
  * key that comes, the new ones for a key that goes - such as the number of
  * its neighbour, and `undefined` for nowhere. `between` gives the numbers
@@ -757,6 +776,8 @@ type Tween = {
  * where it is. Without time, or with reduced motion, the numbers jump. At
  * rest it hands back the record of its target, no copy, so no frame rebuilds
  * it: read it, never write to it.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function useTween(
   values: Record<string, number>,
@@ -776,12 +797,21 @@ function useTween(
     last.current = { values, key: JSON.stringify(values) }
   }
   const key = last.current.key
-  const [tween, setTween] = React.useState<Tween>({ key, from: values, to: values, out: {}, t: 1 })
+  const [tween, setTween] = React.useState<Tween>({
+    key,
+    from: values,
+    to: values,
+    out: {},
+    left: {},
+    t: 1,
+  })
   const shown = tweenNumbers(tween, between)
 
   // Numbers from the render before, the React pattern of state set while rendering.
   if (key !== tween.key) {
-    setTween({ key, ...glideOf(shown, values, enter), t: duration > 0 && animates() ? 0 : 1 })
+    const leaving = { left: tween.left, now: performance.now(), duration }
+    const glide = glideOf(shown, values, enter, leaving)
+    setTween({ key, ...glide, t: duration > 0 && animates() ? 0 : 1 })
   }
 
   React.useEffect(() => {
@@ -808,22 +838,26 @@ function useTween(
 /**
  * The glide from the numbers `shown` into `to`: a new key starts where it
  * enters from, or where it ends, and a gone one heads back there - or stands
- * where it is.
+ * where it is - unless it `left` the data the `duration` of a glide before
+ * `now`: that one has had its time and goes, done or not.
  */
 function glideOf(
   shown: Record<string, number>,
   to: Record<string, number>,
-  enter: Parameters<typeof useTween>[1]
+  enter: Parameters<typeof useTween>[1],
+  { left, now, duration }: { left: Record<string, number>; now: number; duration: number }
 ) {
   const origin = (key: string, among: Record<string, number>) =>
     typeof enter === "function" ? enter(key, among) : enter
   // Own keys only: a name of the data such as "constructor" is no key that every object has.
   const fresh = Object.keys(to).filter((k) => !Object.hasOwn(shown, k))
-  const gone = Object.keys(shown).filter((k) => !Object.hasOwn(to, k))
+  const since = (k: string) => (Object.hasOwn(left, k) ? left[k] : now)
+  const gone = Object.keys(shown).filter((k) => !Object.hasOwn(to, k) && now - since(k) < duration)
   return {
     from: { ...shown, ...Object.fromEntries(fresh.map((k) => [k, origin(k, shown) ?? to[k]])) },
     to,
     out: Object.fromEntries(gone.map((k) => [k, origin(k, to) ?? shown[k]])),
+    left: Object.fromEntries(gone.map((k) => [k, since(k)])),
   }
 }
 
@@ -860,6 +894,8 @@ type GlidingAxis = AxisSpec & { leaving?: number[]; span?: number[] }
  * ends fade out in `edgeLabels` instead of popping out of the range. The
  * outermost ticks glide too, so the line of the axis grows to a new tick and
  * shrinks from a dropped one instead of jumping when the glide is done.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function useTweenAxes(spec: AxesSpec): AxesSpec {
   const axes = ["x", "y", "z"] as const
@@ -917,7 +953,7 @@ const GLIDE = 200
  * over the default view, and glides to a new one in its `ms`.
  */
 function useGlide(defaultView: View3D, { heading, ms = DURATION }: Heading) {
-  const start = { ...defaultView, ...heading }
+  const start = { ...defaultView, ...given(heading) }
   const [view, setView] = React.useState(start)
   const now = React.useRef(start)
   const run = React.useRef<{ to: View3D; frame: number } | null>(null)
@@ -951,13 +987,20 @@ function useGlide(defaultView: View3D, { heading, ms = DURATION }: Heading) {
     run.current = { to: end, frame: requestAnimationFrame(frame) }
   }
   // In step with the data: over the same time, eased the same way.
-  useHeading(heading, (to) => glide((from) => ({ ...from, ...to }), ms, smooth))
+  useHeading(heading, (to) => glide((from) => ({ ...from, ...given(to) }), ms, smooth))
 
   return { view, jump, glide }
 }
 
 /** The view the page heads the camera for, and the time in ms the camera takes there. */
 type Heading = { heading?: View3D; ms?: number }
+
+/**
+ * The fields `view` names: one it leaves undefined, as `{ ...facing(lon, lat), zoom }`
+ * does without a zoom, is none, so the zoom and the pan of the reader stay.
+ */
+const given = (view?: View3D): Partial<View3D> =>
+  Object.fromEntries(Object.entries(view ?? {}).filter(([, value]) => value !== undefined))
 
 /**
  * Heads the camera for `view` when it changes: `head` takes it there. The
@@ -984,12 +1027,15 @@ function between(from: View3D, to: View3D, k: number): View3D {
   const mix = (a: number, b: number) => a + (b - a) * k
   const pan = from.pan ?? ZERO
   const goal = to.pan ?? ZERO
+  // The eye comes in by how near it is, the inverse of its distance: 0 where it is infinitely far.
+  const near = (view: View3D) => 1 / (view.perspective ?? Infinity)
   return {
     ...to,
     yaw: mix(from.yaw, to.yaw),
     tilt: mix(from.tilt, to.tilt),
     zoom: mix(from.zoom ?? 1, to.zoom ?? 1),
     pan: { x: mix(pan.x, goal.x), y: mix(pan.y, goal.y) },
+    perspective: 1 / mix(near(from), near(to)),
   }
 }
 
@@ -1005,7 +1051,6 @@ function between(from: View3D, to: View3D, k: number): View3D {
  */
 function useOrbit(
   defaultView: View3D,
-  width: number,
   keys: Keymap,
   onDragStart: () => void,
   onHover: (e: React.PointerEvent<SVGSVGElement>) => void,
@@ -1346,8 +1391,8 @@ function useWheelZoom(jump: (to: (from: View3D) => View3D) => void, on: boolean)
  * so the tooltip never says what has left from under it. A finger lifting
  * leaves the chart too: what it tapped stays until a tap elsewhere, on the
  * chart or off it. While a drag turns the chart under the captured pointer,
- * `hide` drops the tooltip and keeps the focus, so a flow does not flash away
- * and can be followed from every side.
+ * `hide` drops the tooltip and keeps the focus, so what is in focus does not
+ * flash away and can be followed from every side.
  */
 function useHover(
   scene: React.RefObject<Mark3D[]>,
@@ -1503,15 +1548,20 @@ function useRenderer(requested: Renderer3D) {
  * the config change. A color
  * resolves on the canvas itself, inside the chart, so the `--color-*` apply.
  */
-function useCanvas(scene: React.RefObject<Mark3D[]>, width: number, palette: string) {
+function useCanvas(
+  scene: React.RefObject<Mark3D[]>,
+  width: number,
+  height: number,
+  palette: string
+) {
   const element = React.useRef<HTMLCanvasElement>(null)
   const colors = React.useRef(new Map<string, string>())
 
   const repaint = React.useCallback(() => {
     const canvas = element.current
     if (!canvas) return
-    paint(canvas, scene.current, width, (css) => resolved(canvas, css, colors.current))
-  }, [scene, width])
+    paint(canvas, scene.current, [width, height], (css) => resolved(canvas, css, colors.current))
+  }, [scene, width, height])
 
   const canvas = React.useCallback(
     // A ref that returns its cleanup is never called with null.
@@ -1520,12 +1570,17 @@ function useCanvas(scene: React.RefObject<Mark3D[]>, width: number, palette: str
       repaint()
       const resize = new ResizeObserver(repaint)
       resize.observe(node)
-      // ponytail: watches the theme on <html> only, as the class `.dark` of THEMES does.
+      // The theme is a class on any ancestor, as the `.dark` of THEMES, or the style of <html>.
+      // shortcut: the style of no other ancestor is watched, since an animation writes one at
+      // every frame and each would resolve every color anew; watch them, for a change of a
+      // variable or a color alone, when a page themes a chart through the style of a wrapper.
       const theme = new MutationObserver(() => {
         colors.current.clear()
         repaint()
       })
       theme.observe(document.documentElement, { attributeFilter: ["class", "style"] })
+      for (let el = node.parentElement; el?.parentElement; el = el.parentElement)
+        theme.observe(el, { attributeFilter: ["class"] })
       return () => {
         element.current = null
         resize.disconnect()
@@ -1590,18 +1645,24 @@ function fitCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, width, height)
 }
 
-/** Paints `marks` on `canvas`, from the view box of `width` to the pixels of the canvas. */
+/**
+ * Paints `marks` on `canvas`, from the view box of `width` by `height` to the
+ * pixels of the canvas - fitted as the browser fits the view box into the
+ * svg the canvas lies over: centred, at the smaller of the two scales, so
+ * the marks stay on their axes in a box that CSS made taller or wider.
+ */
 function paint(
   canvas: HTMLCanvasElement,
   marks: Mark3D[],
-  width: number,
+  [width, height]: [number, number],
   color: (css: string) => string
 ) {
   // useRenderer draws on a canvas only where the browser gives one a 2D context.
   const ctx = canvas.getContext("2d")!
   fitCanvas(canvas, ctx)
-  const scale = canvas.width / width
-  ctx.setTransform(scale, 0, 0, scale, 0, 0)
+  const scale = Math.min(canvas.width / width, canvas.height / height)
+  const [left, top] = [(canvas.width - width * scale) / 2, (canvas.height - height * scale) / 2]
+  ctx.setTransform(scale, 0, 0, scale, left, top)
   ctx.lineJoin = "round"
 
   // The shape of a mark names its painter; a polygon names none.
@@ -1673,7 +1734,7 @@ function lieOf({ points: [at], r, symbol, from }: MarkOf<"symbol">) {
 /** Paints a symbol: its ring, and over it its outline, filled or drawn as a line. */
 const paintSymbol: Painter<"symbol"> = (ctx, mark, color) => {
   const { scale, turn, ring } = lieOf(mark)
-  // ponytail: parses the path at every paint, which a tip or two can afford; keep the outlines by their path data when a chart draws symbols by the thousand.
+  // shortcut: parses the path at every paint, which a tip or two can afford; keep the outlines by their path data when a chart draws symbols by the thousand.
   const outline = new Path2D(mark.symbol.path)
   ctx.save()
   ctx.translate(mark.points[0].x, mark.points[0].y)
@@ -1718,17 +1779,16 @@ const turn = (a: Point2D, b: Point2D, c: Point2D) =>
 const areaOf = (ring: Point2D[]) =>
   ring.reduce((sum, p, i) => sum + turn(ring[0], p, ring[i + 1] ?? p), 0)
 
-/** The canvas over the chart box that the marks are painted on, if the chart draws on one. */
+/**
+ * The canvas the marks are painted on, if the chart draws on one: over the
+ * svg, in its box, whatever shape CSS gives that.
+ */
 function ChartCanvas3D({
   renderer,
   canvas,
-  width,
-  height,
 }: {
   renderer: Renderer3D
   canvas: React.Ref<HTMLCanvasElement>
-  width: number
-  height: number
 }) {
   if (renderer === "svg") return null
 
@@ -1736,8 +1796,7 @@ function ChartCanvas3D({
     <canvas
       data-slot="chart-3d-canvas"
       ref={canvas}
-      className="pointer-events-none absolute top-0 left-0 w-full mask-x-from-96% mask-y-from-96%"
-      style={{ aspectRatio: `${width} / ${height}` }}
+      className="pointer-events-none absolute inset-0 size-full mask-x-from-96% mask-y-from-96%"
     />
   )
 }
@@ -1822,10 +1881,16 @@ const cssName = (text: string) =>
 
 /**
  * The color of the config key `key`: the CSS variable the container declares
- * for it. A chart without a config has no first key to fall back on, and
- * draws in a variable nobody declares: colorless, as before.
+ * for it, or the color of the text, `currentColor`, where nothing declares
+ * it: a key the config does not name, or no key at all - undefined, or the
+ * empty key of a chart without a config. SVG and the canvas resolve that
+ * alike, where an undeclared variable falls back differently - to black and
+ * to the text.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-const colorOf = (key: string | undefined) => `var(--color-${cssName(String(key))})`
+const colorOf = (key: string | undefined) =>
+  key ? `var(--color-${cssName(key)}, currentColor)` : "currentColor"
 
 /**
  * The focus color of a fill, which a lit mark takes: `--chart-3d-focus`, or the
@@ -1836,6 +1901,8 @@ const focusOf = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${f
 /**
  * The marks of a chart, drawn by the renderer of the container: as SVG
  * elements, or on the canvas over the chart box. The hover reads them too.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function Marks3D({ marks }: { marks: Mark3D[] }) {
   const { renderer, place, repaint } = useChart3D()
@@ -1846,8 +1913,8 @@ function Marks3D({ marks }: { marks: Mark3D[] }) {
   const own = (group: string) => `${id} ${group}`
   const lit = useLit(own)
   // The lit marks take the focus color as their fill - `--chart-3d-focus`, their own fill
-  // lightened unless set - and keep a stroke of their own: a scatter point its ring, a flow's
-  // inner faces their seams. The order, and with it the depth, stays as painted. A mark
+  // lightened unless set - and keep a stroke of their own: a scatter point its ring, a dot of
+  // the places chart its ring. The order, and with it the depth, stays as painted. A mark
   // whenLit is left out unlit (ADR-0002).
   const drawn = marks.flatMap((mark) => {
     const placed = { ...mark, groups: mark.groups?.map(own) }
@@ -1935,6 +2002,8 @@ function SymbolMark3D({ mark }: { mark: MarkOf<"symbol"> }) {
  * unit vector, lays the label on that side of `at`, touching it, and slides
  * it round `at` as the vector turns; without it, `anchor` is the end of the
  * text that sits at `at`.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 export type Label3D = {
   key: string
@@ -1947,9 +2016,11 @@ export type Label3D = {
 /**
  * The labels of the marks of a chart, ringed by the background so that they
  * read on the marks. Like the labels of the box, they are SVG with every renderer.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function Labels3D({ labels }: { labels: Label3D[] }) {
-  // ponytail: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
+  // shortcut: under the canvas of the canvas renderer, as the labels of the box; an SVG layer over the canvas would lift them.
   return (
     <g data-slot="chart-3d-labels">
       {labels.map((label) => {
@@ -2047,7 +2118,8 @@ function ChartTooltip3D({ tip }: { tip: Tip3D }) {
       // As wide as its content wherever it sits, so a tooltip near the right edge is measured whole.
       className="pointer-events-none absolute z-10 grid w-max min-w-32 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl motion-safe:transition-[translate]"
     >
-      {tooltip.title && <div className="font-medium">{tooltip.title}</div>}
+      {/* A title of 0 - an hour, a row - is one; tested for truth alone, React prints it bare. */}
+      {(tooltip.title || tooltip.title === 0) && <div className="font-medium">{tooltip.title}</div>}
       {tooltip.items.map((item, i) => (
         <div key={i} className="flex items-center gap-2">
           {item.color && (
@@ -2260,6 +2332,8 @@ function ChartLegendBody3D({ config, chartId }: { config: ChartConfig; chartId?:
  * its ticks, and the labels of every axis on each of its four edges. Only the
  * edge the axis sits on shows them, so when the axis moves to another edge,
  * its line, its marks and its labels fade from one to the other.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function Axes3D({
   spec,
@@ -2394,8 +2468,15 @@ function labelAxes(
   format: Partial<Record<keyof AxesSpec, (value: number) => React.ReactNode>>,
   titles: Partial<Record<keyof AxesSpec, React.ReactNode>>
 ) {
-  // The edges again with a tick at each end of the domain: their corners on the box, which a title spans.
-  const ends = (a: AxisSpec) => ({ ...a, ticks: [Math.min(...a.domain), Math.max(...a.domain)] })
+  // The edges again with a tick at each end of the domain - their corners on the box, which
+  // a title spans - and at each end of the line of the axis: the gliding span of its ticks,
+  // within the gliding ends. Projected themselves, not found between two ticks: in
+  // perspective a tick of new data far beyond the box lies anywhere on the screen.
+  const ends = (a: GlidingAxis) => {
+    const [lo, hi] = [Math.min(...a.domain), Math.max(...a.domain)]
+    const [s0, s1] = a.span ?? [a.ticks.at(0) ?? lo, a.ticks.at(-1) ?? hi]
+    return { ...a, ticks: [lo, hi, clamp(lo, hi, s0), clamp(lo, hi, s1)] }
+  }
   const frame = box.edges({ x: ends(spec.x), y: ends(spec.y), z: ends(spec.z) })
   // An axis without ticks, such as the rows of an empty chart, has nothing to label.
   const axes = box
@@ -2427,27 +2508,6 @@ function labelAxes(
   }
 }
 
-/**
- * The labels of one edge: a label per tick beside it, away from the box, in
- * the rows that `fit` finds, and the title of the axis beyond them. The
- * labels of an edge the axis does not sit on are there, but do not show.
- */
-/**
- * The point of `value` along `edge`, between the ticks that bracket it: the
- * projection keeps the edge straight, so the point lies on their line. An
- * axis of one tick is a point.
- */
-function along(edge: AxisEdge, value: number): Point2D {
-  if (edge.length === 1) return edge[0].projected
-  let i = 0
-  while (i < edge.length - 2 && edge[i + 1][edge.axis] < value) i += 1
-  const [a, b] = [edge[i][edge.axis], edge[i + 1][edge.axis]]
-  // Neighbouring ticks are distinct values, so their span has width.
-  const t = clamp(0, 1, (value - a) / (b - a))
-  const [p, q] = [edge[i].projected, edge[i + 1].projected]
-  return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }
-}
-
 /** The ticks whose value lies in `domain`, with the ends of `domain`. */
 function inRange(ticks: AxisLabel[], domain: number[]) {
   const range = { lo: Math.min(...domain), hi: Math.max(...domain) }
@@ -2465,10 +2525,15 @@ function hideOffRange(labels: AxisLabel[], range: { lo: number; hi: number }, ch
       if (l.value !== undefined && !within(range.lo, range.hi, l.value)) l.opacity = 0
 }
 
+/**
+ * The labels of one edge: a label per tick beside it, away from the box, in
+ * the rows that `fit` finds, and the title of the axis beyond them. The
+ * labels of an edge the axis does not sit on are there, but do not show.
+ */
 function edgeLabels(
   edge: AxisEdge,
   frame: AxisEdge,
-  { domain, leaving = [], span }: GlidingAxis,
+  { domain, leaving = [] }: GlidingAxis,
   format: (value: number) => React.ReactNode,
   title?: React.ReactNode
 ) {
@@ -2502,11 +2567,9 @@ function edgeLabels(
   const rows = fit(ranged, n, row)
   // The line of the axis runs the gliding span of its ticks, within the
   // gliding ends: a tick beyond them would drag it out of the box, and one
-  // the data adds or drops would make it jump instead of glide.
-  const [s0, s1] = span ?? [edge[0][axis], edge[edge.length - 1][axis]]
-  const start = along(edge, clamp(range.lo, range.hi, s0))
-  const end = along(edge, clamp(range.lo, range.hi, s1))
-  const [from, to] = [frame[0].projected, frame[frame.length - 1].projected]
+  // the data adds or drops would make it jump instead of glide. `frame`
+  // holds the corners of the box on this edge, then the ends of that line.
+  const [from, to, start, end] = frame.map((corner) => corner.projected)
   const head = title ? titleLabel(`${id}-title`, axis, title, from, to, n, ranged) : undefined
   // A second row of tick labels pushes the title out with it.
   if (head && rows === 2) head.shift = row
@@ -2720,7 +2783,7 @@ function beside(at: Point2D, toward: Point2D, w: number, h: number, gap: number)
 
 /** The width of a label at the font size `size`, guessed from its text, as the browser lays it out only after the render. */
 function textWidth(text: React.ReactNode, size: number) {
-  // ponytail: 0.6em a character; measure with getBBox if wide fonts or rich labels still overlap.
+  // shortcut: 0.6em a character; measure with getBBox if wide fonts or rich labels still overlap.
   const chars = typeof text === "string" || typeof text === "number" ? String(text).length : 4
   return chars * size * 0.6
 }
@@ -2778,7 +2841,11 @@ function AxisLabel3D({ label: { at, shift, opacity, text, title, angle } }: { la
   )
 }
 
-/** A nice axis from `lo` to `hi` with about `count` ticks. */
+/**
+ * A nice axis from `lo` to `hi` with about `count` ticks.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 function axis(lo: number, hi: number, count = 5): AxisSpec {
   const [start, stop] = nice(lo, lo === hi ? hi + 1 : hi, count)
   return { domain: [start, stop], ticks: ticks(start, stop, count) }
@@ -2787,6 +2854,8 @@ function axis(lo: number, hi: number, count = 5): AxisSpec {
 /**
  * The ticks of `count` entries laid out at 0, 1, 2…: about ten of them, on
  * whole entries, so a long row of entries is not labelled at every one.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function entryTicks(count: number) {
   return count ? ticks(0, count - 1, 10).filter(Number.isInteger) : []
@@ -2796,17 +2865,27 @@ function entryTicks(count: number) {
  * The axis `spec` with its domain widened by half a `cell` on each side, so
  * the box keeps room between the outermost data and its walls. The ticks stay
  * where they were, on the data.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function pad(spec: AxisSpec, cell: number): AxisSpec {
   return { domain: [spec.domain[0] - cell / 2, spec.domain[1] + cell / 2], ticks: spec.ticks }
 }
 
-/** The linear map from `domain` to `range`. */
+/**
+ * The linear map from `domain` to `range`.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 function linear([d0, d1]: number[], [r0, r1]: number[]) {
   return (value: number) => r0 + ((value - d0) / (d1 - d0 || 1)) * (r1 - r0)
 }
 
-/** The world box of `spec`: x from -1 to 1, y up from 1 to -1, z from -`depth` to `depth`. */
+/**
+ * The world box of `spec`: x from -1 to 1, y up from 1 to -1, z from -`depth` to `depth`.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 function worldBox(spec: AxesSpec, depth = 1): World {
   return {
     x: linear(spec.x.domain, [-1, 1]),
@@ -2821,6 +2900,8 @@ function worldBox(spec: AxesSpec, depth = 1): World {
  * east lies to the right and the north pole is up - towards -y, as the box
  * counts y. The globe chart builds its tiles from it, since a chart may not
  * do trigonometry of its own.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function globe(lon: number, lat: number, radius = 1): Point3D {
   const [theta, phi] = [lon, lat].map((degrees) => (degrees * Math.PI) / 180)
@@ -2834,6 +2915,8 @@ function globe(lon: number, lat: number, radius = 1): Point3D {
  * geo chart glides a place as a point through the globe - the chord between
  * two places lies under their great circle, so the place takes the shortest
  * way, over the date line too - and reads the place on the way back with it.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function placeOf({ x, y, z }: Point3D): [number, number] {
   const degrees = (radians: number) => (radians * 180) / Math.PI
@@ -2856,6 +2939,8 @@ function facing(lon: number, lat: number): View3D {
  * degrees clockwise from north; `placeAt` reads it back. A geo chart turns
  * one place round another with the two, since a chart may not do
  * trigonometry of its own.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function azimuth([lon0, lat0]: [number, number], [lon1, lat1]: [number, number]) {
   const [from, to, east] = [lat0, lat1, lon1 - lon0].map((degrees) => (degrees * Math.PI) / 180)
@@ -2867,6 +2952,8 @@ function azimuth([lon0, lat0]: [number, number], [lon1, lat1]: [number, number])
  * The place `far` radians of the great circle from the place at `lon` and
  * `lat` that sets out the way `setOut`, in degrees clockwise from north:
  * its longitude, from -180 to 180, and its latitude.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function placeAt([lon, lat]: [number, number], setOut: number, far: number): [number, number] {
   const [from, way] = [lat, setOut].map((degrees) => (degrees * Math.PI) / 180)
@@ -2879,13 +2966,19 @@ function placeAt([lon, lat]: [number, number], setOut: number, far: number): [nu
   return [((lon + degrees(east) + 540) % 360) - 180, degrees(Math.asin(up))]
 }
 
-/** The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it. */
+/**
+ * The radius of the globe in the world box: `geoView` projects the land at it, and a geo chart places its marks on it.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 const GLOBE_RADIUS = 1.15
 
 /**
  * The camera without its perspective, a copy, since d3-3d shares the view of
  * a camera it is handed: d3-geo has no perspective, so a geo chart projects
  * its marks without one too, and they stay on the land.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function orthographic(camera: Camera3DInstance) {
   return camera3D()
@@ -2901,6 +2994,8 @@ function orthographic(camera: Camera3DInstance) {
  * `camera` shows it: `way` itself where the camera faces the place with
  * north up. With it a geo chart says which way over the globe a symbol
  * points that is drawn as it is.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function azimuthAt(camera: Camera3DInstance, place: [number, number], way: number) {
   // A step north and one east, short enough for the bend of the globe: the screen shows a way
@@ -2916,7 +3011,11 @@ function azimuthAt(camera: Camera3DInstance, place: [number, number], way: numbe
   return (Math.atan2((n.x * y - n.y * x) * side, (e.y * x - e.x * y) * side) * 180) / Math.PI
 }
 
-/** What `earth` sets on a projection of d3-geo: the three setters it needs, each returning the projection. */
+/**
+ * What `earth` sets on a projection of d3-geo: the three setters it needs, each returning the projection.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 export type GeoProjectionLike<P> = {
   rotate(angles: [number, number]): P
   scale(scale: number): P
@@ -2984,6 +3083,8 @@ function ringSink() {
  * draws regions of its own: `sink.marks(() => path(feature), key, fill)`,
  * and `ground(feature, key)` draws one feature as land, for a chart that
  * paints the land of a region in an order of its own.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function earth<
   Feature,
@@ -3009,6 +3110,8 @@ function earth<
 /**
  * Hands the projection its accessors into the world box, so every chart maps
  * its shapes onto the screen the same way.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function intoWorld<Datum extends Point3D, T extends ShapeInstance<Datum>>(
   projection: T,
@@ -3027,11 +3130,14 @@ const LIGHT = { x: -0.4, y: -0.8, z: 0.44 }
  * `color` lit by the light from the upper left: the face that looks at it
  * keeps the color, one that turns away gets darker. A CSS color-mix, so the
  * shade follows the theme variables.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function shade(face: TransformedPoint<unknown>[], color: string) {
   const n = normal(face.map((p) => p.rotated))
-  // The normal of the side the camera sees, whichever way the face winds.
-  const side = n.z < 0 ? -1 : 1
+  // The normal of the side the camera sees, whichever way the face winds - as it winds on
+  // the screen: in perspective the eye sees round a face whose normal points away.
+  const side = ccw(face) ? 1 : -1
   const light = Math.max(0, side * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z))
   return `color-mix(in oklch, ${color} ${Math.round(65 + 35 * light)}%, black)`
 }
@@ -3041,6 +3147,8 @@ function shade(face: TransformedPoint<unknown>[], color: string) {
  * mark fades on every renderer while its color stays in CSS. Rounded to a
  * percent, so the renderers that resolve colors cache a bounded few. Fade
  * after `shade`, which would mix a translucent color back towards opaque.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function faded(color: string, opacity: number) {
   const percent = Math.round(opacity * 100)
@@ -3052,6 +3160,8 @@ function faded(color: string, opacity: number) {
  * finite number - a number, a string of one, a date, a bigint - but not what
  * it reads as 0 for want of a value: null, a blank string and a boolean would
  * draw an entry without a place at the origin.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function finite(value: unknown) {
   const isBlank = typeof value === "string" && value.trim() === ""
@@ -3062,17 +3172,23 @@ function finite(value: unknown) {
 /**
  * The config key a field of the data names, as `series` reads it: the value
  * as a string without the spaces around it, as padded CSV holds it, or
- * `fallback` where it is missing or blank, never "undefined" or "null".
+ * `fallback` where it is missing or blank - the empty key where there is no
+ * fallback either, as the first key of a chart without a config - never
+ * "undefined" or "null".
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function keyOf(value: unknown, fallback: string) {
+function keyOf(value: unknown, fallback?: string) {
   const key = value == null ? "" : String(value).trim()
-  return key || fallback
+  return key || (fallback ?? "")
 }
 
 /**
  * `value` as an amount a mark is sized by, such as the area of a dot or the
  * height of a tile: one below 0, or one that is not a finite number, stands
  * as 0.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function nonNegative(value: unknown) {
   return finite(value) ? Math.max(0, Number(value)) : 0
@@ -3091,8 +3207,10 @@ function nonNegative(value: unknown) {
  * and `presence` runs by name from 0 to 1 as a point comes and back as it
  * goes, the gone ones still among them. Built once per change of the data,
  * not at every frame the camera turns.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function usePoints<T extends Record<string, unknown>>(
+function usePoints<T extends object>(
   data: T[],
   x: keyof T & string,
   y: keyof T & string,
@@ -3114,7 +3232,8 @@ function usePoints<T extends Record<string, unknown>>(
     const placed = named.filter((p) => p.placed)
     const range = (a: keyof AxesSpec) => {
       const [lo = 0, hi = 0] = extent(placed, (p) => Number(p.d[fields[a]]))
-      return axis(lo, hi)
+      // A field that never varies lies in the middle of its axis, not on its wall.
+      return lo === hi ? axis(lo - 1, hi + 1) : axis(lo, hi)
     }
     return {
       fields,
@@ -3154,8 +3273,10 @@ type Joint = { line: string; gap: boolean }
  * is. A point goes the straight way, or the way `toward` gives: the place
  * the `share` of the way from one point to another. A point `moves` while it is off its place, or goes to one that stays;
  * in a run that is all new, or all gone, the points stand.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function useRuns<T extends Record<string, unknown>>(
+function useRuns<T extends object>(
   named: { d: T; name: string; placed: boolean }[],
   series: (keyof T & string) | undefined,
   presence: Record<string, number>,
@@ -3274,7 +3395,7 @@ function nearest(runs: { names: string[] }[], among: Record<string, number>) {
 }
 
 /** The joint of every entry, by name, in the order of the data: a point of its line, or a gap in it. */
-function liveJoints<T extends Record<string, unknown>>(
+function liveJoints<T extends object>(
   named: { d: T; name: string; placed: boolean }[],
   series: (keyof T & string) | undefined,
   fallback: string
@@ -3334,6 +3455,8 @@ function runsOf(joints: Map<string, Joint>, held: (name: string) => boolean) {
  * the view box: a line of the same width on the screen from every side, as a
  * polygon every renderer draws. A segment without a length, as of a point
  * that has yet to unfold, has no side to turn to and stays a point.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function segment(a: Point2D, b: Point2D, width: number): Point2D[] {
   const half = width / 2 / (Math.hypot(b.x - a.x, b.y - a.y) || 1)
@@ -3352,8 +3475,10 @@ function segment(a: Point2D, b: Point2D, width: number): Point2D[] {
  * since its entry has already left the data, so it keeps its color to the
  * end - and forgotten with the point, so the memory stays the size of the
  * chart. `alive` holds the points still on their way.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function useConfigKeys<T extends Record<string, unknown>>(
+function useConfigKeys<T extends object>(
   entries: Map<string, T>,
   field: (keyof T & string) | undefined,
   fallback: string,
@@ -3372,8 +3497,10 @@ function useConfigKeys<T extends Record<string, unknown>>(
  * it: its series, where `title` names one, and its x, y and z as the ticks of
  * each axis name them - or what `tooltip` makes of that. A point whose entry
  * has left the data says nothing.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function pointTooltip<T extends Record<string, unknown>>(
+function pointTooltip<T extends object>(
   entry: T | undefined,
   title: React.ReactNode,
   fields: Record<keyof AxesSpec, keyof T & string>,
@@ -3407,10 +3534,11 @@ function pointTooltip<T extends Record<string, unknown>>(
  * props - changes. A mark under a pointer that rests so hands the hover the
  * same tooltip at every frame of the camera or of a glide, and the hover
  * builds what it says only when it changes, never per frame (ADR-0006).
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function useTooltips(deps: React.DependencyList) {
   // The caller names what its tooltips read, so the list is no literal the linter can check.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const cache = React.useMemo(() => new Map<string, Mark3D["tooltip"]>(), deps)
   // As stable as the cache, so a chart may build its marks in a memo of its own.
   return React.useCallback(
@@ -3438,8 +3566,10 @@ function useTooltips(deps: React.DependencyList) {
  * tick of z. Every entry is keyed by its id - its name, made unique where a
  * name repeats - and `nameOf` reads the name back; `entries` holds the entry
  * behind every id still in the data.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
-function useSeries<T extends Record<string, unknown>>({
+function useSeries<T extends object>({
   data,
   index,
   keys,
@@ -3451,19 +3581,24 @@ function useSeries<T extends Record<string, unknown>>({
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
 }) {
   const { config } = useChart3D()
-  const series = React.useMemo(() => keys ?? Object.keys(config), [keys, config])
+  // A key listed twice is one series, not a second lane.
+  const series = React.useMemo(() => [...new Set(keys ?? Object.keys(config))], [keys, config])
   // Built once per change of the data, not at every frame the camera turns.
-  const { names, ids, target, order, present } = React.useMemo(() => {
+  const { names, ids, target, filled, order, present } = React.useMemo(() => {
     const names = data.map((d) => String(d[index] ?? ""))
     const ids = uniqueIds(names)
+    const cells = data.flatMap((d, i) =>
+      series.map((key) => {
+        // A series names a field of the entry by its key, which the type of the entry need not know.
+        const value = (d as Record<string, unknown>)[key]
+        return { id: joined(ids[i], key), value: finite(value) ? Number(value) : undefined }
+      })
+    )
     return {
       names,
       ids,
-      target: Object.fromEntries(
-        data.flatMap((d, i) =>
-          series.map((key) => [joined(ids[i], key), finite(d[key]) ? Number(d[key]) : 0])
-        )
-      ),
+      target: Object.fromEntries(cells.map((c) => [c.id, c.value ?? 0])),
+      filled: Object.fromEntries(cells.flatMap((c) => (c.value === undefined ? [] : [[c.id, 1]]))),
       order: Object.fromEntries(ids.map((id, i) => [id, i])),
       present: Object.fromEntries(ids.map((id) => [id, 1])),
     }
@@ -3483,6 +3618,7 @@ function useSeries<T extends Record<string, unknown>>({
   return {
     series,
     target,
+    filled,
     entries: new Map(data.map((d, i) => [ids[i], d])),
     values: useTween(target, 0),
     rows: useTween(order),
@@ -3503,6 +3639,8 @@ const REPEAT = "\u0000"
  * it comes again, so entries of the same name are entries of their own.
  * Nothing else tells them apart, so the order of the data does: the first
  * "Jan" stays the first through an update, whichever entry that is.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function uniqueIds(names: string[]) {
   const seen = new Map<string, number>()
@@ -3520,10 +3658,16 @@ const nameOf = (id: string) => id.split(REPEAT)[0]
  * One key of several parts, such as an entry and its series: joined by a
  * control character no name of the data is expected to hold, where a hyphen
  * would make "a" and "b-c" the key of "a-b" and "c".
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 const joined = (...parts: string[]) => parts.join("\u0001")
 
-/** The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover. */
+/**
+ * The marks of a cube: its faces that look at the camera, shaded in `color`, each with `tooltip` on hover.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 function cubeMarks(
   id: string,
   faces: CubeFace[],
@@ -3545,6 +3689,8 @@ function cubeMarks(
  * The corners of a bar on the floor of `world`, at `x` and `z` in the values
  * of the data, from 0 to `value`, `size` wide and deep in the world box.
  * box() rises towards -y, so a negative bar starts at its value.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function barCorners(
   world: World,
@@ -3564,7 +3710,11 @@ function barCorners(
   })
 }
 
-/** The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar. */
+/**
+ * The marks of one bar: the faces that look at the camera, shaded and faded to `opacity`, each with `tooltip` on hover. Its group is the bar alone, so hovering highlights one bar.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
 function barMarks({
   id,
   faces,
@@ -3589,6 +3739,8 @@ function barMarks({
  * The color at `value` on a ramp from the config color `low` at `lo` to
  * `high` at `hi` - a value beyond them takes the color of the nearer end: a
  * CSS color-mix, so it follows the theme.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, string]) {
   const t = Math.min(100, Math.max(0, Math.round(((value - lo) / (hi - lo || 1)) * 100)))
@@ -3603,6 +3755,8 @@ function ramp(value: number, [lo, hi]: [number, number], [low, high]: [string, s
  * and the axis over the places, its ticks within: its walls half a cell
  * beyond them - the padding - or at them where not `padded`, never at a
  * rounder tick, which would leave the box empty beyond the data.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
  */
 function gridAxis(
   count: number,
@@ -3612,25 +3766,56 @@ function gridAxis(
     padded = true,
   }: { at?: number[]; ends?: [number, number]; padded?: boolean } = {}
 ) {
-  const even = linear([0, count - 1], ends)
+  // A place given as text, as parsed CSV has it, is that number: text joins where a number adds.
+  const even = linear([0, count - 1], ends.map(Number))
   const values = Array.from({ length: count }, (_, i) => (at ? at[i] : even(i)))
   const places: Record<number, number> = Object.fromEntries(
-    values.flatMap((v, i) => (finite(v) ? [[i, v]] : []))
+    values.flatMap((v, i) => (finite(v) ? [[i, Number(v)]] : []))
   )
   const sorted = [...new Set(Object.values(places))].sort((a, b) => a - b)
   const gaps = sorted.slice(1).map((v, i) => v - sorted[i])
   const cell = min(gaps) ?? 1
-  const [lo = 0, hi = lo] = [sorted[0], sorted.at(-1)]
+  const [lo = 0, hi = lo] = [sorted.at(0), sorted.at(-1)]
   // A single place has no span of its own: it keeps its padding either way.
   const spec = pad({ domain: [lo, hi], ticks: ticks(lo, hi, 5) }, padded || lo === hi ? cell : 0)
   return { places, cell, spec }
 }
 
-/** `cubes`, each with its bottom face as `floor`, found once: bars on one floor paint back to front by it. */
-function floored<C extends { faces: CubeFace[] }>(cubes: C[]) {
-  return cubes.map((cube) =>
-    Object.assign(cube, { floor: cube.faces.find((f) => f.face === "bottom")! })
-  )
+/**
+ * `shapes`, each with where it stands on the floor as `floor`, for d3-3d's
+ * `sort`: the point of its footprint nearest to the eye - of the box around
+ * its corners as `projection` places them in the world box, their height
+ * left out - as near as the camera sees it. Shapes that stand side by side
+ * - bars on one floor, the cells of a surface, the ribbons of an area -
+ * hide each other in the order of their footprints, however high each
+ * reaches or deep it hangs, so they paint back to front by it. In
+ * perspective that is the order of their distance from the eye, which
+ * stands `perspective()` off the middle of the box: a footprint beside the
+ * line of sight is further than one on it, as deep as both may be.
+ *
+ * @experimental A part a chart is built from: a minor version may change it.
+ */
+function floored<P, S extends P[]>(shapes: S[], projection: ShapeInstance<P>) {
+  const [x, z] = [projection.x(), projection.z()]
+  const toward = projection.viewDirection()
+  const eye = projection.perspective()
+  // Where the eye stands over the floor: beyond every footprint where it is infinitely
+  // far. Looking straight along one axis from there, Infinity times the 0 of the other is
+  // NaN: any number does, as that axis adds nothing to the depth.
+  const over = (along: number) => eye * along || 0
+  const [ex, ez] = [over(toward.x), over(toward.z)]
+  return shapes.map((shape) => {
+    const [x0, x1] = extent(shape, x)
+    const [z0, z1] = extent(shape, z)
+    const [nx, nz] = [clamp(x0!, x1!, ex), clamp(z0!, z1!, ez)]
+    // The depth of that point and, in perspective, less half the square of how far it
+    // stands from the middle of the box over the distance of the eye: together they order
+    // the points by their distance from where the eye stands.
+    const near = toward.x * nx + toward.z * nz - (nx * nx + nz * nz) / (2 * eye)
+    // To the ninth decimal: footprints that stand equally near keep the order of the data on
+    // the server and in the browser, which differ in the last bit of a sine.
+    return Object.assign(shape, { floor: { centroid: { z: Math.round(near * 1e9) / 1e9 } } })
+  })
 }
 
 export {

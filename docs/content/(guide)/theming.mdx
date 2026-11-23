@@ -25,7 +25,7 @@ The container writes its `id`, the keys and the colors into a `<style>` element,
 
 ## The chart tokens
 
-The default colors point at `--chart-1` to `--chart-5`, the tokens of your shadcn/ui theme. Change them in your global CSS and every chart follows. The axes and the walls of the chart box use `--muted`, `--muted-foreground` and `--border`, the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`. The ocean and the land of the globe draw in `--chart-3d-ocean` and `--chart-3d-land` where you set them, and otherwise in `--muted` and `--border`; set them on the chart, or any ancestor, for a globe at night:
+A chart draws in the colors its config names: above, `--chart-1`, a token of your shadcn/ui theme. Change it in your global CSS and every chart that names it follows; a key without a color draws in the color of the text. The walls of the chart box and its gridlines use `--muted` and `--border`, the lines of the axes, their tick marks and their titles `--foreground`, the tick labels and the gizmo `--muted-foreground`, the tooltip `--background` and `--foreground`. The ocean and the land of the globe draw in `--chart-3d-ocean` and `--chart-3d-land` where you set them, and otherwise in `--muted` and `--border`; set them on the chart, or any ancestor, for a globe at night:
 
 ```css
 .globe {
@@ -68,19 +68,17 @@ stylesheet: restyle it, move it, hide it, without touching the component.
 | `chart-3d-shortcuts-rule`    | the rule between the keys of a row and its gestures                                 |
 | `kbd-group`, `kbd`           | the key groups and keys inside the panel                                            |
 
-For example, to move the keyboard button and its panel into the lower left corner:
+For example, to move the keyboard button and its panel into the upper left corner - the lower one holds the gizmo:
 
 ```css
 [data-slot="chart-3d-shortcuts"] {
-  top: auto;
   right: auto;
-  bottom: 0.5rem;
   left: 0.5rem;
   align-items: flex-start;
 }
 ```
 
-The keyboard button ships clickable the way a shadcn/ui ghost button does - the pointer cursor and the accent background on hover. To add a little lift on top:
+The keyboard button ships clickable the way a shadcn/ui ghost button does - the pointer cursor, and on hover the full `--background` behind it, where it is see-through at rest, and its icon in `--accent-foreground`. To add a little lift on top:
 
 ```css
 [data-slot="chart-3d-shortcuts-trigger"] {

@@ -13,7 +13,7 @@ description: d3-3d does the math, React draws the SVG.
 
 ## Depth by the order of the elements
 
-SVG has no depth buffer: what comes later in the document is drawn on top. The charts sort their elements back to front with d3-3d's `sort`, and stable React keys make React move the existing DOM nodes rather than rebuild them. Bars sort by their footprint and draw only the faces turned towards the camera, the ones d3-3d marks `ccw`.
+SVG has no depth buffer: what comes later in the document is drawn on top. The charts sort their elements back to front with d3-3d's `sort`, and stable React keys make React move the existing DOM nodes rather than rebuild them. What stands side by side on a floor - bars, the ribbons of an area, the cells of a surface - sorts by its footprint: how high a mark reaches says nothing about what it hides. Bars draw only the faces turned towards the camera, the ones d3-3d marks `ccw`.
 
 ## Rendered on the server
 
@@ -21,4 +21,4 @@ Because the charts are SVG, the first frame is part of the HTML. The pages of th
 
 ## Limits
 
-Sorting by depth is exact for bars on one floor and for points. Geometry that intersects itself, such as a very steep surface, can show artifacts. SVG stays fast up to a few thousand elements; beyond that the canvas renderer is the better fit.
+Sorting is exact for points and for what stands side by side on one floor - bars, the ribbons of an area, the cells of a surface - with `perspective` too. Geometry that intersects itself can show artifacts, such as a surface whose columns or rows do not ascend and so folds back over itself. SVG stays fast up to a few thousand elements; beyond that the canvas renderer is the better fit.

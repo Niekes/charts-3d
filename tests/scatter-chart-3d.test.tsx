@@ -28,8 +28,8 @@ describe("ScatterChart3D", () => {
       </ChartContainer3D>
     )
     expect(html.match(/<circle /g)).toHaveLength(2)
-    expect(html).toContain('fill="var(--color-a)"')
-    expect(html).toContain('fill="var(--color-b)"')
+    expect(html).toContain('fill="var(--color-a, currentColor)"')
+    expect(html).toContain('fill="var(--color-b, currentColor)"')
   })
 
   test("with id, entries of the same name are points of their own", () => {
@@ -57,8 +57,28 @@ describe("ScatterChart3D", () => {
         <ScatterChart3D data={[{ x: 1, y: 1, z: 1 }]} x="x" y="y" z="z" />
       </ChartContainer3D>
     )
-    expect(html).toContain('fill="var(--color-a)"')
+    expect(html).toContain('fill="var(--color-a, currentColor)"')
     expect(html).not.toContain("NaN")
+  })
+
+  test("a single point, and a field that never varies, lie in the middle of the box, not on its wall", () => {
+    const at = (data: Record<string, number>[]) =>
+      [
+        ...renderToString(
+          <ChartContainer3D config={config} defaultView={{ yaw: 0, tilt: 0 }}>
+            <ScatterChart3D data={data} x="x" y="y" z="z" />
+          </ChartContainer3D>
+        ).matchAll(/<circle cx="([^"]+)" cy="([^"]+)"/g),
+      ].map((m) => [Number(m[1]), Number(m[2])])
+    // Level with the front, the middle of the box is the middle of the view box.
+    expect(at([{ x: 5, y: 5, z: 5 }])).toEqual([[320, 200]])
+    // A flat row: y never varies, so both points lie half way up.
+    expect(
+      at([
+        { x: 0, y: 7, z: 0 },
+        { x: 1, y: 7, z: 1 },
+      ]).map(([, y]) => y)
+    ).toEqual([200, 200])
   })
 
   test("an entry with a missing field has no point - null and an empty string are no 0 - and nothing is drawn at NaN", () => {
@@ -300,6 +320,40 @@ describe("ScatterChart3D transitions", () => {
     host.remove()
   })
 
+  test("a new radius while a point named like a property every object has leaves: it fades out all the same", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: { id: string; x: number; y: number; z: number }[], r: number) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <ScatterChart3D data={data} id="id" x="x" y="y" z="z" radius={r} />
+          </ChartContainer3D>
+        )
+      )
+    const p = { id: "p", x: 0, y: 0, z: 0 }
+
+    for (const id of ["constructor", "toString", "__proto__"]) {
+      await render([p, { id, x: 10, y: 10, z: 10 }], 4)
+      await render([p], 4)
+      await act(() => vi.advanceTimersByTime(300))
+      // The presence of the point is done before its radius, which the new one glides on:
+      // it is no key of the presence then, and "constructor" is one of every object.
+      await render([p], 6)
+      await act(() => vi.advanceTimersByTime(400))
+      const paints = [...host.querySelectorAll("circle")].flatMap((c) => [
+        c.getAttribute("fill"),
+        c.getAttribute("stroke"),
+      ])
+      expect(paints.join()).not.toContain("NaN")
+      await act(() => vi.advanceTimersByTime(700))
+    }
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("keyed by id, a new point grows from nothing and a gone one shrinks away", async () => {
     vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
     const host = document.body.appendChild(document.createElement("div"))
@@ -330,9 +384,11 @@ describe("ScatterChart3D transitions", () => {
     const shrinking = gone()!
     expect(Number(shrinking.getAttribute("r"))).toBeGreaterThan(0)
     // It fades as it shrinks, its ring with it; the point that stays is opaque.
-    expect(shrinking.getAttribute("fill")).toMatch(/^color-mix\(in oklab, var\(--color-a\) \d+%/)
+    expect(shrinking.getAttribute("fill")).toMatch(
+      /^color-mix\(in oklab, var\(--color-a, currentColor\) \d+%/
+    )
     expect(shrinking.getAttribute("stroke")).toMatch(/^color-mix\(in oklab, var\(--background\)/)
-    expect(host.querySelectorAll('circle[fill="var(--color-a)"]')).toHaveLength(1)
+    expect(host.querySelectorAll('circle[fill="var(--color-a, currentColor)"]')).toHaveLength(1)
     const at = [shrinking.getAttribute("cx"), shrinking.getAttribute("cy")]
     await act(() => vi.advanceTimersByTime(150))
     expect([gone()!.getAttribute("cx"), gone()!.getAttribute("cy")]).toEqual(at)
@@ -506,7 +562,7 @@ describe("ScatterChart3D focus", () => {
       act(() =>
         svg.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX, clientY }))
       )
-    const point = circles().find((c) => c.getAttribute("fill") === "var(--color-a)")!
+    const point = circles().find((c) => c.getAttribute("fill") === "var(--color-a, currentColor)")!
     const [clientX, clientY] = ["cx", "cy"].map((a) => Number(point.getAttribute(a)))
     const before = fills()
 
@@ -592,19 +648,21 @@ describe("ScatterChart3D series from the data", () => {
       </ChartContainer3D>
     )
     expect(html).toContain("--color-Iris\\20 setosa: red;")
-    expect(html).toContain('fill="var(--color-Iris\\20 setosa)"')
+    expect(html).toContain('fill="var(--color-Iris\\20 setosa, currentColor)"')
   })
 })
 
 describe("ScatterChart3D without a config", () => {
-  test("an empty config has no first key to color the points with: they draw all the same, colorless", () => {
+  test("an empty config has no first key to color the points with: they draw all the same, in the color of the text", () => {
     const html = renderToString(
       <ChartContainer3D config={{}}>
         <ScatterChart3D data={[{ x: 1, y: 1, z: 1 }]} x="x" y="y" z="z" />
       </ChartContainer3D>
     )
     expect(html.match(/<circle /g)).toHaveLength(1)
-    expect(html).toContain('fill="var(--color-undefined)"')
+    // currentColor: SVG and the canvas resolve it alike, where an undeclared variable falls back differently.
+    expect(html).toContain('fill="currentColor"')
+    expect(html).not.toContain("--color-undefined")
   })
 })
 
@@ -627,6 +685,17 @@ describe("a missing series", () => {
     )
     expect(html).not.toContain("--color-undefined")
     expect(html).not.toContain("--color-null")
-    expect(html.match(/fill="var\(--color-a\)"/g)).toHaveLength(2)
+    expect(html.match(/fill="var\(--color-a, currentColor\)"/g)).toHaveLength(2)
+  })
+})
+
+describe("a series the config does not name", () => {
+  test("falls back to the color of the text, which SVG and the canvas resolve alike, never to black on one and the text on the other", () => {
+    const html = renderToString(
+      <ChartContainer3D config={config}>
+        <ScatterChart3D data={[{ x: 0, y: 0, z: 0, s: "Germany" }]} x="x" y="y" z="z" series="s" />
+      </ChartContainer3D>
+    )
+    expect(html).toContain('fill="var(--color-Germany, currentColor)"')
   })
 })

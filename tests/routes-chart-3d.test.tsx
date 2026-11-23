@@ -87,7 +87,7 @@ describe("RoutesChart3D", () => {
     )
     expect(stops).toHaveLength(3)
     expect(quads.length).toBeGreaterThan(10)
-    expect(new Set(fills)).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(fills)).toEqual(new Set(["var(--color-a, currentColor)"]))
     // The equator is a great circle, and from here a level line through the middle of the globe.
     for (const { corners } of quads) expect(middle(corners)[1]).toBeCloseTo(200, 0)
     expect(stops.map((s) => s.at[1])).toEqual([200, 200, 200])
@@ -100,7 +100,7 @@ describe("RoutesChart3D", () => {
     expect(all.slice(-3).map((m) => m.tagName)).toEqual(["circle", "circle", "circle"])
     expect(html.indexOf('fill="var(--chart-3d-ocean')).toBeGreaterThan(-1)
     expect(html.indexOf('fill="var(--chart-3d-ocean')).toBeLessThan(
-      html.indexOf('fill="var(--color-a)"')
+      html.indexOf('fill="var(--color-a, currentColor)"')
     )
     expect(html).not.toContain("NaN")
   })
@@ -130,13 +130,13 @@ describe("RoutesChart3D", () => {
       )
     )
     expect(two.stops.map((s) => s.el.getAttribute("fill")).sort()).toEqual([
-      "var(--color-a)",
-      "var(--color-a)",
-      "var(--color-b)",
-      "var(--color-b)",
+      "var(--color-a, currentColor)",
+      "var(--color-a, currentColor)",
+      "var(--color-b, currentColor)",
+      "var(--color-b, currentColor)",
     ])
     expect(new Set(two.quads.map((q) => q.el.getAttribute("fill")))).toEqual(
-      new Set(["var(--color-a)", "var(--color-b)"])
+      new Set(["var(--color-a, currentColor)", "var(--color-b, currentColor)"])
     )
     const whole = serverMarks(
       chart([
@@ -236,12 +236,16 @@ describe("RoutesChart3D legs of their own color", () => {
     const { quads, stops, fills } = serverMarks(chart(journey, { leg: "by" }))
     const first = quads.filter((q) => middle(q.corners)[0] < 320)
     const second = quads.filter((q) => middle(q.corners)[0] > 320)
-    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-sea)"]))
-    expect(new Set(second.map(fillOf))).toEqual(new Set(["var(--color-air)"]))
+    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-sea, currentColor)"]))
+    expect(new Set(second.map(fillOf))).toEqual(new Set(["var(--color-air, currentColor)"]))
     const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
-    expect(byPlace).toEqual(["var(--color-sea)", "var(--color-sea)", "var(--color-air)"])
+    expect(byPlace).toEqual([
+      "var(--color-sea, currentColor)",
+      "var(--color-sea, currentColor)",
+      "var(--color-air, currentColor)",
+    ])
     // Nothing is left in the color of the route.
-    expect(fills).not.toContain("var(--color-a)")
+    expect(fills).not.toContain("var(--color-a, currentColor)")
   })
 
   test("a stop that names no leg keeps the color of its route, for its leg and for itself", () => {
@@ -253,7 +257,7 @@ describe("RoutesChart3D legs of their own color", () => {
         { leg: "by" }
       )
     )
-    expect(new Set(blank.fills)).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(blank.fills)).toEqual(new Set(["var(--color-a, currentColor)"]))
     const { quads, stops } = serverMarks(
       chart(
         plain.map((stop) => ({ ...stop, s: "b" })),
@@ -261,14 +265,18 @@ describe("RoutesChart3D legs of their own color", () => {
       )
     )
     const first = quads.filter((q) => middle(q.corners)[0] < 320)
-    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-b)"]))
+    expect(new Set(first.map(fillOf))).toEqual(new Set(["var(--color-b, currentColor)"]))
     const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
-    expect(byPlace).toEqual(["var(--color-b)", "var(--color-b)", "var(--color-air)"])
+    expect(byPlace).toEqual([
+      "var(--color-b, currentColor)",
+      "var(--color-b, currentColor)",
+      "var(--color-air, currentColor)",
+    ])
   })
 
   test("a stop no leg touches has the color of its route, whatever it names: one alone, and one alone after a gap", () => {
     const alone = serverMarks(chart([{ lon: 0, lat: 0, by: "sea" }], { leg: "by" }))
-    expect(alone.stops.map(fillOf)).toEqual(["var(--color-a)"])
+    expect(alone.stops.map(fillOf)).toEqual(["var(--color-a, currentColor)"])
     const { stops } = serverMarks(
       chart(
         [
@@ -281,7 +289,11 @@ describe("RoutesChart3D legs of their own color", () => {
       )
     )
     const byPlace = [...stops].sort((a, b) => a.at[0] - b.at[0]).map(fillOf)
-    expect(byPlace).toEqual(["var(--color-sea)", "var(--color-sea)", "var(--color-a)"])
+    expect(byPlace).toEqual([
+      "var(--color-sea, currentColor)",
+      "var(--color-sea, currentColor)",
+      "var(--color-a, currentColor)",
+    ])
   })
 
   test("any value names a leg but a missing or a blank one: a number is read as its key, and spaces are no name", () => {
@@ -292,16 +304,16 @@ describe("RoutesChart3D legs of their own color", () => {
           { leg: "by" }
         )
       ).fills
-    expect(new Set(by(0))).toEqual(new Set(["var(--color-0)"]))
-    expect(new Set(by("  "))).toEqual(new Set(["var(--color-a)"]))
-    expect(new Set(by(null))).toEqual(new Set(["var(--color-a)"]))
-    expect(new Set(by(" sea "))).toEqual(new Set(["var(--color-sea)"]))
+    expect(new Set(by(0))).toEqual(new Set(["var(--color-0, currentColor)"]))
+    expect(new Set(by("  "))).toEqual(new Set(["var(--color-a, currentColor)"]))
+    expect(new Set(by(null))).toEqual(new Set(["var(--color-a, currentColor)"]))
+    expect(new Set(by(" sea "))).toEqual(new Set(["var(--color-sea, currentColor)"]))
   })
 
   test("a series and a leg read a padded value the same way: the spaces are no part of the key", () => {
     const padded = journey.map(({ by: _, ...stop }) => ({ ...stop, s: " b " }))
     expect(new Set(serverMarks(chart(padded, { series: "s" })).fills)).toEqual(
-      new Set(["var(--color-b)"])
+      new Set(["var(--color-b, currentColor)"])
     )
   })
 
@@ -360,7 +372,7 @@ describe("RoutesChart3D hover", () => {
   test("a leg says its two stops, a stop itself, each by its name with its latitude and longitude", async () => {
     const view = await mount(chart(route, { id: "id", series: "s" }))
     const { quads, stops } = marks(view.host)
-    const leg = quads.filter((q) => q.el.getAttribute("fill") === "var(--color-b)")
+    const leg = quads.filter((q) => q.el.getAttribute("fill") === "var(--color-b, currentColor)")
     await view.point(middle(leg[Math.floor(leg.length / 2)].corners))
     expect(view.tip()).toBe("BLisbon39, -9Recife-8, -35")
     const said: string[] = []
@@ -534,14 +546,14 @@ describe("RoutesChart3D transitions", () => {
       now.stops.filter((s) => s.el.getAttribute("fill")!.startsWith("color-mix"))
     ).toHaveLength(1)
     expect(new Set(now.quads.map((q) => q.el.getAttribute("fill")))).toEqual(
-      new Set(["var(--color-a)"])
+      new Set(["var(--color-a, currentColor)"])
     )
 
     await glide(400)
     now = marks(view.host)
     expect(xs(now)[2]).toBeGreaterThan(tip)
     expect(now.quads).toHaveLength(settled * 2)
-    expect(new Set(now.fills)).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(now.fills)).toEqual(new Set(["var(--color-a, currentColor)"]))
     await view.unmount()
   })
 
@@ -634,7 +646,7 @@ describe("RoutesChart3D transitions", () => {
     const [, , head, tip] = xs(after)
     expect(tip - head).toBeLessThan(2)
     expect(new Set(after.quads.map((q) => q.el.getAttribute("fill")))).toEqual(
-      new Set(["var(--color-a)"])
+      new Set(["var(--color-a, currentColor)"])
     )
     await glide(300)
     expect(xs(marks(view.host))[0]).toBeGreaterThan(tail)
@@ -651,9 +663,13 @@ describe("RoutesChart3D transitions", () => {
     const now = marks(view.host)
     const leaving = now.quads.filter((q) => middle(q.corners)[0] > 320)
     expect(leaving.length).toBeGreaterThan(0)
-    expect(leaving.every((q) => q.el.getAttribute("fill")!.includes("var(--color-air)"))).toBe(true)
+    expect(
+      leaving.every((q) => q.el.getAttribute("fill")!.includes("var(--color-air, currentColor)"))
+    ).toBe(true)
     const gone = now.stops.find((s) => s.at[0] > 321)!
-    expect(gone.el.getAttribute("fill")).toMatch(/^color-mix\(in oklab, var\(--color-air\)/)
+    expect(gone.el.getAttribute("fill")).toMatch(
+      /^color-mix\(in oklab, var\(--color-air, currentColor\)/
+    )
     await glide(400)
     expect(marks(view.host).fills.some((f) => f.includes("--color-air"))).toBe(false)
     await view.unmount()
@@ -687,7 +703,7 @@ describe("RoutesChart3D transitions", () => {
       await glide(700)
       const done = marks(view.host)
       expect(xs(done)).toHaveLength(5)
-      expect(new Set(done.fills)).toEqual(new Set(["var(--color-a)"]))
+      expect(new Set(done.fills)).toEqual(new Set(["var(--color-a, currentColor)"]))
       // Four legs of thirty degrees, in pieces of two.
       expect(done.quads.length).toBeGreaterThanOrEqual(4 * 15)
       expect(done.quads.length).toBeLessThanOrEqual(4 * 16)
@@ -834,7 +850,7 @@ describe("RoutesChart3D transitions", () => {
     await glide(700)
     await view.render(chart([...a, ...other], { id: "id", series: "s" }))
     const ofB = (m: ReturnType<typeof marks>) =>
-      m.stops.filter((s) => s.el.getAttribute("fill")!.includes("var(--color-b)"))
+      m.stops.filter((s) => s.el.getAttribute("fill")!.includes("var(--color-b, currentColor)"))
     const start = ofB(marks(view.host)).map((s) => s.at)
     expect(start).toHaveLength(2)
     expect(start[0]).not.toEqual(start[1])
@@ -845,9 +861,9 @@ describe("RoutesChart3D transitions", () => {
     // Its leg has no stop that stands to grow out of: it fades in with its stops.
     const legs = marks(view.host).quads.map((q) => q.el.getAttribute("fill")!)
     expect(
-      legs.filter((f) => f.startsWith("color-mix(in oklab, var(--color-b)")).length
+      legs.filter((f) => f.startsWith("color-mix(in oklab, var(--color-b, currentColor)")).length
     ).toBeGreaterThan(0)
-    expect(legs.filter((f) => f === "var(--color-b)")).toHaveLength(0)
+    expect(legs.filter((f) => f === "var(--color-b, currentColor)")).toHaveLength(0)
     await view.unmount()
   })
 })
@@ -883,7 +899,7 @@ describe("RoutesChart3D tip", () => {
     expect(all[all.length - 1]).toBe(tips[0].el)
     // A box of 24 on a disc 16 across, in the color of the route; the leg runs east, a quarter turn from up.
     expect(tips[0].scale).toBeCloseTo(16 / 24, 3)
-    expect(tips[0].color).toBe("var(--color-a)")
+    expect(tips[0].color).toBe("var(--color-a, currentColor)")
     expect(tips[0].turn).toBeCloseTo(90, 0)
   })
 
@@ -950,11 +966,11 @@ describe("RoutesChart3D tip", () => {
         { series: "s" }
       )
     )
-    expect(tips.map((t) => t.color)).toEqual(["var(--color-a)"])
+    expect(tips.map((t) => t.color)).toEqual(["var(--color-a, currentColor)"])
     expect(stops.map((s) => s.el.getAttribute("fill")).sort()).toEqual([
-      "var(--color-a)",
-      "var(--color-b)",
-      "var(--color-b)",
+      "var(--color-a, currentColor)",
+      "var(--color-b, currentColor)",
+      "var(--color-b, currentColor)",
     ])
   })
 
@@ -966,10 +982,10 @@ describe("RoutesChart3D tip", () => {
       return tips.map((t) => [t.el.lastElementChild!.getAttribute("d"), t.color])
     }
     expect(path([equator[0], { ...equator[1], by: "sea" }])).toEqual([
-      ["M3 20h18", "var(--color-sea)"],
+      ["M3 20h18", "var(--color-sea, currentColor)"],
     ])
     expect(path([{ ...equator[0], by: "sea" }, equator[1]])).toEqual([
-      ["M12 2v20", "var(--color-a)"],
+      ["M12 2v20", "var(--color-a, currentColor)"],
     ])
   })
 
@@ -1035,7 +1051,7 @@ describe("RoutesChart3D tip on its way", () => {
     expect(now.tips).toHaveLength(1)
     expect(now.tips[0].at[0]).toBeCloseTo(320, 1)
     expect(now.tips[0].turn).toBeCloseTo(90, 0)
-    expect(now.tips[0].color).toBe("var(--color-a)")
+    expect(now.tips[0].color).toBe("var(--color-a, currentColor)")
     // The stop it left is a circle again.
     expect(now.stops).toHaveLength(2)
 
@@ -1044,7 +1060,7 @@ describe("RoutesChart3D tip on its way", () => {
     const half = now.tips[0].at[0]
     expect(half).toBeGreaterThan(330)
     expect(now.tips[0].turn).toBeCloseTo(90, 0)
-    expect(now.tips[0].color).toBe("var(--color-a)")
+    expect(now.tips[0].color).toBe("var(--color-a, currentColor)")
 
     await glide(400)
     now = marks(view.host)
@@ -1133,7 +1149,7 @@ describe("RoutesChart3D tip on its way", () => {
       const [tip] = marks(view.host).tips
       seen.push({
         turn: tip.turn,
-        whole: tip.color === "var(--color-a)",
+        whole: tip.color === "var(--color-a, currentColor)",
         x: tip.at[0],
         y: tip.at[1],
       })
@@ -1369,7 +1385,7 @@ describe("RoutesChart3D tip on its way", () => {
     await view.render(tour([{ ...west, lon: -44 }, mid]))
     await glide(330)
     const now = marks(view.host)
-    const seen = now.tips.filter((t) => t.color === "var(--color-a)")
+    const seen = now.tips.filter((t) => t.color === "var(--color-a, currentColor)")
     expect(seen).toHaveLength(1)
     expect(seen[0].at[0]).toBeCloseTo(320, 1)
     expect(seen[0].turn).toBeCloseTo(90, 0)
@@ -1394,7 +1410,7 @@ describe("RoutesChart3D tip on its way", () => {
     now = marks(view.host)
     expect(now.tips).toHaveLength(1)
     expect(now.tips[0].at[0]).toBeCloseTo(320, 1)
-    expect(now.tips[0].color).toBe("var(--color-a)")
+    expect(now.tips[0].color).toBe("var(--color-a, currentColor)")
     expect(now.stops).toHaveLength(1)
     expect(view.host.innerHTML).not.toContain("NaN")
     await view.unmount()
@@ -1512,8 +1528,8 @@ describe("a missing series", () => {
     )
     expect(html).not.toContain("--color-undefined")
     expect(stops.map((s) => s.el.getAttribute("fill"))).toEqual([
-      "var(--color-a)",
-      "var(--color-a)",
+      "var(--color-a, currentColor)",
+      "var(--color-a, currentColor)",
     ])
   })
 })

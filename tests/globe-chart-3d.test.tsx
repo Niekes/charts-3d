@@ -48,7 +48,7 @@ const oceanOf = (html: string) => html.match(new RegExp(`fill="${literal(OCEAN)}
 const literal = (s: string) => s.replace(/[()]/g, "\\$&")
 /** The faces of the tiles that rise, in the color of their series. */
 const faces = (html: string, key = "population") =>
-  html.match(new RegExp(`fill="[^"]*var\\(--color-${key}\\)`, "g")) ?? []
+  html.match(new RegExp(`fill="[^"]*var\\(--color-${key}, currentColor\\)`, "g")) ?? []
 
 describe("GlobeChart3D", () => {
   // The charts are plain SVG, so they render on the server without a DOM.
@@ -92,8 +92,10 @@ describe("GlobeChart3D", () => {
     // The top and one to three sides of the prism, painted after the land.
     expect(faces(html).length).toBeGreaterThanOrEqual(2)
     expect(faces(html).length).toBeLessThanOrEqual(4)
-    expect(html.indexOf("var(--border)")).toBeLessThan(html.indexOf("var(--color-population)"))
-    expect(html).toContain("color-mix(in oklch, var(--color-population)")
+    expect(html.indexOf("var(--border)")).toBeLessThan(
+      html.indexOf("var(--color-population, currentColor)")
+    )
+    expect(html).toContain("color-mix(in oklch, var(--color-population, currentColor)")
     expect(html).not.toContain("NaN")
   })
 
@@ -143,7 +145,7 @@ describe("GlobeChart3D", () => {
           m[1].split("L").map((c) => c.split(",").map(Number))
         )
       // d3-3d projects the four corners of the top; d3-geo the square, resampled, through its corners.
-      const top = points("color-mix\\(in oklch, var\\(--color-population\\)")
+      const top = points("color-mix\\(in oklch, var\\(--color-population, currentColor\\)")
       const ring = points(literal(LAND))
       expect(top).toHaveLength(4)
       expect(ring.length).toBeGreaterThan(4)
@@ -304,7 +306,7 @@ describe("GlobeChart3D hover", () => {
   /** The faces of the tile that rises, as elements, and the center of the one painted last. */
   function prism(svg: SVGSVGElement) {
     const faces = [...svg.querySelectorAll("path")].filter((p) =>
-      p.getAttribute("fill")!.includes("var(--color-population)")
+      p.getAttribute("fill")!.includes("var(--color-population, currentColor)")
     )
     const [x, y] = center(faces.at(-1)!)
     return { faces, x, y }
@@ -512,7 +514,7 @@ describe("GlobeChart3D labels", () => {
       </ChartContainer3D>
     )
     const face = [...chart.svg.querySelectorAll("path")]
-      .filter((p) => p.getAttribute("fill")!.includes("var(--color-wildfire)"))
+      .filter((p) => p.getAttribute("fill")!.includes("var(--color-wildfire, currentColor)"))
       .at(-1)!
     const corners = face.getAttribute("d")!.slice(1, -1).split("L")
     const [x, y] = [0, 1].map(
@@ -1119,5 +1121,41 @@ describe("a missing series", () => {
     expect(html).not.toContain("--color-undefined")
     expect(faces(html).length).toBeGreaterThanOrEqual(1)
     expect(faces(html, "quake")).toHaveLength(1)
+  })
+})
+
+/** The middle of a mark on screen: the mean of the corners of a path, the center of a circle. */
+const middleOf = (mark: Element) => {
+  if (mark.tagName === "circle") return ["cx", "cy"].map((a) => Number(mark.getAttribute(a)))
+  const corners = [...mark.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+  return [1, 2].map((i) => corners.reduce((sum, c) => sum + Number(c[i]), 0) / corners.length)
+}
+
+describe("GlobeChart3D without a config", () => {
+  test("an empty config has no first key to color the tiles with: they draw in the color of the text, and no tooltip says undefined", async () => {
+    const chart = (
+      <ChartContainer3D config={{}}>
+        <GlobeChart3D
+          data={[{ lon: 15, lat: 45, population: 10 }]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          value="population"
+          step={30}
+        />
+      </ChartContainer3D>
+    )
+    expect(renderToString(chart)).not.toContain("undefined")
+    const view = await mount(chart)
+    const tile = [...view.svg.querySelectorAll('[data-slot="chart-3d-marks"] path')].filter((p) =>
+      p.getAttribute("fill")!.includes("currentColor")
+    )
+    expect(tile.length).toBeGreaterThan(0)
+    const [clientX, clientY] = middleOf(tile.at(-1)!)
+    await view.send("pointermove", { clientX, clientY })
+    const tip = view.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent
+    expect(tip).toContain("10")
+    expect(tip).not.toContain("undefined")
+    await view.unmount()
   })
 })

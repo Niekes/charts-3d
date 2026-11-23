@@ -28,7 +28,9 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+// An entry is any object: `object`, not `Record<string, unknown>`, lets one
+// declared as an interface in, which has no index signature.
+export type BarChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per row of bars, with a value per series. */
   data: T[]
   /** The field of the category of an entry along x, such as "month": it names the entry on the axis and in the tooltip, and a bar follows its name through updates. An entry of a name that repeats is, in the order of the data, a bar of its own. */
@@ -61,7 +63,7 @@ export type BarChart3DProps<T extends Record<string, unknown> = Record<string, u
  * along z, the value as the height. The series are the keys of the chart
  * config unless `keys` names them.
  */
-export function BarChart3D<T extends Record<string, unknown>>({
+export function BarChart3D<T extends object>({
   data,
   index,
   keys,
@@ -71,18 +73,33 @@ export function BarChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  // A value that is not a number stands as no bar, one of height 0; a new one
-  // grows from the floor, and a gone one shrinks back into it. The rows glide
-  // to their new cells when the data reorders; a gone row stands in its cell
-  // while its bars shrink and fade away, so a flat bar never pops.
-  const { series, target, entries, values, rows, presence, lanes, lanePresence, labels, nameOf } =
-    useSeries({
-      data,
-      index,
-      keys,
-      format,
-    })
-  const cells = barCells(rows, lanes, values)
+  // A value that is not a number is no bar, as in the bar field: one that goes
+  // shrinks back into the floor and fades as it does, and fades in as it grows
+  // back; a new one grows from the floor. The rows glide to their new cells when
+  // the data reorders; a gone row stands in its cell while its bars shrink and
+  // fade away, so a flat bar never pops.
+  const {
+    series,
+    target,
+    filled,
+    entries,
+    values,
+    rows,
+    presence,
+    lanes,
+    lanePresence,
+    labels,
+    nameOf,
+  } = useSeries({
+    data,
+    index,
+    keys,
+    format,
+  })
+  const fill = useTween(filled, 0)
+  const cells = barCells(rows, lanes, values).filter((cell) =>
+    Object.hasOwn(fill, joined(cell.name, cell.key))
+  )
   const tips = useTooltips([data, index, keys, config, format, tooltip])
 
   const box = barBox(data.length, series.length, Object.values(target))
@@ -112,7 +129,10 @@ export function BarChart3D<T extends Record<string, unknown>>({
                 { config, format, tooltip }
               )
             ),
-            opacity: (presence[bar.name] ?? 0) * (lanePresence[bar.key] ?? 0),
+            opacity:
+              (presence[bar.name] ?? 0) *
+              (lanePresence[bar.key] ?? 0) *
+              (fill[joined(bar.name, bar.key)] ?? 0),
           })
         )}
       />
@@ -127,14 +147,14 @@ function barShapes(
   world: World,
   size: { width: number; depth: number }
 ) {
+  const cubes = cubes3D().camera(camera)
   return floored(
-    cubes3D()
-      .camera(camera)
-      .data(
-        cells.map(({ name, x, j, key, value }) =>
-          Object.assign(barCorners(world, x, j, value, size), { name, key, value })
-        )
+    cubes.data(
+      cells.map(({ name, x, j, key, value }) =>
+        Object.assign(barCorners(world, x, j, value, size), { name, key, value })
       )
+    ),
+    cubes
   ).sort((a, b) => sort(a.floor, b.floor))
 }
 
@@ -192,9 +212,9 @@ function cellSize(spec: AxesSpec, depth: number, barSize: number) {
  * What the bar of `entry` says on hover, made when the pointer lands on it:
  * the entry as the ticks of x name it and its value as the ticks of y name
  * it - or what `tooltip` makes of that. A bar whose entry has left the data
- * says nothing.
+ * says nothing, and so does one whose value has: either is on its way out.
  */
-function barTooltip<T extends Record<string, unknown>>(
+function barTooltip<T extends object>(
   { id, name, key }: { id: string; name: string; key: string },
   entry: T | undefined,
   target: Record<string, number>,
@@ -204,22 +224,19 @@ function barTooltip<T extends Record<string, unknown>>(
     tooltip = (tip) => tip,
   }: Pick<BarChart3DProps<T>, "format" | "tooltip"> & { config: ChartConfig }
 ): Mark3D["tooltip"] {
-  if (!entry) return undefined
+  if (!entry || !finite((entry as Record<string, unknown>)[key])) return undefined
   const value = target[joined(id, key)]
   return () =>
     tooltip(
       {
         title: (format.x ?? String)(name),
-        // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
-        items: finite(entry[key])
-          ? [
-              {
-                label: config[key]?.label ?? key,
-                value: format.y?.(value) ?? value,
-                color: colorOf(key),
-              },
-            ]
-          : [],
+        items: [
+          {
+            label: config[key]?.label ?? key,
+            value: format.y?.(value) ?? value,
+            color: colorOf(key),
+          },
+        ],
       },
       { entry, key }
     )

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { act, type ReactElement } from "react"
+import { act, type ReactElement, type ReactNode } from "react"
 import { createRoot, hydrateRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
-import { box, camera3D, cubes3D, points3D, type AxisSpec } from "d3-3d"
+import { box, camera3D, cubes3D, points3D, sort, type AxisSpec } from "d3-3d"
 
 import {
   Axes3D,
@@ -50,6 +50,7 @@ import {
   worldBox,
   type ChartContainer3DProps,
   type Mark3D,
+  type View3D,
 } from "@/registry/new-york/ui/chart-3d"
 import { AreaChart3D } from "@/registry/new-york/ui/area-chart-3d"
 import { BarChart3D } from "@/registry/new-york/ui/bar-chart-3d"
@@ -147,6 +148,20 @@ describe("ChartContainer3D", () => {
     expect(html).toContain("--color-b: white;")
     expect(html).toContain(".dark [data-chart=chart-t]")
     expect(html).toContain("--color-b: black;")
+  })
+
+  test("takes the props of a div, its id among them, so a link or a label can point at the chart", () => {
+    const html = renderToString(
+      <ChartContainer3D id="sales" config={{}} title="Sales" data-x="1">
+        {null}
+      </ChartContainer3D>
+    )
+    const container = html.match(/<div data-slot="chart-3d"[^>]*>/)![0]
+    expect(container).toContain('id="sales"')
+    expect(container).toContain('title="Sales"')
+    expect(container).toContain('data-x="1"')
+    // The id still scopes the colors of the chart.
+    expect(container).toContain('data-chart="chart-sales"')
   })
 
   test("a theme without a color for one theme leaves the variable out there", () => {
@@ -1561,6 +1576,62 @@ describe("view", () => {
     await view3d.unmount()
   })
 
+  test("a view that names a perspective brings the eye in over the animationDuration, as it turns the camera", async () => {
+    motion(false)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    /** How near the eye is, the inverse of its distance: 0 without perspective. */
+    function Eye() {
+      const { camera } = useChart3D()
+      return <text>{JSON.stringify({ near: 1 / camera.perspective() })}</text>
+    }
+    const at = (heading: View3D) => (
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: 0, tilt: 0 }}
+        view={heading}
+        animationDuration={1000}
+      >
+        <Eye />
+      </ChartContainer3D>
+    )
+    const view3d = await mount(at({ yaw: 0, tilt: 0 }))
+    expect(view(view3d.host).near).toBe(0)
+
+    await view3d.render(at({ yaw: 1, tilt: 0, perspective: 4 }))
+    await frames(250)
+    // A quarter of the time, well under a quarter of the way: the eye has set out, no more.
+    expect(view(view3d.host).near).toBeGreaterThan(0)
+    expect(view(view3d.host).near).toBeLessThan(0.05)
+    await frames(250)
+    expect(view(view3d.host).near).toBeCloseTo(0.125, 2)
+    await frames(600)
+    expect(view(view3d.host).near).toBe(0.25)
+    await view3d.unmount()
+  })
+
+  test("a field a view leaves undefined, as from a condition, is one it does not name: the zoom of the reader stays", async () => {
+    const at = (heading: View3D, start: View3D = { yaw: 0, tilt: 0 }) => (
+      <ChartContainer3D config={{}} defaultView={start} view={heading}>
+        <Heading />
+      </ChartContainer3D>
+    )
+    const view3d = await mount(at({ yaw: 0, tilt: 0 }))
+    await view3d.send(key("+"))
+    const zoomed = view(view3d.host).scale
+    expect(zoomed).toBeGreaterThan(120)
+    // What `{ ...facing(lon, lat), zoom, pan }` builds where neither is set.
+    await view3d.render(at({ yaw: 1, tilt: 0.5, zoom: undefined, pan: undefined }))
+    expect(view(view3d.host)).toMatchObject({ yaw: 1, tilt: 0.5, scale: zoomed })
+    await view3d.unmount()
+
+    // The camera starts at the zoom of the default view, which the view leaves as it is.
+    const started = await mount(
+      at({ yaw: 1, tilt: 0, zoom: undefined }, { yaw: 0, tilt: 0, zoom: 2 })
+    )
+    expect(view(started.host)).toMatchObject({ yaw: 1, scale: 240 })
+    await started.unmount()
+  })
+
   test("the reader turns on from the view, and the same view again does not take the camera back", async () => {
     const view3d = await mount(chart({ yaw: 1, tilt: 0.5 }))
     await view3d.send(key("ArrowRight"))
@@ -1747,6 +1818,32 @@ describe("tooltip", () => {
   // The shift of the tooltip on an axis: before the pointer by its size and the gap, or after it.
   const before = "calc(-100% - 12px)"
   const after = "12px"
+
+  test("a title of 0 is a title: it stands in its own line as any other, and no number stands bare", async () => {
+    const titled = (title: ReactNode) => ({ ...column("all"), tooltip: { title, items: [] } })
+    const lines = async (title: ReactNode) => {
+      const chart = await mount(
+        <ChartContainer3D config={{}}>
+          <Marks3D marks={[titled(title)]} />
+        </ChartContainer3D>
+      )
+      await chart.send(pointer("pointermove", 150, 150))
+      const tip = chart.host.querySelector('[data-slot="chart-3d-tooltip"]')!
+      // What the tooltip holds: its elements, and any text that stands outside of one.
+      const held = [...tip.childNodes].map((node) =>
+        node instanceof Element ? `<${node.textContent}>` : node.textContent
+      )
+      await chart.unmount()
+      return held
+    }
+    expect(await lines("Hour")).toEqual(["<Hour>"])
+    // The hour 0, a row 0: a number React would print bare where a title is only tested for truth.
+    expect(await lines(0)).toEqual(["<0>"])
+    // Nothing to say is no line.
+    expect(await lines(undefined)).toEqual([])
+    expect(await lines("")).toEqual([])
+    expect(await lines(NaN)).toEqual([])
+  })
 
   test("follows the pointer, above and to its right", async () => {
     const chart = await tooltipAt()
@@ -2132,7 +2229,7 @@ describe("renderer", () => {
 
   test("canvas resolves its colors again when the colors of config change, not when the object does", async () => {
     stubCanvas()
-    const filled = [{ ...marks[0], fill: "var(--color-a)" }]
+    const filled = [{ ...marks[0], fill: "var(--color-a, currentColor)" }]
     const chart = await mount(
       <ChartContainer3D config={{ a: { color: "red" } }} renderer="canvas">
         <Marks3D marks={filled} />
@@ -2150,7 +2247,7 @@ describe("renderer", () => {
     )
     expect(resolvedOnCanvas()).toBe(0)
 
-    // A new color behind the same var(--color-a): SVG follows the CSS, so the canvas does too.
+    // A new color behind the same var(--color-a, currentColor): SVG follows the CSS, so the canvas does too.
     await chart.render(
       <ChartContainer3D config={{ a: { color: "blue" } }} renderer="canvas">
         <Marks3D marks={filled} />
@@ -2191,6 +2288,43 @@ describe("renderer", () => {
     host.remove()
   })
 
+  test("canvas fits the view box as the svg does, in a box that CSS made taller or wider: centred, at the smaller scale", async () => {
+    const ctx = stubCanvas()
+    const size = { width: 640, height: 400 }
+    vi.spyOn(HTMLCanvasElement.prototype, "clientWidth", "get").mockImplementation(() => size.width)
+    vi.spyOn(HTMLCanvasElement.prototype, "clientHeight", "get").mockImplementation(
+      () => size.height
+    )
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const chart = (shown: Mark3D[]) => (
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={shown} />
+      </ChartContainer3D>
+    )
+    const k = devicePixelRatio
+    await act(async () => root.render(chart(marks)))
+    // The canvas takes the box of the svg, whatever its shape: it keeps none of its own.
+    expect(host.querySelector("canvas")!.style.aspectRatio).toBe("")
+    expect(ctx.setTransform).toHaveBeenLastCalledWith(k, 0, 0, k, 0, 0)
+
+    // Twice as tall as the view box: the browser centres the picture of the svg 200 pixels
+    // down, where the hover reads it, so the canvas paints it there.
+    size.height = 800
+    await act(async () => root.render(chart(marks.slice(1))))
+    await act(async () => root.render(chart(marks)))
+    expect(ctx.setTransform).toHaveBeenLastCalledWith(k, 0, 0, k, 0, 200 * k)
+
+    // Twice as wide: the picture keeps its scale, centred 320 pixels in.
+    Object.assign(size, { width: 1280, height: 400 })
+    await act(async () => root.render(chart(marks.slice(1))))
+    await act(async () => root.render(chart(marks)))
+    expect(ctx.setTransform).toHaveBeenLastCalledWith(k, 0, 0, k, 320 * k, 0)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("canvas hands a color as the sRGB it paints, resolved once per color", async () => {
     // The canvas paints in sRGB, and parses rgb() far faster than the oklch() of the theme.
     const ctx = stubCanvas()
@@ -2213,6 +2347,34 @@ describe("renderer", () => {
     expect(ctx.strokeStyle).toBe("rgb(10 20 30 / 0.502)")
     expect(styles).toHaveBeenCalledTimes(1)
     styles.mockRestore()
+    await chart.unmount()
+  })
+
+  test("canvas paints again when a class changes on any ancestor, as a theme set on a wrapper does; a style there, which an animation writes every frame, paints nothing", async () => {
+    const ctx = stubCanvas()
+    const chart = await mount(
+      <ChartContainer3D config={{}} renderer="canvas">
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    /** How often the canvas sets its transform, as every paint does, while `change` is made and reported. */
+    const paints = async (change: () => void) => {
+      const before = ctx.setTransform.mock.calls.length
+      await act(async () => {
+        change()
+        // A MutationObserver reports after the change, not during it.
+        await new Promise((resolve) => setTimeout(resolve))
+      })
+      return ctx.setTransform.mock.calls.length - before
+    }
+    // The div around the chart, and the body: `.dark` on either turns the colors of the chart.
+    expect(await paints(() => chart.host.classList.add("dark"))).toBeGreaterThan(0)
+    expect(await paints(() => document.body.classList.add("dark"))).toBeGreaterThan(0)
+    expect(await paints(() => chart.host.classList.remove("dark"))).toBeGreaterThan(0)
+    // A wrapper that moves writes its style at every frame: no color of the chart changed.
+    expect(await paints(() => (chart.host.style.transform = "translateX(4px)"))).toBe(0)
+
+    document.body.classList.remove("dark")
     await chart.unmount()
   })
 
@@ -2593,16 +2755,69 @@ describe("helpers", () => {
     }
   })
 
-  test("floored hands every cube its bottom face as floor", () => {
-    const cubes = cubes3D().data([box({ x: 0, y: 0, z: 0, width: 1, height: 1, depth: 1 })])
-    const [cube] = floored(cubes)
-    expect(cube.floor.face).toBe("bottom")
-    expect(cube.faces).toContain(cube.floor)
+  test("floored hands every shape where it stands on the floor, for sort: the point of its footprint nearest to the camera, whatever its height", () => {
+    const world = worldBox({ x: axis(0, 4), y: axis(-4, 4), z: axis(0, 4) })
+    const size = { width: 0.2, depth: 0.2 }
+    const cubes = cubes3D().rotateY(0.5).rotateX(-0.5)
+    const bars = (x: number, z: number, values: number[], projection = cubes) =>
+      floored(projection.data(values.map((v) => barCorners(world, x, z, v, size))), projection)
+    // One cell, a bar that rises, one that hangs below the floor and a flat one: one footprint.
+    const [up, down, flat] = bars(1, 3, [3, -3, 0])
+    expect(up.floor).toEqual(flat.floor)
+    expect(down.floor).toEqual(flat.floor)
+    // A flat bar without a footprint is one point of the floor, which runs through the middle
+    // of the box here: it stands as deep as d3-3d has its centroid.
+    const [point] = floored(cubes.data([barCorners(world, 1, 3, 0, { width: 0, depth: 0 })]), cubes)
+    expect(point.floor.centroid.z).toBeCloseTo(point.centroid.z, 8)
+    // The bars around that point stand where their nearest corner does: nearer than it.
+    expect(sort(point.floor, flat.floor)).toBe(-1)
+    // The camera looks from the front left: a cell further right or back stands deeper.
+    const [right] = bars(2, 3, [-3])
+    const [back] = bars(1, 2, [3])
+    expect(sort(right.floor, up.floor)).toBe(-1)
+    expect(sort(back.floor, down.floor)).toBe(-1)
+  })
+
+  test("floored orders by the distance from the eye in perspective, and has footprints that stand equally near exactly so", () => {
+    const world = worldBox({ x: axis(0, 4), y: axis(0, 4), z: axis(0, 4) })
+    const size = { width: 0.2, depth: 0.2 }
+    const along = () => cubes3D().rotateX(-0.5)
+    const floors = (projection: ReturnType<typeof along>, cells: number[][]) =>
+      floored(projection.data(cells.map(([x, z]) => barCorners(world, x, z, 1, size))), projection)
+    // Seen along z, the middle of the box and the cell by its left wall stand as deep.
+    const [beside, middle] = floors(along(), [
+      [0, 2],
+      [2, 2],
+    ])
+    expect(sort(beside.floor, middle.floor)).toBe(0)
+    // In perspective the eye stands before the middle: the cell beside it is the further one.
+    const [off, on] = floors(along().perspective(3), [
+      [0, 2],
+      [2, 2],
+    ])
+    expect(sort(off.floor, on.floor)).toBe(-1)
+    // Seen along a diagonal, the cells of the other diagonal stand equally deep, though the
+    // sine and the cosine of the yaw differ in their last bit.
+    expect(Math.sin(Math.PI / 4)).not.toBe(Math.cos(Math.PI / 4))
+    const [a, b, c] = floors(
+      cubes3D()
+        .rotateY(Math.PI / 4)
+        .rotateX(-0.5),
+      [
+        [0, 0],
+        [1, 1],
+        [3, 3],
+      ]
+    )
+    expect(sort(a.floor, b.floor)).toBe(0)
+    expect(sort(b.floor, c.floor)).toBe(0)
   })
 
   test("ramp mixes the high color by the share of the span, clamped at its ends", () => {
     const at = (value: number, span: [number, number]) =>
-      ramp(value, span, ["lo", "hi"]).match(/var\(--color-hi\) (\d+)%, var\(--color-lo\)/)![1]
+      ramp(value, span, ["lo", "hi"]).match(
+        /var\(--color-hi, currentColor\) (\d+)%, var\(--color-lo, currentColor\)/
+      )![1]
     expect(at(15, [10, 20])).toBe("50")
     expect(at(0, [10, 20])).toBe("0")
     expect(at(30, [10, 20])).toBe("100")
@@ -2635,6 +2850,16 @@ describe("helpers", () => {
       spec: { domain: [2.5, 3.5], ticks: [3] },
     })
     expect(gridAxis(0).spec.domain).toEqual([-0.5, 0.5])
+  })
+
+  test("gridAxis reads places and ends given as text, as parsed CSV has them, as the numbers they name", () => {
+    const text = (values: string[]) => values as unknown as number[]
+    expect(gridAxis(3, { at: text(["1", "2", "10"]) })).toEqual(gridAxis(3, { at: [1, 2, 10] }))
+    expect(gridAxis(3, { ends: text(["0", "10"]) as [number, number] })).toEqual(
+      gridAxis(3, { ends: [0, 10] })
+    )
+    // Not joined as text: half a cell beyond 10 is 10.5.
+    expect(gridAxis(3, { at: text(["1", "2", "10"]) }).spec.domain).toEqual([0.5, 10.5])
   })
 
   test("useTooltips builds a tooltip once per key until what it reads changes", async () => {
@@ -2671,7 +2896,7 @@ describe("helpers", () => {
 
   test("useSeries keys every cell by its entry and series, and names the ticks of x and z", () => {
     let read: ReturnType<typeof useSeries> | undefined
-    function Probe(props: Parameters<typeof useSeries>[0]) {
+    function Probe(props: Parameters<typeof useSeries<Record<string, unknown>>>[0]) {
       read = useSeries(props)
       return null
     }
@@ -2719,7 +2944,7 @@ describe("ChartLegend3D", () => {
     expect(html).toContain("Apples")
     expect(html).toContain("data-icon")
     expect(html).toContain("Bananas")
-    expect(html).toContain("background:var(--color-b)")
+    expect(html).toContain("background:var(--color-b, currentColor)")
     // A key without a label shows the key.
     expect(html).toContain(">c<")
   })
@@ -2869,6 +3094,68 @@ describe("Axes3D", () => {
         .flatMap((line) => [Number(line.getAttribute("x1")), Number(line.getAttribute("x2"))])
     )
     expect(lineX).toBeLessThanOrEqual(cornerX + 0.5)
+
+    await chart.unmount()
+  })
+
+  test("an axis without ticks, as the rows of an empty chart, draws no line and leaves the others theirs", () => {
+    const lines = (x: AxisSpec) => {
+      const spec = { x, y: axis(0, 10), z: axis(0, 10) }
+      const html = renderToString(
+        <ChartContainer3D config={{}} gizmo={false}>
+          <Axes3D spec={spec} world={worldBox(spec)} />
+        </ChartContainer3D>
+      )
+      expect(html).not.toContain("NaN")
+      return html.match(/<line [^>]*stroke-width="1.5"/g)
+    }
+    // A line per edge of every axis: four each.
+    expect(lines(axis(0, 10))).toHaveLength(12)
+    expect(lines({ domain: [0, 1], ticks: [] })).toHaveLength(8)
+  })
+
+  test("in perspective the line of an axis stays on its edge while the ticks of new data lie far beyond the box", async () => {
+    // Mid-glide into values a hundred times as high: the ends stand at 30 while the ticks
+    // already run to 1000, far above the box - in perspective out of sight, some behind the
+    // eye. The line ends at the gliding end, a corner of the box, as without perspective.
+    const spec = {
+      x: axis(0, 10),
+      y: { domain: [0, 30], ticks: axis(0, 1000).ticks, span: [0, 30] },
+      z: axis(0, 10),
+    }
+    const chart = await mount(
+      <ChartContainer3D
+        config={{}}
+        defaultView={{ yaw: Math.PI / 6, tilt: Math.PI / 6, perspective: 4 }}
+      >
+        <Axes3D spec={spec} world={worldBox(spec)} />
+      </ChartContainer3D>
+    )
+    const corners = [...chart.svg.querySelectorAll('[data-slot="chart-3d-axes"] path')].flatMap(
+      (wall) =>
+        [...wall.getAttribute("d")!.matchAll(/([\d.-]+),([\d.-]+)/g)].map(([, x, y]) => [
+          Number(x),
+          Number(y),
+        ])
+    )
+    const [xs, ys] = [0, 1].map((i) => corners.map((corner) => corner[i]))
+    const ends = [...chart.svg.querySelectorAll<SVGLineElement>('line[stroke-width="1.5"]')]
+      .filter((line) => Number(line.style.opacity) > 0.5)
+      .flatMap((line) => [
+        [Number(line.getAttribute("x1")), Number(line.getAttribute("y1"))],
+        [Number(line.getAttribute("x2")), Number(line.getAttribute("y2"))],
+      ])
+    expect(ends).toHaveLength(6)
+    for (const [x, y] of ends) {
+      expect(x).toBeGreaterThanOrEqual(Math.min(...xs) - 0.5)
+      expect(x).toBeLessThanOrEqual(Math.max(...xs) + 0.5)
+      expect(y).toBeGreaterThanOrEqual(Math.min(...ys) - 0.5)
+      expect(y).toBeLessThanOrEqual(Math.max(...ys) + 0.5)
+    }
+    // Each line runs from one corner of the box to another.
+    const onCorner = ([x, y]: number[]) =>
+      corners.some(([cx, cy]) => Math.hypot(cx - x, cy - y) < 0.5)
+    expect(ends.filter((end) => !onCorner(end))).toEqual([])
 
     await chart.unmount()
   })
@@ -3406,6 +3693,25 @@ describe("useTween", () => {
     await act(() => frames.splice(0).forEach((frame) => frame(1000)))
     await act(() => frames.splice(0).forEach((frame) => frame(1300)))
     expect(shown(chart.host).a).toBeCloseTo(0.5)
+    await chart.unmount()
+  })
+
+  test("a key that left the data is gone a glide later, though new data starts the glide over before it is done: under a fast feed the gone keys do not pile up", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    const chart = await mountTween(600)
+    await chart.render({ a: 0, b: 1 })
+    // b leaves, and from then on a has a new number every 100 ms: a sixth of the glide.
+    await chart.render({ a: 1 })
+    for (const a of [2, 3, 4, 5, 6]) {
+      await act(() => vi.advanceTimersByTime(100))
+      await chart.render({ a })
+      // On its way out for as long as its glide would have taken.
+      expect(Object.keys(shown(chart.host))).toEqual(["a", "b"])
+    }
+    // The time of a glide after it left, it goes with the next change, done or not.
+    await act(() => vi.advanceTimersByTime(100))
+    await chart.render({ a: 7 })
+    expect(Object.keys(shown(chart.host))).toEqual(["a"])
     await chart.unmount()
   })
 
@@ -4183,15 +4489,15 @@ describe("nonNegative", () => {
 
 describe("colorOf", () => {
   test("names the variable of a config key, a plain key as it is", () => {
-    expect(colorOf("desktop")).toBe("var(--color-desktop)")
-    expect(colorOf("net_sales-2024")).toBe("var(--color-net_sales-2024)")
+    expect(colorOf("desktop")).toBe("var(--color-desktop, currentColor)")
+    expect(colorOf("net_sales-2024")).toBe("var(--color-net_sales-2024, currentColor)")
   })
 
   test("escapes everything but ASCII letters, digits, - and _, so every browser reads the name, and no two keys share one", () => {
-    expect(colorOf("Net sales")).toBe("var(--color-Net\\20 sales)")
-    expect(colorOf("q1.sales")).toBe("var(--color-q1\\2e sales)")
-    expect(colorOf("Umsätze")).toBe("var(--color-Ums\\e4 tze)")
-    expect(colorOf("😀")).toBe("var(--color-\\1f600 )")
+    expect(colorOf("Net sales")).toBe("var(--color-Net\\20 sales, currentColor)")
+    expect(colorOf("q1.sales")).toBe("var(--color-q1\\2e sales, currentColor)")
+    expect(colorOf("Umsätze")).toBe("var(--color-Ums\\e4 tze, currentColor)")
+    expect(colorOf("😀")).toBe("var(--color-\\1f600 , currentColor)")
     expect(colorOf("日本")).not.toBe(colorOf("中国"))
   })
 })

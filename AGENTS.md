@@ -127,15 +127,18 @@ import { box, cubes3D, sort, type AxesSpec } from "d3-3d"
 import { Axes3D, Marks3D, axis, shade, useChart3D, worldBox } from "@/registry/new-york/ui/chart-3d"
 
 // The props, a named type: the docs generate the API table from it, and
-// every prop carries a comment and, if it has one, its @defaultValue.
-export type BarChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+// every prop carries a comment and, if it has one, its @defaultValue. An
+// entry is any object - `object`, not `Record<string, unknown>`, lets one
+// declared as an interface in, which has no index signature - and no `any`:
+// the linters of the projects the registry lands in reject it.
+export type BarChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per row of bars, with a value per series. */
   data: T[]
 }
 
 // The component: reads the camera from the container, projects the data
 // with d3-3d on every render and hands its shapes to the core as marks.
-export function BarChart3D<T extends Record<string, unknown>>({ data }: BarChart3DProps<T>) {
+export function BarChart3D<T extends object>({ data }: BarChart3DProps<T>) {
   const { config, camera } = useChart3D()
   // ...
   return (
@@ -215,7 +218,7 @@ How the charts draw, so that a new one draws the same way:
   hover sees the same function at every frame (the globe keeps one per tile
   in a memo of its own). A mark whose entry has
   left the data says nothing (ADR-0006).
-- **Labels.** Text beside a mark, such as the name of a node, goes to
+- **Labels.** Text beside a mark, such as the name of a point, goes to
   `Labels3D` as `Label3D`s: the point in the view box and the side of it the
   text lies on, `toward`, a unit vector. The core draws it with every
   renderer, ringed by the background. Give a direction that turns with the
@@ -257,7 +260,11 @@ How the charts draw, so that a new one draws the same way:
   at the camera ([ADR-0013](docs/adr/0013-titles-run-along-their-edge.md)).
 - **Depth by order.** Neither SVG nor the canvas has a depth buffer. Sort the
   projected shapes with d3-3d's `sort` and give the marks stable keys, so
-  React moves the DOM nodes.
+  React moves the DOM nodes. Shapes that stand side by side on the floor -
+  bars, the cells of a surface, the ribbons of an area - sort by their
+  footprint, which the core's `floored` hands each as `floor`: how high a
+  shape reaches says nothing about what it hides, and in perspective the
+  distance from the eye orders them, not the depth.
 - **Culling.** The faces of `cubes3D` point outwards: draw the ones that are
   `ccw`, the ones that face the camera.
 - **Shading in CSS.** `shade(face, color)` returns a `color-mix()`. A chart
@@ -271,7 +278,9 @@ How the charts draw, so that a new one draws the same way:
   `useTween`, before it projects - never the projected marks: every frame
   reprojects, and the camera answers at once. A new key starts at `enter`, a
   gone one glides back to it - the mirror of its entering - and leaves when
-  the glide is done. A mark that grows from its enter value fades in as it
+  the glide is done, or, where new data keeps starting the glide over, with
+  the first change the time of a glide after it left: the keys a fast feed
+  drops never pile up. A mark that grows from its enter value fades in as it
   grows and out as it shrinks - its opacity a tween of its own, 1 with the
   enter value 0, handed to `faded` after `shade` - so a flat bar or a dot
   never pops in or out at the end of a glide. A point of a line - the area,

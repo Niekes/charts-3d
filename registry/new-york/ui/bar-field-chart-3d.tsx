@@ -37,7 +37,9 @@ export type BarFieldChart3DProps = {
   /**
    * The data values the first and the last column (x) and row (z) stand for,
    * the others evenly between. The chart keeps half a cell between the bars
-   * and the walls of its box.
+   * and the walls of its box, with `domain`, `x` and `z` too: a bar has a
+   * width, and the room keeps the outer bars inside the box. The surface,
+   * whose points have none, spans named places exactly.
    * @defaultValue the indices of the columns and rows
    */
   domain?: { x?: [number, number]; z?: [number, number] }
@@ -117,11 +119,10 @@ export function BarFieldChart3D({
   // from 0 or shrinking to it must not recolor the others.
   const span = useTween({ lo: field.lo, hi: field.hi })
 
-  const bars = floored(
-    cubes3D<Point3D>()
-      .camera(camera)
-      .data(fieldCorners(values, world, places, size))
-  ).sort((a, b) => sort(a.floor, b.floor))
+  const cubes = cubes3D<Point3D>().camera(camera)
+  const bars = floored(cubes.data(fieldCorners(values, world, places, size)), cubes).sort((a, b) =>
+    sort(a.floor, b.floor)
+  )
   const marks = bars.flatMap((bar) =>
     barMarks({
       id: bar.key,

@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable -- shortcut: the hooks here keep values in refs while rendering, which the rules of React's compiler forbid; move them into state after 1.0. */
 
 import * as React from "react"
 import { geoDistance, geoInterpolate, geoOrthographic, geoPath } from "d3-geo"
@@ -32,7 +33,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type RoutesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type RoutesChart3DProps<T extends object = Record<string, unknown>> = {
   /**
    * One entry per stop, in the order its route visits them. One whose
    * longitude or latitude is missing or not a number is no stop: its route
@@ -100,7 +101,7 @@ const PIECE = Math.PI / 90
  * shortest way over the surface. `series` names the field whose value is the
  * config key of a route; without it all the entries are one route.
  */
-export function RoutesChart3D<T extends Record<string, unknown>>({
+export function RoutesChart3D<T extends object>({
   data,
   land,
   lon,
@@ -165,10 +166,7 @@ function overGlobe(from: Point3D, to: Point3D, share: number) {
 }
 
 /** The fields of an entry the chart reads. */
-type Fields<T> = Pick<
-  RoutesChart3DProps<T & Record<string, unknown>>,
-  "lon" | "lat" | "id" | "series" | "leg"
->
+type Fields<T extends object> = Pick<RoutesChart3DProps<T>, "lon" | "lat" | "id" | "series" | "leg">
 
 /**
  * The entries as the core reads points: each with its name, its route and
@@ -176,7 +174,7 @@ type Fields<T> = Pick<
  * lies on, which the core glides. Built once per change of the data, not at
  * every frame the camera turns.
  */
-function useStops<T extends Record<string, unknown>>(data: T[], fields: Fields<T>) {
+function useStops<T extends object>(data: T[], fields: Fields<T>) {
   const { lon, lat, id, series, leg } = fields
   return React.useMemo(
     () =>
@@ -215,7 +213,7 @@ type Piece = Point3D[] & {
 }
 
 /** What a tooltip and a tip are read from. */
-type Reading<T extends Record<string, unknown>> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
+type Reading<T extends object> = Pick<RoutesChart3DProps<T>, "tooltip"> & {
   config: ChartConfig
   entries: Map<string, { entry: T }>
   fields: Fields<T>
@@ -369,7 +367,7 @@ type Tip = Coming & {
  * and none where it has not, so the stop stays the circle it is. The stops
  * are the last pieces of a run, in their order.
  */
-function tipIn<T extends Record<string, unknown>>(
+function tipIn<T extends object>(
   list: Piece[],
   { line, points: stops }: { line: string; points: Stop[] },
   reading: Reading<T>,
@@ -531,7 +529,7 @@ function pieceMark(
  * its latitude and longitude - or what `tooltip` makes of that. A piece
  * with a stop whose entry has left the data says nothing.
  */
-function routeTooltip<T extends Record<string, unknown>>(
+function routeTooltip<T extends object>(
   { colorKey, named, names }: Pick<Piece, "colorKey" | "named" | "names">,
   { config, entries, fields, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {

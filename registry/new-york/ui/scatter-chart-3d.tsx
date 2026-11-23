@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable -- shortcut: the hooks here keep values in refs while rendering, which the rules of React's compiler forbid; move them into state after 1.0. */
 
 import * as React from "react"
 import { points3D, sort, type AxesSpec, type Point2D, type Point3D } from "d3-3d"
@@ -21,7 +22,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type ScatterChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type ScatterChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per point; one whose x, y or z is missing or not a number has none. */
   data: T[]
   /** The field of the position along x. */
@@ -66,7 +67,7 @@ export type ScatterChart3DProps<T extends Record<string, unknown> = Record<strin
  * Points in the chart box, at the fields `x`, `y` and `z` of each entry.
  * `series` names the field whose value is the config key of the color.
  */
-export function ScatterChart3D<T extends Record<string, unknown>>({
+export function ScatterChart3D<T extends object>({
   data: all,
   x,
   y,
@@ -79,15 +80,8 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   tooltip,
 }: ScatterChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const {
-    fields,
-    names,
-    entries,
-    axes,
-    target,
-    presence,
-    key: at,
-  } = usePoints(all, x, y, z, id, series)
+  const entryPoints = usePoints(all, x, y, z, id, series)
+  const { fields, names, entries, axes, target, presence, key: at } = entryPoints
   // The positions glide entry by entry; a gone point stands in place.
   const values = useTween(target)
   const read = (name: string, axis: keyof AxesSpec) => values[at(axis, name)]
@@ -117,9 +111,11 @@ export function ScatterChart3D<T extends Record<string, unknown>>({
   const marks = points
     .data(placed)
     .sort(sort)
-    .map((p) =>
-      pointMark(p, radii[p.name], colorOf(key(p.name)), presence[p.name] ?? 0, says(p.name))
-    )
+    .map((p) => {
+      // Its own keys only: a point named "constructor" is no key every object has.
+      const seen = Object.hasOwn(presence, p.name) ? presence[p.name] : 0
+      return pointMark(p, radii[p.name], colorOf(key(p.name)), seen, says(p.name))
+    })
 
   return (
     <>

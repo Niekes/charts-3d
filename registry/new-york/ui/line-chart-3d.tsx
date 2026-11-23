@@ -23,7 +23,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type LineChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type LineChart3DProps<T extends object = Record<string, unknown>> = {
   /**
    * One entry per point, in the order its line runs. One whose x, y or z is
    * missing or not a number has no point: its line stops before it and starts
@@ -81,7 +81,7 @@ const WIDTH = 2
  * whose value is the config key of a line; without it all the entries are
  * one line. For entries along x with a value per series, see the area chart.
  */
-export function LineChart3D<T extends Record<string, unknown>>({
+export function LineChart3D<T extends object>({
   data,
   x,
   y,
