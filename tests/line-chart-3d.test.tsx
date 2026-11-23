@@ -506,6 +506,21 @@ describe("LineChart3D transitions", () => {
     // Seven renders of 3,000 points take longer than the default 5 s on a shared CI runner.
   }, 30_000)
 
+  test("an id is its own within its line: lines that share ids keep their points when the data reorders", async () => {
+    const a = [p, q].map((e) => ({ ...e, s: "a" }))
+    const b = [p, q].map((e) => ({ ...e, y: 20, s: "b" }))
+    const at = () =>
+      marks(view.host)
+        .dots.map((d) => d.at.join())
+        .sort()
+    const view = await mount(chart([...a, ...b], { id: "id", series: "s" }))
+    const from = at()
+    await view.render(chart([...b, ...a], { id: "id", series: "s" }))
+    await glide(300)
+    expect(at()).toEqual(from)
+    await view.unmount()
+  })
+
   test("without id a point is named by its place in the data: new values glide, the line stays whole", async () => {
     const view = await mount(chart([p, q, r]))
     const from = marks(view.host).dots.map((d) => d.at.join())
