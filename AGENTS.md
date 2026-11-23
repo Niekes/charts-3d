@@ -337,11 +337,11 @@ every renderer, so text stays sharp and the theme stays in CSS.
   core reads it exhaustively everywhere it draws - `markElement` for SVG,
   the painters of `PAINT` for the canvas, `holds` for the pointer - so a
   shape one renderer misses fails to compile.
-- **No WebGL.** Measured, a webgl renderer drew no faster than the canvas,
-  because projecting the marks on the CPU takes the time, not filling them
-  (the globe's 2,500 tiles ran at about 25 fps on both). A GPU renderer
-  earns its place again only with the projection on the GPU, through
-  `camera.matrix()`, and a measurement that shows it faster.
+- **No WebGL** ([ADR-0014](docs/adr/0014-projection-stays-on-the-cpu.md)).
+  The CPU work of a frame takes the time, not filling the marks.
+- **Faster is measured** in `docs/performance.md`. A change that claims to
+  be faster adds its before and after rows there, measured on the same
+  machine in the same session.
 
 ### Interaction
 
