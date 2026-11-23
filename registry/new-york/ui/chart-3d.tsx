@@ -1267,9 +1267,12 @@ function useTouch(
       if (!svg || !(orbit || zoom)) return
       let last: Pinch | null = null
       const onTouch = (e: TouchEvent) => {
-        // Only fingers that landed on the chart count, and a touch the browser
-        // scrolls with can no longer be cancelled: it stays the browser's.
-        if (e.targetTouches.length !== 2 || !e.cancelable) {
+        // Only fingers that landed on the chart count, on any part of it, and a
+        // touch the browser scrolls with can no longer be cancelled: it stays the browser's.
+        // shortcut: a finger whose face is culled mid-orbit leaves the svg and ends the
+        // pinch; upgrade if phones show it, the touch keeps its detached target.
+        const on = [...e.touches].filter((t) => svg.contains(t.target as Node))
+        if (on.length !== 2 || !e.cancelable) {
           if (last) setOrbiting(false)
           touching.current = false
           last = null
@@ -1277,7 +1280,7 @@ function useTouch(
         }
         e.preventDefault()
         touching.current = true
-        const now = pinchOf(e.targetTouches[0], e.targetTouches[1])
+        const now = pinchOf(on[0], on[1])
         if (last) {
           const step = {
             ...pinchStep(last, now, orbit, zoom),

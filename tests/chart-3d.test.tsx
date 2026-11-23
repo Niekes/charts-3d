@@ -285,22 +285,27 @@ function Camera() {
 const view = (host: HTMLElement) => JSON.parse(host.querySelector("text")!.textContent!)
 
 /**
- * A touch event with a finger on the chart at each of `on` and, if any, more
- * on the screen beside it, since jsdom builds no touch list. A touch the
- * browser has begun to scroll with is not `cancelable`.
+ * A touch event with a finger on the chart at each of `on` - on the svg, or
+ * on the element a third entry names - and, if any, more on the screen beside
+ * it, since jsdom builds no touch list. A touch the browser has begun to
+ * scroll with is not `cancelable`.
  */
 const fingers = (
   type: string,
-  on: [number, number][],
+  on: ([number, number] | [number, number, Element])[],
   {
     elsewhere = [],
     cancelable = true,
   }: { elsewhere?: [number, number][]; cancelable?: boolean } = {}
 ) => {
-  const list = (at: [number, number][]) => at.map(([clientX, clientY]) => ({ clientX, clientY }))
+  const svg = document.querySelector("svg")
+  const list = (at: ([number, number] | [number, number, Element])[], beside: Element | null) =>
+    at.map(([clientX, clientY, target = beside]) => ({ clientX, clientY, target }))
+  const chart = list(on, svg)
   return Object.assign(new Event(type, { bubbles: true, cancelable }), {
-    targetTouches: list(on),
-    touches: list([...on, ...elsewhere]),
+    // As the browser lists them: the fingers on the element of the first.
+    targetTouches: chart.filter((t) => t.target === chart[0]?.target),
+    touches: [...chart, ...list(elsewhere, document.body)],
   })
 }
 const touch = (type: string, ...on: [number, number][]) => fingers(type, on)
@@ -651,6 +656,33 @@ describe("shortcuts", () => {
     await chart.send(touch("touchend", [196, 150]))
     await chart.send(touch("touchmove", [296, 150]))
     expect(read().yaw).toBeCloseTo(Math.PI / 5)
+
+    await chart.unmount()
+  })
+
+  test("two fingers pinch on whatever of the chart they land on: a mark, a wall", async () => {
+    const spec = { x: axis(0, 10), y: axis(0, 10), z: axis(0, 10) }
+    const chart = await mount(
+      <ChartContainer3D config={{}} defaultView={{ yaw: 0, tilt: 0 }}>
+        <Camera />
+        <Axes3D spec={spec} world={worldBox(spec)} />
+        <Marks3D marks={marks} />
+      </ChartContainer3D>
+    )
+    // Each finger on an element of its own, as on a phone: the square, and a
+    // wall of the box, which the canvas leaves to the svg.
+    const square = chart.svg.querySelector('path[d^="M100,100"]')!
+    const wall = chart.svg.querySelector('[data-slot="chart-3d-axes"] path')!
+    const apart = (type: string, a: number, b: number) =>
+      fingers(type, [
+        [a, 200, square],
+        [b, 200, wall],
+      ])
+    await act(() => square.dispatchEvent(apart("touchstart", 170, 270)))
+    const pinch = apart("touchmove", 120, 320)
+    await act(() => wall.dispatchEvent(pinch))
+    expect(pinch.defaultPrevented).toBe(true)
+    expect(view(chart.host).scale).toBe(240)
 
     await chart.unmount()
   })
