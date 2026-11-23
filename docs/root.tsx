@@ -7,6 +7,11 @@ import "@fontsource-variable/geist"
 import "@fontsource-variable/geist-mono"
 import "./app.css"
 
+// The cube of the registry's entry in the shadcn directory.
+export const links: Route.LinksFunction = () => [
+  { rel: "icon", type: "image/svg+xml", href: `${import.meta.env.BASE_URL}favicon.svg` },
+]
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
