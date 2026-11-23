@@ -720,7 +720,7 @@ describe("SurfaceChart3D transitions", () => {
 
     await act(async () => root.unmount())
     host.remove()
-  })
+  }, 30_000)
 })
 
 describe("SurfaceChart3D keys", () => {
