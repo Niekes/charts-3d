@@ -161,7 +161,9 @@ describe("BarFieldChart3D", () => {
             [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
           )
         )
-      const walls = left([...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+      const walls = left([
+        ...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+      ])
       expect(left(view.bars())).toBeGreaterThan(walls)
       await view.unmount()
     }
@@ -178,7 +180,9 @@ describe("BarFieldChart3D", () => {
       paths.flatMap((p) =>
         [...p.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
       )
-    const walls = xs([...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const walls = xs([
+      ...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+    ])
     const bars = xs(view.bars())
     const left = Math.min(...bars) - Math.min(...walls)
     const right = Math.max(...walls) - Math.max(...bars)

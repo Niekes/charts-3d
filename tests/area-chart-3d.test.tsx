@@ -496,9 +496,10 @@ describe("AreaChart3D transitions", () => {
     const side = { yaw: Math.PI / 2, tilt: Math.PI / 6 }
     const view = await mount(chart(data, { keys: ["a"] }, side))
     const depth = () => {
-      const xs = [...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')].flatMap(
-        (el) =>
-          [...el.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
+      const xs = [
+        ...view.host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+      ].flatMap((el) =>
+        [...el.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => Number(m[1]))
       )
       return Math.max(...xs) - Math.min(...xs)
     }
@@ -634,7 +635,7 @@ describe("AreaChart3D transitions", () => {
     await view.render(chart(flat, { keys: ["a"] }, level))
     for (const _ of [1, 2, 3]) {
       await act(() => vi.advanceTimersByTime(150))
-      const walls = xs('[data-slot="chart-3d-axes"] > path')
+      const walls = xs('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]')
       const ribbon = xs('[data-slot="chart-3d-marks"] path')
       expect(Math.min(...ribbon)).toBeGreaterThan(Math.min(...walls))
       expect(Math.max(...ribbon)).toBeLessThan(Math.max(...walls))

@@ -154,7 +154,9 @@ describe("BarChart3D", () => {
         )
       )
     const barFaces = xs([...bars.host.querySelectorAll('path[fill^="color-mix"]')])
-    const walls = xs([...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] > path')])
+    const walls = xs([
+      ...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] > path[stroke-width="0.75"]'),
+    ])
     // Without the padding the bars stand a fifth of a cell from the walls, half
     // a cell with it.
     expect(Math.min(...barFaces) - Math.min(...walls)).toBeGreaterThan(40)
@@ -493,6 +495,35 @@ describe("BarChart3D labels", () => {
     expect(Math.hypot(desktop.x, desktop.y)).toBeGreaterThan(0.5)
     expect(Math.hypot(mobile.x, mobile.y)).toBeLessThan(12)
     expect(desktop.x * mobile.x + desktop.y * mobile.y).toBeLessThan(0)
+    await bars.unmount()
+  })
+
+  test("bend the mark of a slid label to it, and the marks never cross", async () => {
+    const bars = await mount(chart({ yaw: (70 * Math.PI) / 180, tilt: Math.PI / 6 }))
+    const marks = [
+      ...bars.host.querySelectorAll('[data-slot="chart-3d-axes"] path[stroke-width="1"]'),
+    ].map((el) => {
+      const [x0, y0, ...rest] = el
+        .getAttribute("d")!
+        .match(/-?[\d.]+/g)!
+        .map(Number)
+      return { from: { x: x0, y: y0 }, to: { x: rest.at(-2)!, y: rest.at(-1)! } }
+    })
+    const ends = ["Desktop", "Mobile"].map((text) => {
+      const label = drawn(bars.host).find((l) => l.text === text && l.opacity === 1)!
+      const at = { x: label.x - label.dx, y: label.y - label.dy }
+      // The mark of a label starts at its tick, straight in from the label before it slid.
+      const near = (p: { x: number; y: number }) => Math.hypot(p.x - at.x, p.y - at.y)
+      const mark = marks.reduce((a, b) => (near(b.from) < near(a.from) ? b : a))
+      // Without the slide, the mark reaches straight out MARK, 6px.
+      const straight = { x: mark.to.x - label.dx, y: mark.to.y - label.dy }
+      expect(Math.hypot(straight.x - mark.from.x, straight.y - mark.from.y)).toBeCloseTo(6, 1)
+      return mark
+    })
+    // The two labels slid apart, and their marks with them: their ends lie further apart than their ticks.
+    const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.hypot(a.x - b.x, a.y - b.y)
+    expect(dist(ends[0].to, ends[1].to)).toBeGreaterThan(dist(ends[0].from, ends[1].from))
     await bars.unmount()
   })
 
