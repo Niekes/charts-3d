@@ -1312,9 +1312,12 @@ function useTouch(
       if (!svg || !(orbit || zoom)) return
       let last: Pinch | null = null
       const onTouch = (e: TouchEvent) => {
-        // Only fingers that landed on the chart count, and a touch the browser
-        // scrolls with can no longer be cancelled: it stays the browser's.
-        if (e.targetTouches.length !== 2 || !e.cancelable) {
+        // Only fingers that landed on the chart count, on any part of it, and a
+        // touch the browser scrolls with can no longer be cancelled: it stays the browser's.
+        // shortcut: a finger whose face is culled mid-orbit leaves the svg and ends the
+        // pinch; upgrade if phones show it, the touch keeps its detached target.
+        const on = [...e.touches].filter((t) => svg.contains(t.target as Node))
+        if (on.length !== 2 || !e.cancelable) {
           if (last) setOrbiting(false)
           touching.current = false
           last = null
@@ -1322,7 +1325,7 @@ function useTouch(
         }
         e.preventDefault()
         touching.current = true
-        const now = pinchOf(e.targetTouches[0], e.targetTouches[1])
+        const now = pinchOf(on[0], on[1])
         if (last) {
           const step = {
             ...pinchStep(last, now, orbit, zoom),
@@ -2922,9 +2925,10 @@ function placeOf({ x, y, z }: Point3D): [number, number] {
 
 /**
  * The view that looks at the place at `lon` and `lat`, in degrees: the
- * place lies in the middle of the globe. A page hands it to the `view` of
- * the container, so the camera turns to a place, since a chart may not do
- * trigonometry of its own, and neither should a page have to.
+ * place lies in the middle of the globe. A page hands it to the `defaultView`
+ * or the `view` of the container, so the camera starts at or turns to a
+ * place, since a chart may not do trigonometry of its own, and neither
+ * should a page have to.
  */
 function facing(lon: number, lat: number): View3D {
   return { yaw: (-lon * Math.PI) / 180, tilt: (lat * Math.PI) / 180 }
@@ -3193,7 +3197,8 @@ function nonNegative(value: unknown) {
 /**
  * The entries of `data` as points in the chart box, for a chart that places
  * every entry at its fields `x`, `y` and `z`, as the scatter and the line
- * chart do. Every entry is `named` by its `id` field, or by its position in
+ * chart do. Every entry is `named` by its `id` field - within its `series`,
+ * so lines that share ids keep their points - or by its position in
  * the data, so a point keeps its name when an entry before it gains or loses
  * its place; one whose x, y or z is not a finite number is not `placed` and
  * is not among the `names` and the `entries` behind them. The `axes` hold
@@ -3210,11 +3215,15 @@ function usePoints<T extends object>(
   x: keyof T & string,
   y: keyof T & string,
   z: keyof T & string,
-  id?: keyof T & string
+  id?: keyof T & string,
+  series?: keyof T & string
 ) {
   const points = React.useMemo(() => {
     const fields = { x, y, z }
-    const names = id ? uniqueIds(data.map((d) => String(d[id]))) : data.map((_, i) => String(i))
+    const own = (d: T, name: string) => (series ? joined(keyOf(d[series], ""), name) : name)
+    const names = id
+      ? uniqueIds(data.map((d) => own(d, String(d[id]))))
+      : data.map((_, i) => String(i))
     const named = data.map((d, i) => ({
       d,
       name: names[i],
@@ -3237,7 +3246,7 @@ function usePoints<T extends object>(
       present: Object.fromEntries(placed.map((p) => [p.name, 1])),
       axes: { x: range("x"), y: range("y"), z: range("z") },
     }
-  }, [data, x, y, z, id])
+  }, [data, x, y, z, id, series])
   return { ...points, presence: useTween(points.present, 0), key: positionKey }
 }
 

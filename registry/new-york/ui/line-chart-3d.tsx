@@ -40,7 +40,8 @@ export type LineChart3DProps<T extends object = Record<string, unknown>> = {
    * The field that identifies an entry, so a point follows its name through
    * updates: a new one unfolds from the point before it, a gone one folds
    * back into it, one that moves glides. A name that repeats is, in the
-   * order of the data, a point of its own.
+   * order of the data, a point of its own. A name is its own within its
+   * series, and read as text: derive a field for a key of several fields.
    * @defaultValue the position of the entry
    */
   id?: keyof T & string
@@ -93,7 +94,7 @@ export function LineChart3D<T extends object>({
   tooltip,
 }: LineChart3DProps<T>) {
   const { config, camera } = useChart3D()
-  const { fields, named, entries, axes, presence, target } = usePoints(data, x, y, z, id)
+  const { fields, named, entries, axes, presence, target } = usePoints(data, x, y, z, id, series)
   // A point that comes or goes unfolds from its neighbour straight through the box.
   const runs = useRuns(named, series, presence, target)
   const tips = useTooltips([data, x, y, z, id, series, config, format, titles, tooltip])

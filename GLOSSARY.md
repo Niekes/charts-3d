@@ -10,7 +10,8 @@ sees, not how the code draws it.
 What the data of a chart lists, one by one: a row of bars, a point, a stop, a
 place, the value of a region. Its identity - a name of its own, the region
 it colors, or else its place in the data - is what its marks follow through
-new data.
+new data. A name is its own within its series: Jan of one line is not Jan
+of another. A cell of a grid is no entry: it is where it stands.
 _Avoid_: record, datum, item, row (a row is a row of bars)
 
 ## The chart box
@@ -280,6 +281,11 @@ and a trackpad pinch arrives as Ctrl and the wheel on every platform - or,
 with `+` and `-`, to the middle of the chart. On a touch screen two fingers
 pinch, and the point between them stays. The wheel alone scrolls the page.
 _Avoid_: dolly, scale, zoom to the centre (the wheel)
+
+**Default view**:
+The view the camera starts at and a reset returns it to. Unlike a
+heading, changing it moves nothing: only the next reset goes to the new one.
+_Avoid_: home, initial view, start position
 
 **Heading**:
 A view the page gives the camera to head for: the camera glides there when

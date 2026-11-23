@@ -111,6 +111,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exhaustive switch on every renderer. A chart of your own that hands
   `Marks3D` a circle adds `shape: "circle"` beside its `r`; without it the
   circle draws and hits nothing. A polygon stays as it is.
+- **Breaking:** the `id` of `ScatterChart3D` and `LineChart3D` names an
+  entry within its `series`, as the routes chart's does: lines that share
+  ids keep their points when the data reorders, and a point that changes
+  its series is a new point that grows in, not one that glides there. `id`
+  is read as text: a key of several fields, or a nested one, is a field the
+  page derives, `data.map((d) => ({ ...d, key: `${d.a}-${d.b}` }))` (ADR-0012).
 - `facing` is on the semver side of the Stability list: a page hands it to
   `view`. `uniqueIds` joins the core helpers.
 - What a stylesheet styles a chart by - the names of the `data-slot`s, the
@@ -159,6 +165,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ChoroplethChart3D`: an id with spaces around it, as padded CSV holds it,
   matches its region.
 - A key listed twice in `keys` is one series, not a second, empty lane.
+- Two fingers turn and zoom the chart when they land on its marks or the
+  walls of its box: on a phone, a pinch with each finger on an element of its
+  own was left to the page, so the chart moved only where both fingers met
+  its bare background.
 - An entry named like a property every object has - `constructor`,
   `toString`, `__proto__` - glides in and out like any other: the bar and
   the area chart hid it until its glide was done, the line drew NaN and the

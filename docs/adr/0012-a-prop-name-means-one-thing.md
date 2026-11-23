@@ -11,7 +11,11 @@ chart reads an idea through the name the others give it.
 - **`id` identifies an entry**: what its marks follow through new data. In
   the choropleth an entry's identity is its region, so joining on `id` is
   the same idea. In the places and the routes chart `id` names the entry in
-  the tooltip too.
+  the tooltip too. Wherever a chart has `series`, an id is its own within
+  its series: Jan of one line is not Jan of another. `id` names a field and
+  reads it as text, not a function as d3's key: a field name stays the same
+  from render to render where an inline function would not, and a key of
+  several fields is a field the page derives.
 - **`label` titles the tooltip of an entry**, and nothing else: the globe
   and the choropleth.
 - **`index` is the category along x of a wide table** - an entry per row of
