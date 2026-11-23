@@ -223,9 +223,9 @@ with the renderer switch - the proof the chart stays interactive at size.
 _Avoid_: performance demo, stress test, benchmark
 
 **Frame time**:
-How long one step of the camera takes until the picture is painted, while
-the camera orbits in a Many demo, in milliseconds. The number the project
-tracks to get faster.
+The time from one painted picture to the next while the camera orbits in a
+Many demo, in milliseconds; never below one refresh of the screen. The
+number the project tracks to get faster.
 _Avoid_: fps, speed, performance score
 
 ## Styling

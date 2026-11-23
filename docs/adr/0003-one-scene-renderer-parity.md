@@ -2,7 +2,8 @@
 
 Status: amended 2026-11-21 - the webgl renderer is gone, and with 0.8.0 its
 name too. Read "three renderers" below as SVG and canvas, and what it says of
-webgl as history.
+webgl as history. Why it went, and what would bring a GPU renderer back:
+[ADR-0014](0014-projection-stays-on-the-cpu.md).
 
 Context: the registry draws with three renderers - SVG, canvas and webgl - and
 a chart must behave the same on all of them, gap-free. A chart that draws for
