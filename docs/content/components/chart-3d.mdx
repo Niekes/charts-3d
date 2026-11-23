@@ -33,10 +33,11 @@ import Chart3DDemo from "@/docs/examples/chart-3d-demo"
 
   </Tab>
   <Tab value="Manual">
-    Install the dependencies:
+    Install the dependencies, and their types for TypeScript:
 
     ```package-install
     npm install d3-3d d3-array
+    npm install -D @types/d3-array
     ```
 
     Copy the code into `components/ui/chart-3d.tsx`:
@@ -60,7 +61,7 @@ The box, its labels, the tooltip, the legend and the gizmo stay SVG and HTML wit
 
 ## Shortcuts
 
-Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it; Escape or a click outside closes the panel again. Each row names its action, then lists its keys and - past a thin rule - its pointer gestures, with the drag written out as "Drag". The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Alt (⌥ on a Mac) and a drag pans, the platform modifier with the wheel zooms to the cursor - a trackpad pinch arrives as Ctrl and the wheel, so it zooms on every platform - and a double click resets; the wheel alone scrolls the page. On a touch screen two fingers turn the chart and pinch it to the point between them, while one finger scrolls the page and inspects. A drag that turns nothing - without the modifier, or one finger sideways - shows a hint in the middle of the chart for a moment, over a light veil, the gesture that would have turned it, as the panel names it; the veil is `data-slot="chart-3d-hint"`, the box in it `data-slot="chart-3d-hint-box"`, and it shows nothing where `keymap` has that gesture off. The cursor names the gesture: a hand while the platform modifier is held, `grabbing` while the drag turns, the four arrows while Alt is held, `zoom-in` or `zoom-out` while the wheel zooms. See [ADR-0001](../adr/0001-navigation). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts"`.
+Press `?` on a chart, or the keyboard button in its corner, for the shortcuts that rotate, pan, zoom and reset it; Escape or a click outside closes the panel again. Each row names its action, then lists its keys and - past a thin rule - its pointer gestures, with the drag written out as "Drag". The platform modifier and a drag rotate - ⌘ on a Mac, Ctrl on Windows and Linux; a plain drag only inspects, with the default cursor - Alt (⌥ on a Mac) and a drag pans, the platform modifier with the wheel zooms to the cursor - a trackpad pinch arrives as Ctrl and the wheel, so it zooms on every platform - and a double click resets; the wheel alone scrolls the page. On a touch screen two fingers turn the chart and pinch it to the point between them, while one finger scrolls the page and inspects. A drag that turns nothing - without the modifier, or one finger sideways - shows a hint in the middle of the chart for a moment, over a light veil, the gesture that would have turned it, as the panel names it; the veil is `data-slot="chart-3d-hint"`, the box in it `data-slot="chart-3d-hint-box"`, and it shows nothing where `keymap` has that gesture off. The cursor names the gesture: a hand while the platform modifier is held, `grabbing` while the drag turns, the four arrows while Alt is held, `zoom-in` or `zoom-out` while the wheel zooms. See [ADR-0001](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0001-navigation.md). `shortcuts={false}` hides the button. The chart announces its keys to screen readers through `aria-keyshortcuts`, and the keys in the panel carry `data-slot="kbd"`, as the Kbd of shadcn/ui does, so `className="[&_[data-slot=kbd]]:bg-background"` on the container restyles them. The button is `data-slot="chart-3d-shortcuts-trigger"`, the list `data-slot="chart-3d-shortcuts-panel"`, and the corner that holds both `data-slot="chart-3d-shortcuts"`.
 
 ### Keymap
 
@@ -117,7 +118,7 @@ The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hid
 
 ## View
 
-`defaultView` is where the camera starts and where a reset returns it. `view` is a heading the page gives the camera: it starts there, and when the view changes it glides there over the `animationDuration`, in step with the data - where the reader asks for reduced motion, it jumps. A view moves only what it names, so one of `yaw` and `tilt` keeps the zoom and the pan of the reader, and it is no lock: the reader turns the camera on from it, and the same view handed in again moves nothing.
+`defaultView` is where a reset returns the camera, and where it starts without a `view`. `view` is a heading the page gives the camera: it starts there, and when the view changes it glides there over the `animationDuration`, in step with the data - where the reader asks for reduced motion, it jumps. A view moves only what it names, so one of `yaw` and `tilt` keeps the zoom and the pan of the reader, and it is no lock: the reader turns the camera on from it, and the same view handed in again moves nothing.
 
 ```tsx
 <ChartContainer3D config={chartConfig} view={facing(place.lon, place.lat)}>
@@ -125,7 +126,7 @@ The gizmo is `data-slot="chart-3d-gizmo"`, drawn in `--muted-foreground` and hid
 </ChartContainer3D>
 ```
 
-`facing(lon, lat)` is the view that looks at a place on a globe. The [routes chart](/docs/components/routes-chart-3d#enter-and-leave) uses both for a tour that turns the globe to its next stop.
+`facing(lon, lat)` is the view that looks at a place on a globe. The [routes chart](/docs/components/routes-chart-3d#enter-and-leave) uses both for a tour that turns the globe to its next stop. Like every part of the charts, `facing` runs on the client: call it in a client component, or hand `view` the `yaw` and `tilt` it returns - a server component of Next.js cannot call it.
 
 ## Tooltip
 
@@ -153,18 +154,18 @@ What a mark says is built from the data behind it, its values as the ticks name 
   tooltip={(tooltip, { entry, key }) => ({
     ...tooltip,
     title: `${entry.month} · ${key}`,
-    items: tooltip.items.map((item) => ({ ...item, value: `${entry[key]} €` })),
+    items: tooltip.items.map((item) => ({ ...item, value: <>{item.value} €</> })),
   })}
 />
 ```
 
 ## Focus
 
-A mark can name the groups it belongs to in `groups`. Pointing at a mark lights the fill of every mark that shares one of its groups - the faces of a bar, the segments of a flow - in the focus color: `--chart-3d-focus`, or its own fill lightened (see [Theming](/docs/theming)). A stroke of the mark's own stays, and nothing else changes, so the order the marks paint in, and with it the depth, stays as it was, on the canvas too. Off the mark or off the chart the focus clears; through a drag that turns the chart it stays, so what is in focus can be followed from every side. Marks without groups never light.
+A mark can name the groups it belongs to in `groups`. Pointing at a mark lights the fill of every mark that shares one of its groups - the faces of a bar, the faces of a tile of the globe - in the focus color: `--chart-3d-focus`, or its own fill lightened (see [Theming](/docs/theming)). A stroke of the mark's own stays, and nothing else changes, so the order the marks paint in, and with it the depth, stays as it was, on the canvas too. Off the mark or off the chart the focus clears; through a drag that turns the chart it stays, so what is in focus can be followed from every side. Marks without groups never light.
 
 ```tsx
-// The marks of a flow share its key; the marks of a node carry the keys of all its flows.
-const marks = cubeMarks(key, faces, color, tooltip).map((mark) => ({ ...mark, groups: [flow.key] }))
+// The faces of a bar share its key, so pointing at one lights the whole bar.
+const marks = cubeMarks(key, faces, color, tooltip).map((mark) => ({ ...mark, groups: [key] }))
 ```
 
 ## Labels
@@ -181,7 +182,7 @@ A chart glides into new data over the `animationDuration` of its container; 0 ma
 - A key that **stays** glides from where it stands to its new number - also to a new place, when the data reorders.
 - A key the data **drops** glides back to its enter value, the mirror of its entering, and leaves when the glide is done: a removed bar shrinks back into the floor and fades out as it shrinks, so nothing flat pops away at the end.
 
-The enter value is one number for every key, or a function that finds it among numbers, such as that of a neighbour: a point of the [line](/docs/components/line-chart-3d) and the [routes chart](/docs/components/routes-chart-3d) starts on its neighbour where that is on screen, and a dropped one heads for the nearest that stays. A glide starts from the numbers on screen, so data that comes while a chart is on its way moves every mark on from where it is.
+The enter value is one number for every key, or a function that finds it among numbers, such as that of a neighbour: a point of the [line](/docs/components/line-chart-3d) and the [routes chart](/docs/components/routes-chart-3d) starts on its neighbour where that is on screen, and a dropped one heads for the nearest that stays. A glide starts from the numbers on screen, so data that comes while a chart is on its way moves every mark on from where it is. Every change of the data starts the glide anew, though, so a feed that comes faster than the `animationDuration` leaves the marks trailing behind it, and a mark the feed dropped goes, wherever it has come to, with the first change the time of a glide after it left: give such a chart a duration shorter than the interval of its feed, or 0.
 
 A mark fades with `faded(color, opacity)`, a `color-mix` with transparent that every renderer draws: tween an opacity per key with `useTween` - 1, with 0 as the enter value - and fade the color after `shade`.
 
@@ -229,7 +230,7 @@ A prop means the same in every chart that takes it, so the next chart reads like
 
 ## Stability
 
-From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `Symbol3D`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D` - and `facing`, the view a page hands `view`. A change to any of them that breaks a project waits for a major version.
+From 1.0.0 the package follows semver for what a chart is used with: the charts and their props, `ChartContainer3D` and its props, `ChartLegend3D`, and the types they take - `ChartConfig`, `Symbol3D`, `View3D`, `Renderer3D`, `Keymap3D`, `KeyAction3D`, `Gesture3D` and `Tooltip3D` - and `facing`, the view a page hands `view`. So does what a stylesheet styles a chart by, on the [Theming](/docs/theming) page: the names of the `data-slot`s, the `data-*` attributes beside them and the CSS variables. A change to any of them that breaks a project waits for a major version.
 
 What a chart is built from stays free to change in a minor version, with an entry in the changelog: `Axes3D`, `Marks3D`, `Labels3D`, `useChart3D`, `useTween`, `useTweenAxes`, `useSeries`, `useTooltips`, `Mark3D`, `Label3D`, `World`, `GeoProjectionLike` and the helpers `axis`, `entryTicks`, `pad`, `linear`, `worldBox`, `intoWorld`, `shade`, `faded`, `colorOf`, `finite`, `keyOf`, `joined`, `nonNegative`, `cubeMarks`, `barCorners`, `barMarks`, `floored`, `gridAxis`, `ramp`, `globe`, `placeOf`, `azimuth`, `azimuthAt`, `placeAt`, `GLOBE_RADIUS`, `orthographic`, `earth`, `usePoints`, `pointTooltip`, `useConfigKeys`, `useRuns`, `segment` and `uniqueIds`. They are exported so a chart of your own can draw the way the charts here do; pin the version of the package, or own a copy through the registry, if you build on them.
 

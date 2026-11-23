@@ -67,7 +67,7 @@ _Avoid_: margin, gap
 ## The marks
 
 **Mark**:
-One shape of a chart - a bar, a point, a face of a flow - projected into
+One shape of a chart - a bar, a point, a face of a ribbon - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
 

@@ -67,6 +67,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The core's builder helpers - every name the Stability section lists as
+  free to change in a minor version - say so in their doc comment with
+  `@experimental`, so an editor shows it where they are imported.
+- `floored(shapes, projection)` hands every shape - a cube, a quad of a
+  grid, a polygon - where it stands on the floor as `floor`, for d3-3d's
+  `sort`: the point of its footprint nearest to the eye. It took cubes alone
+  and handed each its bottom face.
+- `BarChart3D`: a value that is not a finite number draws no bar, as in
+  `BarFieldChart3D`, not a flat tile with a tooltip; a value that goes
+  missing shrinks back into the floor and fades as it does, saying nothing
+  on hover on its way out, and fades in again as it comes back.
+- `SurfaceChart3D`: a cell says the x and z it starts at beside its height,
+  and hands them to `tooltip` as `x` and `z`, as a bar of `BarFieldChart3D`
+  does.
+- A series the config does not name, and a chart without a config, draw in
+  `currentColor`, the color of the text, on every renderer: `colorOf(key)`
+  is `var(--color-key, currentColor)`. An undeclared variable drew black on
+  SVG and the text color on the canvas, and a chart without a config read
+  `--color-undefined`.
+- `AreaChart3D`: a single entry draws no ribbon, where it drew the two ends
+  of one without a width.
 - `BarChart3D` ticks about ten of its entries along x, as `AreaChart3D`
   does, not every one: a dozen bars keep a label each, a year of daily bars
   lays out eight instead of 365, and turns at frame rate. The labels of an
@@ -92,6 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   circle draws and hits nothing. A polygon stays as it is.
 - `facing` is on the semver side of the Stability list: a page hands it to
   `view`. `uniqueIds` joins the core helpers.
+- What a stylesheet styles a chart by - the names of the `data-slot`s, the
+  `data-*` attributes beside them and the CSS variables of the Theming page
+  - is on the semver side of the Stability list too.
 - The docs follow the release: the release workflow deploys them from its
   tag once the version is on npm, and its commit pins their install
   commands to it.
@@ -99,19 +123,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Breaking:** `renderer="webgl"`, deprecated in 0.7.0: use `"canvas"`,
-  which it drew as. It goes before 1.0.0, not with it as announced, so that
-  1.0.0 does not keep it until 2.0.0. Only the type drops it: a caller that
-  still passes it draws on the canvas.
+  which it drew as. It goes in 1.0.0, as 0.7.0 announced. Only the type
+  drops it: a caller that still passes it draws on the canvas.
 
 ### Fixed
 
+- `SurfaceChart3D`: the cells paint in the order of their footprints,
+  however high each reaches. They were ordered by the depth of their middle,
+  height and all, so a high cell behind could paint over a low one before
+  it: a stepped or a noisy surface showed that on a tenth of its pixels and
+  more.
+- `BarChart3D`, `BarFieldChart3D`: a bar below 0 paints in the order of its
+  footprint, as one above it. The bars were ordered by their bottom face,
+  which lies below the floor for a bar that hangs from it, so among bars
+  above and below 0 one behind could paint over the one before it.
+- With `perspective` in the view, the bars, the ribbons of `AreaChart3D` and
+  the cells of the surface paint in the order of their distance from the
+  eye. They were ordered by their depth, so seen along an axis of the box a
+  mark further out could paint over the one that hides it.
+- Bars, ribbons and cells that stand equally deep paint in the order of the
+  data, so the server and the browser, which round a sine differently in the
+  last bit, agree on a view along a diagonal of the box.
+- Every chart takes data whose entries are declared as a TypeScript
+  `interface`. The type of an entry had to be a `Record<string, unknown>`,
+  which an interface - it has no index signature - is not, so
+  `data={rows}` did not compile for `rows: Sale[]` of an `interface Sale`;
+  a type alias did. The constraint is `object` now - no `any`, which the
+  linters of a Next.js or a Vite project reject in the files the registry
+  copies; nothing changes at run time, and `tooltip` is handed entries of
+  the type given.
+- `PlacesChart3D`: a lone dot grows out of an empty globe and shrinks back
+  into it, where it popped in at full size and only faded.
+- `ScatterChart3D`, `LineChart3D`: a single point, or a field that never
+  varies, lies in the middle of its axis, not on the wall of the box.
+- `ChoroplethChart3D`: an id with spaces around it, as padded CSV holds it,
+  matches its region.
+- A key listed twice in `keys` is one series, not a second, empty lane.
 - An entry named like a property every object has - `constructor`,
   `toString`, `__proto__` - glides in and out like any other: the bar and
   the area chart hid it until its glide was done, the line drew NaN and the
-  scatter threw. The glides ask for the keys an object has of its own.
+  scatter threw. The glides ask for the keys an object has of its own, and
+  so does the scatter for the presence of a point: one so named flashed
+  black where a new `radius` came while it left.
 - `BarFieldChart3D`, `SurfaceChart3D`: a height given as text, as parsed CSV
   has it, is the number it names - compared as text, "9" topped "100", the
-  axis ended short or ran upside down and a glide added the text up.
+  axis ended short or ran upside down and a glide added the text up. So is a
+  place given as text through `x`, `z` or `domain`: joined as text, "10" and
+  half a cell ended the axis at "100.5", and the grid stood squeezed into a
+  corner of the box.
 - `RoutesChart3D` with `id`: a stop is named within its route, so two routes
   through one stop keep their own - a route that came or went folded the
   other one, which had not changed, and regrew it.
@@ -206,6 +265,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SurfaceChart3D` fades a cell as every mark fades, in oklab.
 - The hover finds the mark under the pointer in an svg that CSS made
   taller than its view box, as the wheel and the pinch do.
+- The canvas renderer paints the marks on their axes in an svg that CSS made
+  taller or wider than its view box: the canvas takes the box of the svg and
+  fits the view box into it as the browser does, centred, where it kept the
+  shape of the view box at the top of the svg.
+- With `perspective`, the line of an axis stays on its edge while a glide
+  changes the scale: it was found between two ticks, and a tick of the new
+  data far beyond the box threw it across the chart for some frames.
+- With `perspective`, a face is lit as the side of it the eye sees: the left
+  and the right sides of a row of bars seen from the front took one shade.
+- A `view` that names a `perspective` brings the eye in over the
+  `animationDuration`, as it turns the camera, where the perspective jumped.
+- A tooltip whose `title` is the number 0 - an hour, a row - shows it as a
+  title, where it stood bare above the items.
+- Data that comes faster than the `animationDuration`, as from a feed, no
+  longer piles up the marks it drops: a glide starts over with every change,
+  so a mark on its way out was never done leaving - a line of 20 points fed
+  every 50 ms held 1,258 marks after 20 seconds, and every update took
+  longer. A mark that left the data now goes with the first change that
+  comes the time of a glide after it left (`useTween`).
+- The canvas renderer repaints in the colors of a theme switched by a class
+  on any ancestor of the chart, such as `.dark` on a wrapper or on `<body>`:
+  it followed `<html>` alone, and its marks kept the old colors while the
+  box and the labels changed.
+- `SurfaceChart3D`: cells that come or go stay inside the box while the axes
+  glide. A new border cell stood at its own place and height, beyond the old
+  walls, until the axes made room for it - with `perspective` reaching across
+  the whole chart - and a leaving one rose out of the box as the axes shrank.
+- `view`: a field it leaves undefined, as `{ ...facing(lon, lat), zoom }`
+  does without a zoom, is one it does not name: the zoom and the pan of the
+  reader stay, where they went back to the default.
+- `GlobeChart3D`, `PlacesChart3D` and `ChoroplethChart3D` without a config
+  draw in `currentColor`, as every other chart does: the choropleth threw,
+  and the globe and the places drew in `--color-undefined` and said
+  "undefined" in every tooltip. `keyOf` hands back the empty key where there
+  is neither a value nor a fallback, and `colorOf` draws it in
+  `currentColor`.
+- The files of the registry lint clean in a new Next.js 16 project, whose
+  react-hooks rules forbid reading and writing refs while rendering: the
+  five files whose hooks remember values that way say `/* eslint-disable */`,
+  with the reason, until those hooks keep them in state. The lint of the
+  repository holds the other files to those rules.
+- The code of the registry compiles in a project that turns on
+  `noUnusedLocals` and `noUnusedParameters`, as the React template of Vite
+  does: `chart-3d` held a parameter it never read, and the build of such a
+  project stopped there. The repository checks itself with both now.
+- `ChartContainer3D` puts its `id` on its `div`, as it does the other props
+  of a div: it only scoped the colors of the chart, so a link or an
+  `aria-labelledby` that named the id found nothing.
+- `require("@niekes/charts-3d")` finds the package, as `import` does: the
+  exports named the entry for `import` alone, so Jest and other tools that
+  resolve with `require` stopped at `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 - A glide whose `animationDuration` changes on its way goes on from where
   it is, where it started over.
 - `keymap`: `Shift+Space` is a binding of its own, where it fired on Space;
@@ -215,7 +325,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The box, its labels and the gizmo write their numbers with two decimals,
   as the marks, so the HTML the server writes is the HTML the browser
   hydrates.
-
 - `BarChart3D`, `AreaChart3D`, `BarFieldChart3D`, `ScatterChart3D`,
   `PlacesChart3D` and `GlobeChart3D`: a mark on its way out while new data comes no longer paints black or
   vanishes - its fade could end before its glide, as when rows with

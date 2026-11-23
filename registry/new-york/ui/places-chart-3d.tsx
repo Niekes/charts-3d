@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable -- shortcut: the hooks here keep values in refs while rendering, which the rules of React's compiler forbid; move them into state after 1.0. */
 
 import * as React from "react"
 import { max } from "d3-array"
@@ -25,7 +26,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type PlacesChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type PlacesChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per place: a dot on the globe. */
   data: T[]
   /**
@@ -90,7 +91,7 @@ type Fields<T> = {
 }
 
 /** What a dot reads for its mark: the config, the fields, the largest radius, the format and what the reader makes of its tooltip. */
-type Reading<T extends Record<string, unknown>> = {
+type Reading<T extends object> = {
   config: ChartConfig
   fields: Fields<T>
   radius: number
@@ -100,7 +101,7 @@ type Reading<T extends Record<string, unknown>> = {
  * Dots on the land of a globe, one per place, its area its value. A dot on
  * the far side is hidden by the globe.
  */
-export function PlacesChart3D<T extends Record<string, unknown>>({
+export function PlacesChart3D<T extends object>({
   data,
   land,
   lon,
@@ -119,7 +120,9 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
   const sizes = useTween(target, 0)
   const opacity = useTween(present, 0)
   // max, not a spread: thousands of arguments overflow the stack.
-  const { peak } = useTween({ peak: max(Object.values(target)) ?? 0 })
+  const top = max(Object.values(target))
+  // No dots, no peak: a first one starts at its own, and the last one's stays as it shrinks.
+  const { peak = 0 } = useTween(top ? { peak: top } : {})
   const place = usePlaces(names, entries, fields, sizes)
 
   const reading = { config, fields, radius, format, tooltip }
@@ -161,11 +164,7 @@ export function PlacesChart3D<T extends Record<string, unknown>>({
  * changes color leaves as one and enters as the other, as a tile of the
  * globe does - at the place of its entry, which the two share.
  */
-function useDots<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Fields<T>,
-  fallback: string
-) {
+function useDots<T extends object>(data: T[], fields: Fields<T>, fallback: string) {
   const { lon, lat, value, series, id } = fields
   return React.useMemo(() => {
     // An entry without a place on the globe has no dot.
@@ -197,7 +196,7 @@ function useDots<T extends Record<string, unknown>>(
  * that dots in front stand out. Its group is the dot alone, so hovering
  * highlights that dot only.
  */
-function dotMark<T extends Record<string, unknown>>(
+function dotMark<T extends object>(
   p: TransformedPoint<Dot>,
   place: Place,
   share: number,
@@ -223,7 +222,7 @@ function dotMark<T extends Record<string, unknown>>(
  * labelled by the fields - or what `tooltip` makes of that. A dot whose
  * entry has left the data says nothing.
  */
-function dotTooltip<T extends Record<string, unknown>>(
+function dotTooltip<T extends object>(
   { key }: Place,
   entry: T | undefined,
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
@@ -286,7 +285,7 @@ const placeKeys = (name: string) => {
  * screen, `shown`, or else was headed, so over the antimeridian a dot glides
  * 2°, not 358°, and one sent on mid-glide turns from where it is.
  */
-function headings<T extends Record<string, unknown>>(
+function headings<T extends object>(
   known: Map<string, Place>,
   shown: Record<string, number>,
   names: string[],
@@ -319,7 +318,7 @@ function headings<T extends Record<string, unknown>>(
  * gone dot shrinks away, since its entry has already left the data - and
  * forgotten with the dot, so the memory stays the size of the chart.
  */
-function usePlaces<T extends Record<string, unknown>>(
+function usePlaces<T extends object>(
   names: string[],
   data: T[],
   fields: Fields<T>,

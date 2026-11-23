@@ -40,6 +40,6 @@ print the latitude and longitude raw, and a record lets `format.lat` and
 
 Consequences: the Props section of the `chart-3d` docs page lists the shared
 names, and a new chart takes them from there. A field a chart lacks - a
-`label` beside the `id` of the places chart, `x` and `z` in the tooltip data
-of the surface, `format` on the routes chart - is a minor version and waits
-until someone asks.
+`label` beside the `id` of the places chart, `format` on the routes chart -
+is a minor version and waits until someone asks. The `x` and `z` in the
+tooltip data of the surface were such a field, and came before 1.0.

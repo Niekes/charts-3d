@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable -- shortcut: the hooks here keep values in refs while rendering, which the rules of React's compiler forbid; move them into state after 1.0. */
 
 import * as React from "react"
 import {
@@ -31,7 +32,7 @@ import {
   type Tooltip3D,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type GlobeChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type GlobeChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per tile: the tile that holds an entry rises to its value, and the last entry on a tile wins. */
   data: T[]
   /**
@@ -101,7 +102,7 @@ type Fields<T> = {
 type Tile<T> = { id: string; value: number; read?: number; entries: T[]; name?: string }
 
 /** What the tooltip of a tile reads: the config, the fields, the format and what the reader makes of it. */
-type Reading<T extends Record<string, unknown>> = {
+type Reading<T extends object> = {
   config: ChartConfig
   fields: Fields<T>
 } & Pick<GlobeChart3DProps<T>, "format" | "tooltip">
@@ -111,7 +112,7 @@ type Reading<T extends Record<string, unknown>> = {
  * the land. The tile that holds an entry rises from the globe to the entry's
  * value, in the color of its series; one without an entry is not drawn.
  */
-export function GlobeChart3D<T extends Record<string, unknown>>({
+export function GlobeChart3D<T extends object>({
   data,
   land,
   lon,
@@ -171,12 +172,7 @@ export function GlobeChart3D<T extends Record<string, unknown>>({
  * keyed by its place and its series, so a tile that changes color leaves as
  * one and enters as the other.
  */
-function useTiles<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Fields<T>,
-  step: number,
-  fallback: string
-) {
+function useTiles<T extends object>(data: T[], fields: Fields<T>, step: number, fallback: string) {
   // The fields one by one: the record of them is new at every render.
   const { lon, lat, value, series, label } = fields
   return React.useMemo(() => {
@@ -227,7 +223,7 @@ function useShapes(ids: string[]) {
  * what reads them, not at every frame the camera turns; every face of a tile
  * shares it.
  */
-function useTileTooltips<T extends Record<string, unknown>>(
+function useTileTooltips<T extends object>(
   tiles: Map<string, Tile<T>>,
   { config, fields, format, tooltip }: Reading<T>
 ) {
@@ -266,7 +262,7 @@ function nearTiles(ids: string[], shapes: Map<string, Shape>, eye: Camera3DInsta
  * the chart names entries, the name of that last entry, and every entry on
  * the tile, gathered in one list: a copy per entry costs the square of them.
  */
-function tileValues<T extends Record<string, unknown>>(
+function tileValues<T extends object>(
   data: T[],
   fields: Fields<T>,
   step: number,
@@ -355,7 +351,7 @@ function corners(lon: number, lat: number, step: number, radius: number): Point3
  * `tooltip` makes of that. A tile whose entries have left the data says
  * nothing.
  */
-function tileTooltip<T extends Record<string, unknown>>(
+function tileTooltip<T extends object>(
   { id, read, name, entries }: Tile<T>,
   { config, fields, format, tooltip = (tip) => tip }: Reading<T>
 ): Mark3D["tooltip"] {

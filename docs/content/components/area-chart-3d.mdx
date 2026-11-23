@@ -27,6 +27,9 @@ The area is the measure, so the chart is for values of 0 and up. A value below
 0 drops the floor of the box to it, and every area then reads from there, not
 from 0; a bar chart grows from 0 either way.
 
+A ribbon runs from one entry to the next, so it needs at least two: a single
+entry draws the box and no ribbon.
+
 ## Installation
 
 <Tabs items={["CLI", "npm", "Manual"]}>
@@ -44,10 +47,11 @@ from 0; a bar chart grows from 0 either way.
 
   </Tab>
   <Tab value="Manual">
-    Install the dependencies:
+    Install the dependencies, and their types for TypeScript:
 
     ```package-install
     npm install d3-3d d3-array
+    npm install -D @types/d3-array
     ```
 
     Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/area-chart-3d.tsx`:

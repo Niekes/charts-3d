@@ -43,9 +43,11 @@ const OCEAN = "var(--chart-3d-ocean, var(--muted))"
 const literal = (s: string) => s.replace(/[()]/g, "\\$&")
 /** The dots of a series in the server HTML: their radii. */
 const radii = (html: string, key = "city") =>
-  [...html.matchAll(new RegExp(`<circle[^>]*\\br="([^"]+)"[^>]*var\\(--color-${key}\\)`, "g"))].map(
-    (m) => Number(m[1])
-  )
+  [
+    ...html.matchAll(
+      new RegExp(`<circle[^>]*\\br="([^"]+)"[^>]*var\\(--color-${key}, currentColor\\)`, "g")
+    ),
+  ].map((m) => Number(m[1]))
 
 describe("PlacesChart3D", () => {
   test("draws a dot per place over the land and the ocean, as large as its share of the largest value, hidden on the far side", () => {
@@ -161,7 +163,7 @@ describe("PlacesChart3D hover", () => {
   /** The dot of a series, as an element, and its center. */
   function dot(svg: SVGSVGElement, key: string) {
     const circle = [...svg.querySelectorAll("circle")].find((c) =>
-      c.getAttribute("fill")!.includes(`var(--color-${key})`)
+      c.getAttribute("fill")!.includes(`var(--color-${key}, currentColor)`)
     )!
     return { circle, x: Number(circle.getAttribute("cx")), y: Number(circle.getAttribute("cy")) }
   }
@@ -395,6 +397,37 @@ describe("PlacesChart3D transitions", () => {
     host.remove()
   })
 
+  test("a lone dot grows out of an empty globe and shrinks back into it: the largest value does not glide with it", async () => {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = (data: Record<string, unknown>[]) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config}>
+            <PlacesChart3D data={data} land={none} lon="lon" lat="lat" value="people" id="name" />
+          </ChartContainer3D>
+        )
+      )
+    const r = () =>
+      Number(host.querySelector('[data-slot="chart-3d-marks"] circle')!.getAttribute("r"))
+
+    await render([])
+    await render([{ lon: 15, lat: 15, people: 100, name: "Rome" }])
+    await act(() => vi.advanceTimersByTime(300))
+    expect(r()).toBeGreaterThan(0)
+    expect(r()).toBeLessThan(6)
+    await act(() => vi.advanceTimersByTime(500))
+    expect(r()).toBe(6)
+
+    await render([])
+    await act(() => vi.advanceTimersByTime(300))
+    expect(r()).toBeGreaterThan(0)
+    expect(r()).toBeLessThan(6)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   test("a dot that moves glides there, the short way over the antimeridian", async () => {
     const host = document.body.appendChild(document.createElement("div"))
     const root = createRoot(host)
@@ -495,7 +528,7 @@ describe("PlacesChart3D transitions", () => {
     expect(mid.some((f) => f.includes("--color-city") && f.includes("transparent"))).toBe(true)
     expect(mid.some((f) => f.includes("--color-capital") && f.includes("transparent"))).toBe(true)
     await act(() => vi.advanceTimersByTime(500))
-    expect(fills()).toEqual(["var(--color-capital)"])
+    expect(fills()).toEqual(["var(--color-capital, currentColor)"])
 
     await act(async () => root.unmount())
     host.remove()
@@ -771,7 +804,41 @@ describe("a missing series", () => {
       </ChartContainer3D>
     )
     expect(html).not.toContain("--color-undefined")
-    expect(html).toContain("var(--color-city)")
-    expect(html).toContain("var(--color-capital)")
+    expect(html).toContain("var(--color-city, currentColor)")
+    expect(html).toContain("var(--color-capital, currentColor)")
+  })
+})
+
+/** The middle of a mark on screen: the mean of the corners of a path, the center of a circle. */
+const middleOf = (mark: Element) => {
+  if (mark.tagName === "circle") return ["cx", "cy"].map((a) => Number(mark.getAttribute(a)))
+  const corners = [...mark.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+  return [1, 2].map((i) => corners.reduce((sum, c) => sum + Number(c[i]), 0) / corners.length)
+}
+
+describe("PlacesChart3D without a config", () => {
+  test("an empty config has no first key to color the dots with: they draw in the color of the text, and no tooltip says undefined", async () => {
+    const chart = (
+      <ChartContainer3D config={{}}>
+        <PlacesChart3D
+          data={[{ lon: 15, lat: 15, people: 10 }]}
+          land={none}
+          lon="lon"
+          lat="lat"
+          value="people"
+        />
+      </ChartContainer3D>
+    )
+    expect(renderToString(chart)).not.toContain("undefined")
+    const view = await mount(chart)
+    const dots = [...view.svg.querySelectorAll('[data-slot="chart-3d-marks"] circle')]
+    expect(dots).toHaveLength(1)
+    expect(dots[0].getAttribute("fill")).toContain("currentColor")
+    const [clientX, clientY] = middleOf(dots[0])
+    await view.send("pointermove", { clientX, clientY })
+    const tip = view.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent
+    expect(tip).toContain("10")
+    expect(tip).not.toContain("undefined")
+    await view.unmount()
   })
 })

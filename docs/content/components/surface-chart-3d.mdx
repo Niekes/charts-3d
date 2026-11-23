@@ -19,6 +19,10 @@ import SurfaceChart3DSpacingDemo from "@/docs/examples/surface-chart-3d-spacing-
   </Tab>
 </Tabs>
 
+Every 2 × 2 heights side by side make a quad of the surface, so a grid needs
+at least two rows and two columns: a single row, column or cell draws the box
+and no surface.
+
 ## Uneven spacing
 
 Where the columns or rows were not measured at even steps, `x` and `z` name
@@ -53,10 +57,11 @@ value drops out, and its neighbours join.
 
   </Tab>
   <Tab value="Manual">
-    Install the dependencies:
+    Install the dependencies, and their types for TypeScript:
 
     ```package-install
     npm install d3-3d d3-array
+    npm install -D @types/d3-array
     ```
 
     Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/surface-chart-3d.tsx`:
@@ -85,9 +90,10 @@ of the container, and its color ramp follows the heights.
 ## Enter and leave
 
 The grid may grow and shrink. Coming and going is a fade in place: new border
-cells fade in where they belong while the axes make room, and shrunken away,
-they fade out where they stand and leave when the glide is done - the mirror
-of their entering (see Enter in the
+cells fade in where they belong while the axes make room - held inside the box
+until there is room for them - and shrunken away, they fade out where they
+stand, inside the box, and leave when the glide is done - the mirror of their
+entering (see Enter in the
 [glossary](https://github.com/Niekes/charts-3d/blob/main/GLOSSARY.md)). The
 surface itself never moves where data merely appears or disappears.
 

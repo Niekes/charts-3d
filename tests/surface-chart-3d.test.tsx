@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test"
 
-import { ChartContainer3D, type Tooltip3D } from "@/registry/new-york/ui/chart-3d"
+import { ChartContainer3D, type Tooltip3D, type View3D } from "@/registry/new-york/ui/chart-3d"
 import { SurfaceChart3D, type SurfaceChart3DProps } from "@/registry/new-york/ui/surface-chart-3d"
 
 const config = { low: { color: "blue" }, high: { color: "red" } }
@@ -37,7 +37,9 @@ describe("SurfaceChart3D", () => {
         />
       </ChartContainer3D>
     )
-    expect(html).toMatch(/color-mix\(in oklch, var\(--color-high\) \d+%, var\(--color-low\)\)/)
+    expect(html).toMatch(
+      /color-mix\(in oklch, var\(--color-high, currentColor\) \d+%, var\(--color-low, currentColor\)\)/
+    )
   })
 
   test("a flat surface stays a number", () => {
@@ -55,8 +57,8 @@ describe("SurfaceChart3D", () => {
     expect(html).not.toContain("NaN")
   })
 
-  test("an empty grid draws the box and no surface", () => {
-    for (const data of [[], [[]]]) {
+  test("an empty grid, a single row, column or cell draws the box and no surface: a quad needs 2 × 2 heights", () => {
+    for (const data of [[], [[]], [[1, 2, 3]], [[1], [2], [3]], [[5]]]) {
       const html = renderToString(
         <ChartContainer3D config={config}>
           <SurfaceChart3D data={data} />
@@ -238,6 +240,26 @@ describe("SurfaceChart3D places", () => {
     )
   })
 
+  test("places given as text, as parsed CSV has them, stand the surface where the numbers do", () => {
+    const html = (props: object) =>
+      renderToString(
+        <ChartContainer3D id="c" config={config}>
+          <SurfaceChart3D
+            data={[
+              [1, 2, 3],
+              [4, 5, 6],
+            ]}
+            {...props}
+          />
+        </ChartContainer3D>
+      )
+    // Joined as text, "10" and half a cell would end the axis at "100.5".
+    expect(html({ x: ["1", "2", "10"], z: ["0", "5"] })).toBe(html({ x: [1, 2, 10], z: [0, 5] }))
+    expect(html({ domain: { x: ["0", "10"], z: ["2", "4"] } })).toBe(
+      html({ domain: { x: [0, 10], z: [2, 4] } })
+    )
+  })
+
   test("a column or row without a finite place drops out, its neighbours join", () => {
     const html = (x?: number[], z?: number[]) =>
       renderToString(
@@ -293,8 +315,8 @@ describe("SurfaceChart3D tooltip", () => {
     return { host, render, unmount }
   }
 
-  test("tooltip makes what a cell says from the default and the row, column and value behind it", async () => {
-    const seen: { row: number; column: number; value: number }[] = []
+  test("tooltip makes what a cell says from the default and the row, column, x, z and value behind it, as in the bar field", async () => {
+    const seen: { row: number; column: number; x: number; z: number; value: number }[] = []
     const tooltip = (tip: Tooltip3D, cell: (typeof seen)[number]) => {
       seen.push(cell)
       return { ...tip, title: `${cell.row},${cell.column}` }
@@ -306,11 +328,11 @@ describe("SurfaceChart3D tooltip", () => {
     )
     const view = await hovered(surface())
     // The one cell spans the four heights, so its value is their mean.
-    expect(seen).toEqual([{ row: 0, column: 0, value: 2.5 }])
+    expect(seen).toEqual([{ row: 0, column: 0, x: 0, z: 0, value: 2.5 }])
     // A frame renders the chart again with the same props: what the cell says is not built again.
     await view.render(surface())
     expect(seen).toHaveLength(1)
-    expect(tip(view.host)).toBe("0,0value2.5")
+    expect(tip(view.host)).toBe("0,0x0z0value2.5")
     await view.unmount()
   })
 
@@ -342,13 +364,20 @@ describe("SurfaceChart3D tooltip", () => {
     await view.unmount()
   })
 
-  test("the tooltip names the height of a cell as the ticks of y do, through format", async () => {
+  test("the tooltip names the place and the height of a cell as the ticks do, through format", async () => {
     const view = await hovered(
       <ChartContainer3D config={config}>
-        <SurfaceChart3D data={data} titles={{ y: "height" }} format={{ y: (v) => `${v} m` }} />
+        <SurfaceChart3D
+          data={data}
+          x={[10, 20]}
+          z={[5, 7]}
+          titles={{ x: "day", y: "height" }}
+          format={{ y: (v) => `${v} m`, z: (v) => `${v} km` }}
+        />
       </ChartContainer3D>
     )
-    expect(tip(view.host)).toBe("height2.5 m")
+    // The place the cell starts at: its first column and row.
+    expect(tip(view.host)).toBe("day10z5 kmheight2.5 m")
     await view.unmount()
   })
 
@@ -428,7 +457,8 @@ describe("SurfaceChart3D tooltip", () => {
     await hover(fading[0])
     expect(tip()).toBe("")
     await hover(quads().find((p) => !fading.includes(p))!)
-    expect(tip()).toBe("value2")
+    // The cell that stays starts at the first column and row: x 0, z 0.
+    expect(tip()).toBe("x0z0value2")
 
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -609,6 +639,86 @@ describe("SurfaceChart3D transitions", () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  test("cells that come or go stay inside the box while the axes glide: a grown grid fades in within it, a shrunken one fades out within it", async () => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = async (data: number[][], view?: View3D) =>
+      act(async () =>
+        root.render(
+          <ChartContainer3D config={config} defaultView={view}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        )
+      )
+    /** The corners of the paths of a slot, as drawn. */
+    const corners = (slot: string) =>
+      [...host.querySelectorAll(`[data-slot="${slot}"] path`)].flatMap((path) =>
+        [...path.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [
+          Number(m[1]),
+          Number(m[2]),
+        ])
+      )
+    /** How far the furthest corner of a cell lies outside the box the walls span on the screen. */
+    const outside = () => {
+      const [xs, ys] = [0, 1].map((i) => corners("chart-3d-axes").map((c) => c[i]))
+      return Math.max(
+        0,
+        ...corners("chart-3d-marks").map(([x, y]) =>
+          Math.max(
+            Math.min(...xs) - x,
+            x - Math.max(...xs),
+            Math.min(...ys) - y,
+            y - Math.max(...ys)
+          )
+        )
+      )
+    }
+    /** The furthest any cell lies outside the box at any frame of a glide into `data`. */
+    const furthest = async (data: number[][], view?: View3D) => {
+      await render(data, view)
+      let most = outside()
+      for (let t = 0; t < 700; t += 16) {
+        await act(() => vi.advanceTimersByTime(16))
+        most = Math.max(most, outside())
+      }
+      return most
+    }
+    const small = [
+      [1, 2],
+      [3, 4],
+    ]
+    const big = [
+      [1, 2, 3],
+      [3, 4, 5],
+      [5, 6, 7],
+    ]
+    await render(small)
+    await act(() => vi.advanceTimersByTime(700))
+    // The new cells stand far beyond the old axes - to the right and above - which glide to
+    // make room for them.
+    expect(await furthest(big)).toBeLessThanOrEqual(0.5)
+    expect(await furthest(small)).toBeLessThanOrEqual(0.5)
+    // In perspective a cell far beyond the axis would reach across the chart.
+    const perspective = { yaw: Math.PI / 6, tilt: Math.PI / 6, perspective: 3 }
+    expect(await furthest(small, perspective)).toBeLessThanOrEqual(0.5)
+    expect(
+      await furthest(
+        [
+          [1, 2, 30],
+          [3, 4, 50],
+          [5, 6, 70],
+        ],
+        perspective
+      )
+    ).toBeLessThanOrEqual(0.5)
+    expect(await furthest(small, perspective)).toBeLessThanOrEqual(0.5)
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
 })
 
 describe("SurfaceChart3D keys", () => {
@@ -737,8 +847,92 @@ describe("SurfaceChart3D focus", () => {
   })
 })
 
+describe("SurfaceChart3D paint order", () => {
+  /** The cells in paint order, far to near, each named by its share of the high color: its height on the ramp. */
+  const order = (data: number[][]) =>
+    [
+      ...renderToString(
+        <ChartContainer3D config={config}>
+          <SurfaceChart3D data={data} />
+        </ChartContainer3D>
+      ).matchAll(/<path d="[^"]*" fill="[^"]*?var\(--color-high, currentColor\) (\d+)%/g),
+    ].map((cell) => Number(cell[1]))
+
+  test("the cells paint in the order of their footprints, far to near, however high each reaches: a cell behind never paints over the one before it", () => {
+    // From the default view the far row paints first, and in a row the cell on the right.
+    expect(
+      order([
+        [0, 0, 0],
+        [0, 0, 0],
+        [1, 0, 2],
+      ])
+    ).toEqual([0, 0, 25, 13])
+    // The far cells tower over the near ones, and paint first all the same.
+    expect(
+      order([
+        [0, 8, 8],
+        [0, 0, 0],
+        [1, 0, 0],
+      ])
+    ).toEqual([50, 25, 0, 3])
+  })
+
+  test("a stepped surface paints its cells in the order a flat one does, from every side", () => {
+    // The cells in paint order, each named by where its corners stand along the screen: a
+    // corner stands as far left whatever its height.
+    const cells = (data: number[][], view: View3D) =>
+      [
+        ...renderToString(
+          <ChartContainer3D config={config} defaultView={view}>
+            <SurfaceChart3D data={data} />
+          </ChartContainer3D>
+        ).matchAll(/<path d="M([^"]*)Z" fill="color-mix/g),
+      ].map((cell) =>
+        cell[1]
+          .split("L")
+          .map((corner) => Number(corner.split(",")[0]).toFixed(1))
+          .sort()
+          .join(" ")
+      )
+    // Blocks of three heights, a cliff between any two.
+    const stepped = Array.from({ length: 7 }, (_, r) =>
+      Array.from({ length: 7 }, (_, c) => ((Math.floor(r / 2) * 2 + Math.floor(c / 2)) % 3) * 5)
+    )
+    const flat = stepped.map((row) => row.map(() => 1))
+    // From the front right and left, from behind, steeply from above and from below.
+    for (const view of [
+      { yaw: 0.5, tilt: 0.5 },
+      { yaw: -0.6, tilt: 0.3 },
+      { yaw: 2.4, tilt: 0.35 },
+      { yaw: 1.1, tilt: 1.2 },
+      { yaw: -2, tilt: -0.4 },
+    ]) {
+      const order = cells(flat, view)
+      expect(new Set(order).size).toBe(36)
+      expect(cells(stepped, view)).toEqual(order)
+    }
+  })
+  test("in perspective a wide cell the eye stands before paints after its narrow neighbour: the nearest point of a footprint orders it, not its middle", () => {
+    // One row of cells, the fifth sixteen times as wide as the others. The eye stands before
+    // it, near its left edge: its sight passes over that cell first and its left neighbour
+    // after, though the middle of the neighbour is the nearer one.
+    const heights = [0, 1, 2, 3, 4, 5, 6, 7]
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: 0.158, tilt: 0.4, perspective: 3 }}>
+        <SurfaceChart3D data={[heights, heights]} x={[0, 1, 2, 3, 4, 20, 21, 22]} />
+      </ChartContainer3D>
+    )
+    // The cells in paint order, each named by its share of the high color: 50 the neighbour, 64 the wide one.
+    const painted = [
+      ...html.matchAll(/<path d="[^"]*" fill="[^"]*?var\(--color-high, currentColor\) (\d+)%/g),
+    ].map((cell) => Number(cell[1]))
+    expect([...painted].sort((a, b) => a - b)).toEqual([7, 21, 36, 50, 64, 79, 93])
+    expect(painted.indexOf(50)).toBeLessThan(painted.indexOf(64))
+  })
+})
+
 describe("SurfaceChart3D without a config", () => {
-  test("an empty config has no keys for the color ramp: the surface draws all the same, colorless", () => {
+  test("an empty config has no keys for the color ramp: the surface draws all the same, in the color of the text", () => {
     const html = renderToString(
       <ChartContainer3D config={{}}>
         <SurfaceChart3D
@@ -749,7 +943,8 @@ describe("SurfaceChart3D without a config", () => {
         />
       </ChartContainer3D>
     )
-    expect(html.match(/<path [^>]*var\(--color-undefined\)/g)).toHaveLength(1)
+    expect(html.match(/<path [^>]*currentColor/g)).toHaveLength(1)
+    expect(html).not.toContain("--color-undefined")
   })
 })
 
@@ -768,6 +963,6 @@ describe("SurfaceChart3D heights that are no numbers", () => {
     expect(html).not.toContain("NaN")
     expect(html).not.toContain("Infinity")
     // Two rows of three corners make two cells.
-    expect(html.match(/<path [^>]*var\(--color-(low|high)\)/g)).toHaveLength(2)
+    expect(html.match(/<path [^>]*var\(--color-(low|high), currentColor\)/g)).toHaveLength(2)
   })
 })

@@ -43,7 +43,7 @@ const landOf = (html: string) => html.match(new RegExp(`fill="${literal(LAND)}"`
 const oceanOf = (html: string) => html.match(new RegExp(`fill="${literal(OCEAN)}"`, "g")) ?? []
 /** The rings of the regions with an entry, in the color of their series. */
 const regions = (html: string, key = "population") =>
-  html.match(new RegExp(`fill="[^"]*var\\(--color-${key}\\)`, "g")) ?? []
+  html.match(new RegExp(`fill="[^"]*var\\(--color-${key}, currentColor\\)`, "g")) ?? []
 
 // South Africa around Lesotho, in the middle of the view at yaw and tilt 0: the hole is the enclave, wound the other way.
 const [outer, enclave] = [square("za", -20, -20, 40), square("ls", -5, -5, 10)]
@@ -94,6 +94,8 @@ describe("ChoroplethChart3D", () => {
     expect(regions(html([{ code: "0040" }]))).toHaveLength(1)
     expect(regions(html([{ code: 0 }]))).toHaveLength(1)
     expect(regions(html([{ code: 4 }]))).toHaveLength(0)
+    // Padded CSV: the spaces around a code are no part of it, as they are none of a series.
+    expect(regions(html([{ code: " 040 " }]))).toHaveLength(1)
   })
 
   test("a region of several features, a mainland and its island, colors every one of them", () => {
@@ -148,7 +150,7 @@ describe("ChoroplethChart3D", () => {
     expect(oceanOf(html)).toHaveLength(1)
     // The regions a and c, over the land without an id, which lies under every region.
     expect(regions(html)).toHaveLength(2)
-    expect(html.indexOf(LAND)).toBeLessThan(html.indexOf("var(--color-population)"))
+    expect(html.indexOf(LAND)).toBeLessThan(html.indexOf("var(--color-population, currentColor)"))
     expect(html).not.toContain("NaN")
   })
 
@@ -207,7 +209,9 @@ describe("ChoroplethChart3D", () => {
     )
     expect(regions(html, "population")).toHaveLength(1)
     expect(regions(html, "quake")).toHaveLength(1)
-    expect(html.indexOf("var(--color-population)")).toBeLessThan(html.indexOf("var(--color-quake)"))
+    expect(html.indexOf("var(--color-population, currentColor)")).toBeLessThan(
+      html.indexOf("var(--color-quake, currentColor)")
+    )
 
     // Without an entry of its own, the enclave's land lies over the region around it, where the pointer finds it.
     const alone = renderToString(
@@ -221,7 +225,9 @@ describe("ChoroplethChart3D", () => {
       </ChartContainer3D>
     )
     expect(landOf(alone)).toHaveLength(1)
-    expect(alone.indexOf("var(--color-population)")).toBeLessThan(alone.indexOf(`fill="${LAND}"`))
+    expect(alone.indexOf("var(--color-population, currentColor)")).toBeLessThan(
+      alone.indexOf(`fill="${LAND}"`)
+    )
   })
 })
 
@@ -232,7 +238,7 @@ describe("ChoroplethChart3D hover", () => {
   /** The rings of the region in `key`, as elements, and the center of the first on screen. */
   function region(svg: SVGSVGElement, key = "population") {
     const rings = [...svg.querySelectorAll('[data-slot="chart-3d-marks"] path')].filter((p) =>
-      p.getAttribute("fill")!.includes(`var(--color-${key})`)
+      p.getAttribute("fill")!.includes(`var(--color-${key}, currentColor)`)
     )
     const corners = rings[0].getAttribute("d")!.slice(1, -1).split("L")
     const [x, y] = [0, 1].map(
@@ -598,5 +604,34 @@ describe("a missing series", () => {
     expect(html).not.toContain("--color-undefined")
     expect(regions(html, "population")).toHaveLength(1)
     expect(regions(html, "quake")).toHaveLength(1)
+  })
+})
+
+/** The middle of a mark on screen: the mean of the corners of a path, the center of a circle. */
+const middleOf = (mark: Element) => {
+  if (mark.tagName === "circle") return ["cx", "cy"].map((a) => Number(mark.getAttribute(a)))
+  const corners = [...mark.getAttribute("d")!.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)]
+  return [1, 2].map((i) => corners.reduce((sum, c) => sum + Number(c[i]), 0) / corners.length)
+}
+
+describe("ChoroplethChart3D without a config", () => {
+  test("an empty config has no first key to color the regions with: they draw in the color of the text, and no tooltip says undefined", async () => {
+    const chart = (
+      <ChartContainer3D config={{}}>
+        <ChoroplethChart3D data={[{ id: "a", people: 10 }]} land={land} id="id" value="people" />
+      </ChartContainer3D>
+    )
+    expect(renderToString(chart)).not.toContain("undefined")
+    const view = await mount(chart)
+    const region = [...view.svg.querySelectorAll('[data-slot="chart-3d-marks"] path')].filter((p) =>
+      p.getAttribute("fill")!.includes("currentColor")
+    )
+    expect(region.length).toBeGreaterThan(0)
+    const [clientX, clientY] = middleOf(region.at(-1)!)
+    await view.send("pointermove", { clientX, clientY })
+    const tip = view.host.querySelector('[data-slot="chart-3d-tooltip"]')!.textContent
+    expect(tip).toContain("10")
+    expect(tip).not.toContain("undefined")
+    await view.unmount()
   })
 })

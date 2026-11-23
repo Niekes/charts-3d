@@ -20,7 +20,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type ChoroplethChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type ChoroplethChart3DProps<T extends object = Record<string, unknown>> = {
   /** One entry per region: the region an entry names takes its color, and the last entry on a region wins. */
   data: T[]
   /**
@@ -81,7 +81,7 @@ type Fields<T> = {
  * in with its entry, out without it, and one that changes series leaves as
  * one and enters as the other.
  */
-export function ChoroplethChart3D<T extends Record<string, unknown>>({
+export function ChoroplethChart3D<T extends object>({
   data,
   land,
   id,
@@ -180,9 +180,13 @@ function overlaysOf(
 /**
  * The id of a region as the chart matches it: a numeric code without its
  * leading zeros, as the zero-padded `"040"` of world-atlas and the `40` that
- * parsed data holds are one region, Austria; any other id as it is.
+ * parsed data holds are one region, Austria; any other id as it is - each
+ * without the spaces around it, as padded CSV holds it.
  */
-const regionOf = (id: unknown) => String(id).replace(/^0+(?=\d+$)/, "")
+const regionOf = (id: unknown) =>
+  String(id)
+    .trim()
+    .replace(/^0+(?=\d+$)/, "")
 
 /**
  * Orders two regions by their ids, the larger region first, so a region
@@ -208,7 +212,7 @@ function useLargerFirst(land: GeoJSON.FeatureCollection) {
  * own `series` speaks; a region still fading out has no entry, so it says
  * nothing.
  */
-function regionTooltip<T extends Record<string, unknown>>(
+function regionTooltip<T extends object>(
   region: Region<T> | undefined,
   series: string,
   {
@@ -240,11 +244,7 @@ function regionTooltip<T extends Record<string, unknown>>(
  * region and its series, so a region that changes color leaves as one and
  * enters as the other, each fading.
  */
-function useRegions<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Fields<T>,
-  fallback: string
-) {
+function useRegions<T extends object>(data: T[], fields: Fields<T>, fallback: string) {
   // The fields one by one: the record of them is new at every render.
   const { id, value, series, label } = fields
   return React.useMemo(() => {
@@ -259,11 +259,7 @@ function useRegions<T extends Record<string, unknown>>(
 }
 
 /** The region of every entry - the last entry on a region wins - by the id it names. */
-function regionValues<T extends Record<string, unknown>>(
-  data: T[],
-  fields: Fields<T>,
-  fallback: string
-) {
+function regionValues<T extends object>(data: T[], fields: Fields<T>, fallback: string) {
   const regions = new Map<string, Region<T>>()
   for (const d of data) {
     const rid = regionOf(d[fields.id])

@@ -15,6 +15,7 @@ import {
   Axes3D,
   Marks3D,
   axis,
+  floored,
   intoWorld,
   pad,
   useSeries,
@@ -34,7 +35,7 @@ import {
   useTooltips,
 } from "@/registry/new-york/ui/chart-3d"
 
-export type AreaChart3DProps<T extends Record<string, unknown> = Record<string, unknown>> = {
+export type AreaChart3DProps<T extends object = Record<string, unknown>> = {
   /**
    * One entry per point along x, with a value per series. The area fills down
    * to the floor of the box, so it is a measure of values of 0 and up: below
@@ -71,7 +72,7 @@ const RIBBON = 2 / 3
  * the box. The series are the keys of the chart config unless `keys` names
  * them.
  */
-export function AreaChart3D<T extends Record<string, unknown>>({
+export function AreaChart3D<T extends object>({
   data,
   index,
   keys,
@@ -93,21 +94,21 @@ export function AreaChart3D<T extends Record<string, unknown>>({
   const polygons = intoWorld(polygons3D().camera(camera), world)
   // The x axis keeps half a row beyond the first and the last entry.
   const ends = [spec.x.domain[0] + 0.5, spec.x.domain[1] - 0.5]
-  const toward = Math.sign(camera.viewDirection().x)
   // Every series still on screen: one turned off flattens and fades away in its lane.
   const marks = Object.entries(lanes)
     .flatMap(([key, j]) => {
       const line = linePoints(rows, values, presence, key, ends)
-      if (!line.length) return []
+      // One point has no width to fill: a ribbon needs two.
+      if (line.length < 2) return []
       const z = [j - RIBBON / 2, j + RIBBON / 2]
       return [{ key, line, faces: ribbonFaces(polygons, line, spec.y.domain[0], z) }]
     })
     // The ribbons lie in slices of z of their own, and their floors span the
-    // same x at the same height: ordered by the middle of the floor, they are
-    // painted back to front exactly.
-    .sort((a, b) => sort(a.faces[4], b.faces[4]))
+    // same x: ordered by where their floors stand, they are painted back to
+    // front exactly.
+    .sort((a, b) => sort(a.faces[4].floor, b.faces[4].floor))
     .flatMap(({ key, line, faces }) =>
-      ribbonMarks(key, painted(faces, toward), line, lanePresence[key] ?? 0, (names) =>
+      ribbonMarks(key, painted(faces), line, lanePresence[key] ?? 0, (names) =>
         tips(joined(key, ...names), () =>
           // A series turned off says nothing, as an entry that left.
           series.includes(key)
@@ -128,11 +129,11 @@ export function AreaChart3D<T extends Record<string, unknown>>({
 /** One point of a line: the entry it stands for, its place along x and its value. */
 type LinePoint = { name: string; x: number; value: number }
 
-/** One face of a ribbon after the projection, with its name and, on the top, its segment. */
+/** One face of a ribbon after the projection, with its name, on the top its segment, and where it stands on the floor. */
 type RibbonFace = Polygon<
   Point3D,
   Point3D[] & { face: "front" | "back" | "left" | "right" | "bottom" | "top"; segment: number }
->
+> & { floor: { centroid: { z: number } } }
 
 /**
  * The points of the line of the series `key`, in order along x: every entry,
@@ -181,7 +182,8 @@ function linePoints(
  * counter-clockwise as seen from outside, so `ccw` tells whether it faces the
  * camera. The first five lie on its bounding box - the front and the back,
  * one polygon each however many points the line has, the two ends and the
- * bottom - the rest are its top, one quad per segment of the line.
+ * bottom - the rest are its top, one quad per segment of the line. Each has
+ * where it stands on the floor, as `floored` reads it.
  */
 function ribbonFaces(
   polygons: Polygons3DInstance<Point3D>,
@@ -194,7 +196,7 @@ function ribbonFaces(
   const face = (name: RibbonFace["face"], points: Point3D[], segment = -1) =>
     Object.assign(points, { face: name, segment })
   const [a, o] = [line[0], line[line.length - 1]]
-  return polygons.data([
+  const faces = polygons.data([
     face("front", [
       on(a, front),
       under(a, front),
@@ -214,19 +216,20 @@ function ribbonFaces(
         face("top", [on(line[i], front), on(p, front), on(p, back), on(line[i], back)], i)
       ),
   ])
+  return floored(faces, polygons)
 }
 
 /**
  * The faces of a ribbon that face the camera, in paint order. Every segment
  * of the top is a slab, and the planes x = const separate them: the top is
- * painted from the end of the ribbon away from the camera, which `toward`,
- * the sign of x in the view direction, names. The faces of the bounding box
- * come last: the ribbon lies wholly behind each of them.
+ * painted back to front by where its segments stand on the floor, from the
+ * end of the ribbon away from the camera. The faces of the bounding box come
+ * last: the ribbon lies wholly behind each of them.
  */
-function painted(faces: RibbonFace[], toward: number) {
+function painted(faces: RibbonFace[]) {
   const shown = faces.filter((f) => f.ccw)
   return [
-    ...shown.filter((f) => f.face === "top").sort((a, b) => toward * (a.segment - b.segment)),
+    ...shown.filter((f) => f.face === "top").sort((a, b) => sort(a.floor, b.floor)),
     ...shown.filter((f) => f.face !== "top"),
   ]
 }
@@ -269,7 +272,7 @@ function ribbonMarks(
  * name them - or what `tooltip` makes of that. A segment whose entry has
  * left the data says nothing.
  */
-function ribbonTooltip<T extends Record<string, unknown>>(
+function ribbonTooltip<T extends object>(
   key: string,
   names: string[],
   {
@@ -298,7 +301,7 @@ function ribbonTooltip<T extends Record<string, unknown>>(
         // A missing value stands as 0 but is no measured 0: the tooltip leaves it out.
         items: names.flatMap((name, i) => {
           const value = target[joined(name, key)]
-          if (!finite(spanned[i][key])) return []
+          if (!finite((spanned[i] as Record<string, unknown>)[key])) return []
           return [
             { label: (format.x ?? String)(nameOf(name)), value: format.y?.(value) ?? value, color },
           ]

@@ -60,8 +60,12 @@ describe("BarFieldChart3D", () => {
       </ChartContainer3D>
     )
     expect(faces(html)).toHaveLength(18)
-    expect(html).toContain("color-mix(in oklch, var(--color-high) 100%, var(--color-low))")
-    expect(html).toContain("color-mix(in oklch, var(--color-high) 0%, var(--color-low))")
+    expect(html).toContain(
+      "color-mix(in oklch, var(--color-high, currentColor) 100%, var(--color-low, currentColor))"
+    )
+    expect(html).toContain(
+      "color-mix(in oklch, var(--color-high, currentColor) 0%, var(--color-low, currentColor))"
+    )
   })
 
   test("colors names the config keys of the ramp", () => {
@@ -70,7 +74,7 @@ describe("BarFieldChart3D", () => {
         <BarFieldChart3D data={[[1, 2]]} colors={["mid", "high"]} />
       </ChartContainer3D>
     )
-    expect(html).toContain("var(--color-high) 0%, var(--color-mid)")
+    expect(html).toContain("var(--color-high, currentColor) 0%, var(--color-mid, currentColor)")
   })
 
   test("numbers given as text, as parsed CSV has them, draw what the numbers draw", () => {
@@ -82,6 +86,26 @@ describe("BarFieldChart3D", () => {
       )
     // Compared as text, "9" would top "100" and the axis would end at 10.
     expect(html([["10", "9", "100"]])).toBe(html([[10, 9, 100]]))
+  })
+
+  test("places given as text, as parsed CSV has them, stand the bars where the numbers do", () => {
+    const html = (props: object) =>
+      renderToString(
+        <ChartContainer3D id="c" config={config}>
+          <BarFieldChart3D
+            data={[
+              [1, 2, 3],
+              [4, 5, 6],
+            ]}
+            {...props}
+          />
+        </ChartContainer3D>
+      )
+    // Joined as text, "10" and half a cell would end the axis at "100.5".
+    expect(html({ x: ["1", "2", "10"], z: ["0", "5"] })).toBe(html({ x: [1, 2, 10], z: [0, 5] }))
+    expect(html({ domain: { x: ["0", "10"], z: ["2", "4"] } })).toBe(
+      html({ domain: { x: [0, 10], z: [2, 4] } })
+    )
   })
 
   test("a value that is no finite number draws no bar, and the rest stand", () => {
@@ -281,6 +305,87 @@ describe("BarFieldChart3D tooltip", () => {
   })
 })
 
+describe("BarFieldChart3D paint order", () => {
+  test("a bar below the floor paints in the order of its footprint, as one above it: the order does not follow the values", () => {
+    // The bars in paint order, far to near, each named by the middle of its three faces along x:
+    // a bar stands as far left on the screen whatever its height.
+    const order = (data: number[][]) => {
+      const html = renderToString(
+        <ChartContainer3D config={config}>
+          <BarFieldChart3D data={data} />
+        </ChartContainer3D>
+      )
+      const xs = faces(html).map((face) =>
+        [...face.match(/ d="([^"]*)"/)![1].matchAll(/(-?[\d.]+),/g)].map((m) => Number(m[1]))
+      )
+      expect(xs).toHaveLength(12)
+      return [0, 3, 6, 9].map((i) => {
+        const bar = xs.slice(i, i + 3).flat()
+        return Math.round((Math.min(...bar) + Math.max(...bar)) / 2)
+      })
+    }
+    // Four bars in the same cells, whatever their values.
+    const above = order([
+      [1, 10],
+      [10, 1],
+    ])
+    expect(new Set(above).size).toBe(4)
+    // All below the floor, the deep ones near, then far; then above and below it mixed.
+    expect(
+      order([
+        [-1, -1],
+        [-10, -10],
+      ])
+    ).toEqual(above)
+    expect(
+      order([
+        [-10, -10],
+        [-1, -1],
+      ])
+    ).toEqual(above)
+    expect(
+      order([
+        [-10, 1],
+        [10, -1],
+      ])
+    ).toEqual(above)
+    expect(
+      order([
+        [10, -1],
+        [-10, 1],
+      ])
+    ).toEqual(above)
+  })
+  test("bars that stand equally deep paint in the order of the data, so the server and the browser agree", () => {
+    // Seen along a diagonal of the grid, the bars of every diagonal across it stand equally
+    // deep. Node and the browser round sine and cosine differently in the last bit, so the
+    // depth alone paints such bars in either order and the hydration of the server HTML
+    // fails: the order of the data has to decide.
+    const html = renderToString(
+      <ChartContainer3D config={config} defaultView={{ yaw: Math.PI / 4, tilt: Math.PI / 6 }}>
+        <BarFieldChart3D
+          data={[
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+            [9, 10, 11, 12],
+            [13, 14, 15, 16],
+          ]}
+        />
+      </ChartContainer3D>
+    )
+    // The values of the bars in paint order, each read off its share of the high color.
+    const painted = [
+      ...new Set(
+        [...html.matchAll(/<path d="[^"]*" fill="[^"]*?var\(--color-high[^)]*\) (\d+)%/g)].map(
+          (face) => 1 + Math.round((Number(face[1]) * 15) / 100)
+        )
+      ),
+    ]
+    // Far to near, diagonal by diagonal, and within one from the first row on.
+    expect(painted).toEqual([4, 3, 8, 2, 7, 12, 1, 6, 11, 16, 5, 10, 15, 9, 14, 13])
+  })
+})
+
 describe("BarFieldChart3D focus", () => {
   test("hovering a face lights the faces of its bar alone; leaving clears them", async () => {
     const view = await mount(
@@ -433,7 +538,7 @@ describe("BarFieldChart3D transitions", () => {
         .bars()
         .map((p) => p.getAttribute("fill")!)
         .filter((f) => !f.includes("transparent"))
-        .map((f) => f.match(/var\(--color-high\) (-?\d+)%/)![1])
+        .map((f) => f.match(/var\(--color-high, currentColor\) (-?\d+)%/)![1])
     const view = await mount(chart([[900, 1000]]))
     const before = [...new Set(ramps(view))].sort()
     expect(before).toEqual(["0", "100"])

@@ -42,7 +42,7 @@
     </tr>
 </table>
 
-Copy-paste components or an npm package, plain SVG, themed by the `--chart-*` tokens you already have. They render on the server, take the same `ChartConfig` as the chart of shadcn/ui and turn with ⌘ on a Mac or Ctrl elsewhere and a drag, or with the arrow keys.
+Copy-paste components or an npm package, plain SVG, in the colors of your theme: they take the same `ChartConfig` as the chart of shadcn/ui, so `color: "var(--chart-1)"` draws in your `--chart-1`, light and dark. They render on the server and turn with ⌘ on a Mac or Ctrl elsewhere and a drag, or with the arrow keys.
 
 ## Sponsor charts-3d
 

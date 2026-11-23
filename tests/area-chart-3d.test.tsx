@@ -85,14 +85,14 @@ describe("AreaChart3D", () => {
       "b:5",
       "b:4",
     ])
-    expect(html).toContain("color-mix(in oklch, var(--color-b)")
+    expect(html).toContain("color-mix(in oklch, var(--color-b, currentColor)")
     expect(html).not.toContain("NaN")
   })
 
   test("keys picks the series", () => {
     const { html, marks: drawn } = serverMarks(chart(data, { keys: ["a"] }))
     expect(drawn).toHaveLength(4)
-    expect(html).not.toContain("var(--color-b)")
+    expect(html).not.toContain("var(--color-b, currentColor)")
   })
 
   test("an empty chart draws the box and no ribbons, and a single entry stays a number", () => {
@@ -101,6 +101,12 @@ describe("AreaChart3D", () => {
       expect(drawn.length).toBeLessThanOrEqual(2)
       expect(html).not.toContain("NaN")
     }
+  })
+
+  test("a single entry has no width to fill: it draws the box and no ribbon, no slab of its two ends", () => {
+    const { html, marks: drawn } = serverMarks(chart(data.slice(0, 1)))
+    expect(drawn).toHaveLength(0)
+    expect(html).not.toContain("NaN")
   })
 
   test("a value that is not a finite number stands as 0, and the labels fall back to the keys", () => {
@@ -164,6 +170,33 @@ describe("AreaChart3D", () => {
     const falling = (xs: number[]) => xs.every((x, i) => i === 0 || x < xs[i - 1])
     expect([rising(right), rising(left)]).toEqual([falling(left), falling(right)])
     expect(rising(right) !== rising(left)).toBe(true)
+  })
+  test("in perspective the ribbons paint by their distance from the eye: looking along them, a ribbon hides the one further out on either side", () => {
+    const rows = ["x", "y"].map((name) => ({ name, a: 1, b: 1, c: 1, d: 1, e: 1 }))
+    const view = { yaw: Math.PI / 2, tilt: 0.4, perspective: 3 }
+    const drawn = serverMarks(chart(rows, { keys: "abcde".split("") }, view)).marks
+    // The series in paint order, far to near.
+    const painted = [...new Set(drawn.map((m) => m.series))]
+    expect(painted).toHaveLength(5)
+    const at = (key: string) => painted.indexOf(key)
+    // The eye stands before the middle series, `c`: from there `b` hides part of `a` and `c`
+    // part of `b`, and on the other side `d` hides part of `e` and `c` part of `d`.
+    expect(at("a")).toBeLessThan(at("b"))
+    expect(at("b")).toBeLessThan(at("c"))
+    expect(at("e")).toBeLessThan(at("d"))
+    expect(at("d")).toBeLessThan(at("c"))
+  })
+
+  test("in perspective the top of a ribbon paints from both its ends towards the eye", () => {
+    // Seen along z the eye stands before the middle of the three segments: the outer ones
+    // lie further from it on either side, and paint first.
+    const view = { yaw: 0, tilt: Math.PI / 6, perspective: 3 }
+    const drawn = serverMarks(chart(flat, { keys: ["a"] }, view)).marks
+    const front = drawn.findIndex((m) => m.corners.length === flat.length + 2)
+    const tops = drawn.slice(0, front).map((m) => middle(m.corners)[0])
+    expect(tops).toHaveLength(3)
+    const [, between] = [...tops].sort((a, b) => a - b)
+    expect(tops.indexOf(between)).toBe(2)
   })
 })
 
@@ -275,7 +308,11 @@ describe("AreaChart3D tooltip", () => {
     // The default it was handed: the series, and an item per spanned entry with its value of b.
     expect(given[0].title).toBe("B")
     expect(given[0].items).toEqual(
-      seen[0].entries.map((e) => ({ label: e.name, value: e.b, color: "var(--color-b)" }))
+      seen[0].entries.map((e) => ({
+        label: e.name,
+        value: e.b,
+        color: "var(--color-b, currentColor)",
+      }))
     )
     expect(tip(view.host)).toBe(`b:${seen[0].entries.map((e) => e.name).join("")}`)
     const [x, y] = middle(front(view.host).corners.slice(1, 3))

@@ -52,6 +52,22 @@ export default defineConfig({
     ignorePatterns,
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    // The registry lands in other projects and is linted there. The recommended rules of
+    // typescript-eslint reject `any`, and those of react-hooks 7, as Next.js 16 sets them
+    // up, the rules of React's compiler: errors here too, so a file that breaks one fails.
+    overrides: [
+      {
+        files: ["registry/**"],
+        plugins: ["react", "typescript", "unicorn", "oxc"],
+        rules: {
+          "typescript/no-explicit-any": "error",
+          "react/refs": "error",
+          "react/purity": "error",
+          "react/immutability": "error",
+          "react/set-state-in-effect": "error",
+        },
+      },
+    ],
     options: { typeAware: true, typeCheck: true },
   },
 

@@ -18,6 +18,7 @@ import {
   gridAxis,
   intoWorld,
   faded,
+  floored,
   shade,
   useChart3D,
   useTween,
@@ -27,6 +28,7 @@ import {
   ramp,
   type Mark3D,
   type Tooltip3D,
+  type World,
   useTooltips,
   joined,
 } from "@/registry/new-york/ui/chart-3d"
@@ -38,7 +40,9 @@ export type SurfaceChart3DProps = {
    * The data values the first and the last column (x) and row (z) stand for,
    * the others evenly between. The chart keeps half a cell between the grid
    * and the walls of its box; a domain given here names the box exactly,
-   * without that room.
+   * without that room, as `x` and `z` do: a point of the surface has no
+   * width to keep inside the box. The bar field keeps the room either way,
+   * for the width of its bars.
    * @defaultValue the indices of the columns and rows
    */
   domain?: { x?: [number, number]; z?: [number, number] }
@@ -67,14 +71,15 @@ export type SurfaceChart3DProps = {
   /** The titles of the axes. */
   titles?: Partial<Record<keyof AxesSpec, React.ReactNode>>
   /**
-   * What a cell says on hover: `tooltip` is what it would say, its height as
-   * the ticks of y name it, `data` the row and column the cell starts at and
-   * its height, the mean of its four corners; `null` shows none.
+   * What a cell says on hover: `tooltip` is what it would say, its x, z and
+   * height as the ticks name them, `data` the row and column the cell starts
+   * at, the x and z they stand for and its height, the mean of its four
+   * corners; `null` shows none.
    * @defaultValue (tooltip) => tooltip
    */
   tooltip?: (
     tooltip: Tooltip3D,
-    data: { row: number; column: number; value: number }
+    data: { row: number; column: number; x: number; z: number; value: number }
   ) => Tooltip3D | null
 }
 
@@ -107,33 +112,30 @@ export function SurfaceChart3D({
   // Every column and row glides to its place.
   const placesX = useTween(sides.x.places)
   const placesZ = useTween(sides.z.places)
-  const tips = useTooltips([raw, present, format, titles, tooltip])
-  // Everything of a cell but its shade waits for the data to move, not the camera.
-  const { lattice, points } = React.useMemo(() => {
-    const lattice = gridLattice(heights, { x: placesX, z: placesZ }, floor)
-    const cells = {
-      raw,
-      present,
-      keys: [low, high] as [string, string],
-      tips,
-      format,
-      titles,
-      tooltip,
-    }
-    return { lattice, points: gridPoints(lattice, { x: placesX, z: placesZ }, cells) }
-  }, [heights, placesX, placesZ, floor, raw, present, low, high, tips, format, titles, tooltip])
+  const tips = useTooltips([raw, present, sides.x.places, sides.z.places, format, titles, tooltip])
+  const { lattice, points } = useLattice(heights, { x: placesX, z: placesZ }, floor, {
+    raw,
+    present,
+    // The places of the data, not the gliding ones: what a cell says names where it stands.
+    at: { x: sides.x.places, z: sides.z.places },
+    keys: [low, high],
+    tips,
+    format,
+    titles,
+    tooltip,
+  })
   const spec = useTweenAxes({ x: sides.x.spec, y: axis(floor, peak), z: sides.z.spec })
   const world = worldBox(spec)
 
   const grid = intoWorld<GridPoint, GridPlanes3DInstance<GridPoint>>(
     gridPlanes3D<GridPoint>().camera(camera),
-    world
+    heldIn(world, spec)
   )
     // d3-3d reads rows(0) as the getter; a grid without columns has no points anyway.
     .rows(Math.max(1, lattice[0]?.length ?? 0))
-  const marks = grid
-    .data(points)
-    .sort(sort)
+  // The cells stand side by side: back to front by their footprints, however high each reaches.
+  const marks = floored(grid.data(points), grid)
+    .sort((a, b) => sort(a.floor, b.floor))
     .map((quad) => quadMark(quad, fade))
 
   return (
@@ -142,6 +144,48 @@ export function SurfaceChart3D({
       <Marks3D marks={marks} />
     </>
   )
+}
+
+/**
+ * `world` with every point held within `spec`, the gliding ends of the axes.
+ * A cell that comes or goes keeps its place and its height while the axes
+ * glide to make room for it or away from it: it stands at the wall it would
+ * pass, not beyond the box - where a cell that stays is at every frame anyway.
+ */
+function heldIn(world: World, spec: AxesSpec): World {
+  const held = (axis: keyof AxesSpec) => {
+    const [lo, hi] = [Math.min(...spec[axis].domain), Math.max(...spec[axis].domain)]
+    return (value: number) => world[axis](Math.min(hi, Math.max(lo, value)))
+  }
+  return { x: held("x"), y: held("y"), z: held("z") }
+}
+
+/**
+ * The lattice at the gliding `places` and its points, each cell colored and
+ * named by `cells`: built when the data moves, not when the camera does.
+ */
+function useLattice(
+  heights: Record<string, number>,
+  { x, z }: Record<"x" | "z", Record<string, number>>,
+  floor: number,
+  { raw, present, at, keys: [low, high], tips, format, titles, tooltip }: Cells
+) {
+  const [atX, atZ] = [at.x, at.z]
+  return React.useMemo(() => {
+    const lattice = gridLattice(heights, { x, z }, floor)
+    const data = { x: atX, z: atZ }
+    const cells: Cells = {
+      raw,
+      present,
+      at: data,
+      keys: [low, high],
+      tips,
+      format,
+      titles,
+      tooltip,
+    }
+    return { lattice, points: gridPoints(lattice, { x, z }, cells) }
+  }, [heights, x, z, floor, raw, present, atX, atZ, low, high, tips, format, titles, tooltip])
 }
 
 /**
@@ -159,6 +203,7 @@ type GridPoint = Point3D & {
 type Cells = Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip"> & {
   raw: number[][]
   present: Record<string, number>
+  at: Record<"x" | "z", Record<number, number>>
   keys: [string, string]
   tips: ReturnType<typeof useTooltips>
 }
@@ -171,7 +216,7 @@ type Cells = Pick<SurfaceChart3DProps, "format" | "titles" | "tooltip"> & {
 function gridPoints(
   lattice: { r: number; c: number; y: number }[][],
   places: Record<"x" | "z", Record<string, number>>,
-  { raw, present, keys, tips, ...say }: Cells
+  { raw, present, at, keys, tips, ...say }: Cells
 ): GridPoint[] {
   const [lo = 0, hi = 0] = extent(lattice.flat(), (p) => p.y)
   return lattice.flatMap((row, i) =>
@@ -187,7 +232,7 @@ function gridPoints(
           // What a cell says reads the data at its corners, not the heights on their way; a
           // column that leaves gives the cell beside it new corners when the glide is done.
           tooltip: tips(joined(...quad.map((p) => `${p.r}-${p.c}`)), () =>
-            cellTooltip(quad, raw, present, say)
+            cellTooltip(quad, raw, present, at, say)
           ),
         }
       }
@@ -207,6 +252,7 @@ function cellTooltip(
   quad: { r: number; c: number }[],
   data: number[][],
   present: Record<string, number>,
+  at: Cells["at"],
   {
     format = {},
     titles = {},
@@ -218,9 +264,14 @@ function cellTooltip(
     const value = quad.reduce((sum, p) => sum + Number(data[p.r][p.c]), 0) / quad.length
     const row = Math.min(...quad.map((p) => p.r))
     const column = Math.min(...quad.map((p) => p.c))
+    const [x, z] = [at.x[column], at.z[row]]
+    const named = (name: keyof AxesSpec, v: number) => ({
+      label: titles[name] ?? (name === "y" ? "value" : name),
+      value: format[name]?.(v) ?? v,
+    })
     return tooltip(
-      { items: [{ label: titles.y ?? "value", value: format.y?.(value) ?? value }] },
-      { row, column, value }
+      { items: [named("x", x), named("z", z), named("y", value)] },
+      { row, column, x, z, value }
     )
   }
 }

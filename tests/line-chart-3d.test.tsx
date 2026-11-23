@@ -80,8 +80,8 @@ describe("LineChart3D", () => {
     // Three points are two segments, four halves; two points one segment, two halves.
     expect(quads).toHaveLength(6)
     expect(dots).toHaveLength(5)
-    expect(fills.filter((f) => f === "var(--color-a)")).toHaveLength(4 + 3)
-    expect(fills.filter((f) => f === "var(--color-b)")).toHaveLength(2 + 2)
+    expect(fills.filter((f) => f === "var(--color-a, currentColor)")).toHaveLength(4 + 3)
+    expect(fills.filter((f) => f === "var(--color-b, currentColor)")).toHaveLength(2 + 2)
     expect(html).not.toContain("NaN")
   })
 
@@ -89,7 +89,7 @@ describe("LineChart3D", () => {
     const { quads, dots, fills } = serverMarks(chart(helix))
     expect(quads).toHaveLength(8)
     expect(dots).toHaveLength(5)
-    expect(new Set(fills)).toEqual(new Set(["var(--color-a)"]))
+    expect(new Set(fills)).toEqual(new Set(["var(--color-a, currentColor)"]))
   })
 
   test("a line is as wide on the screen wherever it runs, and its joints are as wide", () => {
@@ -175,7 +175,8 @@ describe("LineChart3D", () => {
   })
 
   test("colors ramps each point's part of every line by its height, in place of the series colors", () => {
-    const ramp = (t: number) => `color-mix(in oklch, var(--color-b) ${t}%, var(--color-a))`
+    const ramp = (t: number) =>
+      `color-mix(in oklch, var(--color-b, currentColor) ${t}%, var(--color-a, currentColor))`
     const { fills } = serverMarks(chart(helix, { series: "s", colors: ["a", "b"] }))
     // Heights 0, 2, 4 on a, 8, 6 on b, on a ramp from 0 to 8: the halves and the joint of a point.
     expect(fills).toHaveLength(6 + 5)
@@ -232,15 +233,19 @@ describe("LineChart3D hover", () => {
     const view = await mount(chart(two, { series: "s" }))
     const before = marks(view.host)
     // The first point of b: one half segment and its joint.
-    const quad = before.quads.find((q) => q.el.getAttribute("fill") === "var(--color-b)")!
+    const quad = before.quads.find(
+      (q) => q.el.getAttribute("fill") === "var(--color-b, currentColor)"
+    )!
     await view.point(middle(quad.corners))
     const after = marks(view.host)
     const on = after.all.filter((m) => lit(m.getAttribute("fill")!))
     expect(on.filter((m) => m.tagName === "path")).toHaveLength(1)
     expect(on.filter((m) => m.tagName === "circle" && m.getAttribute("r") === "1")).toHaveLength(1)
-    expect(after.fills.filter((f) => f === "var(--color-b)")).toHaveLength(2)
-    expect(after.fills.filter((f) => f === "var(--color-a)")).toHaveLength(4)
-    expect(on.every((m) => m.getAttribute("fill")!.includes("var(--color-b)"))).toBe(true)
+    expect(after.fills.filter((f) => f === "var(--color-b, currentColor)")).toHaveLength(2)
+    expect(after.fills.filter((f) => f === "var(--color-a, currentColor)")).toHaveLength(4)
+    expect(on.every((m) => m.getAttribute("fill")!.includes("var(--color-b, currentColor)"))).toBe(
+      true
+    )
     await view.leave()
     expect(marks(view.host).fills.filter(lit)).toHaveLength(0)
     expect(view.tip()).toBe("")
@@ -262,7 +267,9 @@ describe("LineChart3D hover", () => {
 
   test("the title is the label of the series, its key without one, and none without series", async () => {
     const view = await mount(chart(two, { series: "s" }))
-    const a = marks(view.host).dots.find((d) => d.el.getAttribute("fill") === "var(--color-a)")!
+    const a = marks(view.host).dots.find(
+      (d) => d.el.getAttribute("fill") === "var(--color-a, currentColor)"
+    )!
     await view.point(a.at)
     expect(view.tip()).toMatch(/^ax/)
     await view.render(chart(two))
@@ -312,13 +319,39 @@ describe("LineChart3D transitions", () => {
   const p = { id: "p", x: 0, y: 0, z: 0 }
   const q = { id: "q", x: 10, y: 10, z: 10 }
   const r = { id: "r", x: 20, y: 0, z: 20 }
-  const faded = (fill: string) => fill.startsWith("color-mix(in oklab, var(--color-a)")
+  const faded = (fill: string) =>
+    fill.startsWith("color-mix(in oklab, var(--color-a, currentColor)")
   /** The one dot that stands on no other. */
   const alone = (dots: { at: number[] }[]) =>
     dots.filter((d) => dots.filter((o) => o.at.join() === d.at.join()).length === 1)[0]
   /** How many of the dots stand on another one. */
   const stacked = (dots: { at: number[] }[]) =>
     dots.filter((d, i) => dots.some((o, j) => i !== j && o.at.join() === d.at.join())).length
+
+  test("a feed that comes faster than the line glides drops its oldest point with every update: the points that left do not pile up", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
+    // A window of six points that moves on by one every 100 ms, a sixth of the glide.
+    const window = (t: number) =>
+      [0, 1, 2, 3, 4, 5].map((i) => ({ id: `n${t + i}`, x: t + i, y: (t + i) % 3, z: (t + i) % 2 }))
+    const view = await mount(chart(window(0), { id: "id" }))
+    const drawn = async (updates: number[]) => {
+      for (const t of updates) {
+        await view.render(chart(window(t), { id: "id" }))
+        await glide(100)
+      }
+      return marks(view.host).all.length
+    }
+    const range = (from: number, to: number) =>
+      Array.from({ length: to - from }, (_, i) => from + i)
+    // A point that left is on its way out for the time of a glide, six updates: no longer.
+    const early = await drawn(range(1, 13))
+    expect(await drawn(range(13, 41))).toBe(early)
+    expect(view.host.innerHTML).not.toContain("NaN")
+    // The feed stops: the line comes to rest on its six points.
+    await glide(700)
+    expect(marks(view.host).all.length).toBeLessThan(early)
+    await view.unmount()
+  })
 
   test("points that come faster than they arrive each start on the point before them, where that one is now", async () => {
     // A zigzag, so no two points lie on one another on the screen once they have parted.
@@ -377,7 +410,7 @@ describe("LineChart3D transitions", () => {
     expect(stacked(now.dots)).toBe(0)
     // Its half of the new segment and its dot fade in; the rest of the line stays as it is.
     expect(now.fills.filter(faded)).toHaveLength(2)
-    expect(now.fills.filter((f) => f === "var(--color-a)")).toHaveLength(3 + 2)
+    expect(now.fills.filter((f) => f === "var(--color-a, currentColor)")).toHaveLength(3 + 2)
 
     await glide(400)
     now = marks(view.host)
@@ -468,7 +501,7 @@ describe("LineChart3D transitions", () => {
     const view = await mount(chart(a, { id: "id", series: "s" }))
     await view.render(chart([...a, ...b], { id: "id", series: "s" }))
     const ofB = (m: ReturnType<typeof marks>) =>
-      m.dots.filter((d) => d.el.getAttribute("fill")!.includes("var(--color-b)"))
+      m.dots.filter((d) => d.el.getAttribute("fill")!.includes("var(--color-b, currentColor)"))
     const start = ofB(marks(view.host))
     expect(start).toHaveLength(2)
     expect(stacked(marks(view.host).dots)).toBe(0)
@@ -477,7 +510,9 @@ describe("LineChart3D transitions", () => {
     expect(mid.map((d) => d.at)).toEqual(start.map((d) => d.at))
     expect(mid.every((d) => d.el.getAttribute("fill")!.startsWith("color-mix"))).toBe(true)
     await glide(400)
-    expect(marks(view.host).fills.filter((f) => f === "var(--color-b)")).toHaveLength(4)
+    expect(marks(view.host).fills.filter((f) => f === "var(--color-b, currentColor)")).toHaveLength(
+      4
+    )
     await view.unmount()
   })
 
@@ -581,6 +616,6 @@ describe("a missing series", () => {
     )
     expect(html).not.toContain("--color-undefined")
     // The two entries without a series are one line of the first key: a segment, two halves, two dots.
-    expect(fills.filter((f) => f === "var(--color-a)")).toHaveLength(2 + 2)
+    expect(fills.filter((f) => f === "var(--color-a, currentColor)")).toHaveLength(2 + 2)
   })
 })
