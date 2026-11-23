@@ -111,6 +111,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Two fingers turn and zoom the chart when they land on its marks or the
+  walls of its box: on a phone, a pinch with each finger on an element of its
+  own was left to the page, so the chart moved only where both fingers met
+  its bare background.
 - An entry named like a property every object has - `constructor`,
   `toString`, `__proto__` - glides in and out like any other: the bar and
   the area chart hid it until its glide was done, the line drew NaN and the
