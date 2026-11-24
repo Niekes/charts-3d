@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `donut-chart-3d`, `DonutChart3D`: the pie of the registry, with a hole -
   slices as wide as their share of the whole and as tall as their value,
-  relative to the largest, so the depth carries the value (ADR-0014). The
+  relative to the largest, so the depth carries the value (ADR-0015). The
   slices run in the order of the data, clockwise seen from above from the
   back, and glide, widen out of their neighbours and narrow back into them
   as the data changes. It reads its entries as the places chart does -

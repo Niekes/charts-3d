@@ -90,7 +90,7 @@ type Slice = { name: string; start: number; end: number; height: number }
 /**
  * A donut of slices, each as wide as its share of the whole and as tall as
  * its value, relative to the largest: a pie whose depth carries the value
- * (ADR-0014).
+ * (ADR-0015).
  */
 export function DonutChart3D<T extends object>({
   data,
