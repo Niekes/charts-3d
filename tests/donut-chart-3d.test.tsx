@@ -47,6 +47,28 @@ const angleOf = ([x, y]: [number, number], [cx, cy]: number[]) =>
 const tipOf = (host: HTMLElement) =>
   host.querySelector('[data-slot="chart-3d-tooltip"]')?.textContent ?? ""
 
+const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
+const lit = (fill: string) => `var(--chart-3d-focus, color-mix(in oklch, ${fill} 60%, white))`
+const marks = (svg: SVGSVGElement) => [
+  ...svg.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-marks"] path'),
+]
+const marksOf = (svg: SVGSVGElement, key: string) =>
+  marks(svg).filter((m) => m.getAttribute("fill")!.includes(colorOf(key)))
+const litOnes = (svg: SVGSVGElement) => marks(svg).filter((m) => isLit(m.getAttribute("fill")!))
+const spread = (points: [number, number][]) =>
+  Math.max(...points.map(([x]) => x)) - Math.min(...points.map(([x]) => x))
+
+/** A point on the largest face of the slice of `key`: the middle of its corners. */
+function on(svg: SVGSVGElement, key: string) {
+  const [corners] = marksOf(svg, key)
+    .map((m) => faces(`<path d="${m.getAttribute("d")}" fill="x"`)[0].points)
+    .sort((a, b) => spread(b) - spread(a))
+  return {
+    clientX: corners.reduce((s, [x]) => s + x, 0) / corners.length,
+    clientY: corners.reduce((s, [, y]) => s + y, 0) / corners.length,
+  }
+}
+
 const browsers = [
   { browser: "chrome", visitors: 100 },
   { browser: "safari", visitors: 300 },
@@ -150,27 +172,6 @@ describe("DonutChart3D paint order", () => {
 })
 
 describe("DonutChart3D hover", () => {
-  const isLit = (fill: string) => fill.startsWith("var(--chart-3d-focus")
-  const marks = (svg: SVGSVGElement) => [
-    ...svg.querySelectorAll<SVGPathElement>('[data-slot="chart-3d-marks"] path'),
-  ]
-  const marksOf = (svg: SVGSVGElement, key: string) =>
-    marks(svg).filter((m) => m.getAttribute("fill")!.includes(colorOf(key)))
-  const litOnes = (svg: SVGSVGElement) => marks(svg).filter((m) => isLit(m.getAttribute("fill")!))
-
-  /** A point on the largest face of the slice of `key`: the middle of its corners. */
-  function on(svg: SVGSVGElement, key: string) {
-    const [corners] = marksOf(svg, key)
-      .map((m) => faces(`<path d="${m.getAttribute("d")}" fill="x"`)[0].points)
-      .sort((a, b) => spread(b) - spread(a))
-    return {
-      clientX: corners.reduce((s, [x]) => s + x, 0) / corners.length,
-      clientY: corners.reduce((s, [, y]) => s + y, 0) / corners.length,
-    }
-  }
-  const spread = (points: [number, number][]) =>
-    Math.max(...points.map(([x]) => x)) - Math.min(...points.map(([x]) => x))
-
   test("a slice under the pointer names itself in the tooltip, with its value formatted and its share of the whole; it lights whole, and leaving clears it", async () => {
     const chart = await mount(
       <ChartContainer3D config={config} defaultView={FROM_ABOVE}>
@@ -182,6 +183,7 @@ describe("DonutChart3D hover", () => {
         />
       </ChartContainer3D>
     )
+    const before = marks(chart.svg).map((m) => m.getAttribute("fill")!)
     await chart.send("pointermove", on(chart.svg, "chrome"))
     const text = tipOf(chart.host)
     expect(text).toContain("chrome")
@@ -189,7 +191,19 @@ describe("DonutChart3D hover", () => {
     expect(text).toMatch(/share\s*25%/)
     expect(text).not.toContain("safari")
     expect(litOnes(chart.svg)).toEqual(marksOf(chart.svg, "chrome"))
+    // The slice takes its own fill lightened; every other fill stays.
+    const after = marks(chart.svg).map((m) => m.getAttribute("fill")!)
+    expect(after).toEqual(before.map((f, i) => (isLit(after[i]) ? lit(f) : f)))
 
+    // Off the slice, over the hole of the ring: the focus and the tooltip go.
+    const [x, y] = middle(chart.svg.innerHTML)
+    await chart.send("pointermove", { clientX: x, clientY: y })
+    expect(litOnes(chart.svg)).toHaveLength(0)
+    expect(tipOf(chart.host)).toBe("")
+
+    // Back on it, then off the chart.
+    await chart.send("pointermove", on(chart.svg, "chrome"))
+    expect(litOnes(chart.svg)).toEqual(marksOf(chart.svg, "chrome"))
     await chart.send("pointerout", { relatedTarget: document.body })
     expect(litOnes(chart.svg)).toHaveLength(0)
     expect(tipOf(chart.host)).toBe("")
@@ -384,7 +398,7 @@ describe("DonutChart3D transitions", () => {
   // A browser that says the reader has not asked for reduced motion, so the chart may glide.
   beforeEach(() => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
-    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] })
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -490,6 +504,89 @@ describe("DonutChart3D transitions", () => {
     await act(() => vi.advanceTimersByTime(500))
     expect(cornersOf(chart.svg.innerHTML, "safari")).toHaveLength(0)
     expect(span(chart.svg, "firefox", { last: true }).to).toBeCloseTo(360, 0)
+    await chart.unmount()
+  })
+
+  test("a slice on its way out keeps its place and its fade while new values glide the others: a feed faster than the glide", async () => {
+    const three = [
+      { browser: "chrome", visitors: 100 },
+      { browser: "safari", visitors: 100 },
+      { browser: "firefox", visitors: 100 },
+    ]
+    const chart = await mount(donut(three))
+    await act(() => vi.advanceTimersByTime(700))
+    // Safari leaves; before its glide is done, Chrome's value changes.
+    await chart.render(donut([three[0], three[2]]))
+    await act(() => vi.advanceTimersByTime(250))
+    await chart.render(donut([{ browser: "chrome", visitors: 120 }, three[2]]))
+    await act(() => vi.advanceTimersByTime(450))
+    expect(marks(chart.svg).filter((m) => m.getAttribute("fill")!.includes("NaN"))).toEqual([])
+    // Still narrowing, faded, where it stood: between Chrome and Firefox.
+    const [chrome, safari, firefox] = ["chrome", "safari", "firefox"].map((k) =>
+      span(chart.svg, k, { last: k === "firefox" })
+    )
+    expect(fadedOnes(chart.svg, "safari")).toBe(true)
+    expect(safari.from).toBeCloseTo(chrome.to, 0)
+    expect(firefox.from).toBeCloseTo(safari.to, 0)
+    await chart.unmount()
+  })
+
+  test("slices whose values glide to 0 fade out as they go, and fade back in as they come: no slice pops, and none speaks on its way out", async () => {
+    const chart = await mount(donut(browsers))
+    await act(() => vi.advanceTimersByTime(700))
+    await chart.render(donut(browsers.map((d) => ({ ...d, visitors: 0 }))))
+    await act(() => vi.advanceTimersByTime(300))
+    expect(fadedOnes(chart.svg, "chrome")).toBe(true)
+    expect(fadedOnes(chart.svg, "safari")).toBe(true)
+    await chart.send("pointermove", on(chart.svg, "safari"))
+    expect(tipOf(chart.host)).toBe("")
+    await act(() => vi.advanceTimersByTime(500))
+    expect(marks(chart.svg)).toHaveLength(0)
+
+    await chart.render(donut(browsers))
+    await act(() => vi.advanceTimersByTime(300))
+    expect(fadedOnes(chart.svg, "chrome")).toBe(true)
+    await act(() => vi.advanceTimersByTime(500))
+    expect(fadedOnes(chart.svg, "chrome")).toBe(false)
+    expect(chart.svg.innerHTML).not.toContain("NaN")
+    await chart.unmount()
+  })
+
+  test("while it glides, a slice says the value of its entry, not the one on screen, and a gone one says nothing", async () => {
+    const chart = await mount(donut(browsers))
+    await act(() => vi.advanceTimersByTime(700))
+    await chart.render(donut([{ browser: "chrome", visitors: 300 }]))
+    await act(() => vi.advanceTimersByTime(300))
+    await chart.send("pointermove", on(chart.svg, "chrome"))
+    expect(tipOf(chart.host)).toMatch(/visitors\s*300.*share\s*100%/)
+    await chart.send("pointermove", on(chart.svg, "safari"))
+    expect(tipOf(chart.host)).toBe("")
+    await chart.unmount()
+  })
+
+  test("an id is its own within its series: an entry that changes its series leaves as the slice of one and enters as the other", async () => {
+    const two = { a: { color: "red" }, b: { color: "blue" } }
+    const keyed = (kind: string) => (
+      <ChartContainer3D config={two} defaultView={FROM_ABOVE}>
+        <DonutChart3D
+          data={[
+            { browser: "chrome", visitors: 100, kind },
+            { browser: "safari", visitors: 100, kind: "b" },
+          ]}
+          id="browser"
+          value="visitors"
+          series="kind"
+        />
+      </ChartContainer3D>
+    )
+    const chart = await mount(keyed("a"))
+    await act(() => vi.advanceTimersByTime(700))
+    await chart.render(keyed("b"))
+    await act(() => vi.advanceTimersByTime(300))
+    // Chrome of `a` fades out as Chrome of `b` fades in.
+    expect(fadedOnes(chart.svg, "a")).toBe(true)
+    await act(() => vi.advanceTimersByTime(500))
+    expect(marksOf(chart.svg, "a")).toHaveLength(0)
     await chart.unmount()
   })
 })

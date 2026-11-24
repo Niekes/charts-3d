@@ -265,10 +265,11 @@ How the charts draw, so that a new one draws the same way:
   footprint, which the core's `floored` hands each as `floor`: how high a
   shape reaches says nothing about what it hides, and in perspective the
   distance from the eye orders them, not the depth. Shapes that stand round
-  one upright axis - the steps of the slices of the donut - sort by how near
-  each stands round the ring to the side the eye looks from: an upright
-  plane through the axis parts any two, and the box around a step, turned
-  round the ring, overlaps its neighbours', which `floored` would misorder.
+  one upright axis - the cubes the slices of the donut are cut into - sort
+  by how near each stands round the ring to the side the eye looks from: an
+  upright plane through the axis parts any two, and the box around such a
+  cube, turned round the ring, overlaps its neighbours', which `floored`
+  would misorder.
 - **Culling.** The faces of `cubes3D` point outwards: draw the ones that are
   `ccw`, the ones that face the camera.
 - **Shading in CSS.** `shade(face, color)` returns a `color-mix()`. A chart

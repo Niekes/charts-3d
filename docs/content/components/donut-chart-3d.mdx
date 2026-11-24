@@ -77,10 +77,14 @@ Press Update: every slice glides to its new share and height over the
 ## Enter and leave
 
 New data may also bring and drop whole slices - a slice follows the name of
-its entry, in the `id` field. An added browser widens out of its neighbours
-and rises as it fades in; a removed one narrows back into them and sinks as it
-fades out, the mirror of its entering, where it stood in the ring (see Enter
-in the [glossary](https://github.com/Niekes/charts-3d/blob/main/GLOSSARY.md)).
+its entry, in the `id` field, within its series. An added browser widens out
+of its neighbours and rises as it fades in; a removed one narrows back into
+them and sinks as it fades out, the mirror of its entering, where it stood in
+the ring (see Enter in the
+[glossary](https://github.com/Niekes/charts-3d/blob/main/GLOSSARY.md)). A
+value that drops to 0 leaves the same way, and one that rises from 0 comes. A
+slice that changes its place in the order swaps with the ones it passes
+halfway through the glide: a ring has no room to let it by.
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">

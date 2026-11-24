@@ -5,11 +5,12 @@ import { max, sum } from "d3-array"
 import { cubes3D, sector, sort, type Camera3DInstance, type Point3D } from "d3-3d"
 
 import {
+  GLOBE_RADIUS,
   Marks3D,
+  barMarks,
   colorOf,
-  cubeMarks,
-  faded,
   joined,
+  keyOf,
   nonNegative,
   uniqueIds,
   useChart3D,
@@ -22,12 +23,16 @@ import {
 } from "@/registry/new-york/ui/chart-3d"
 
 /** The outer radius of the ring, as wide as the globe, and that of its hole, half of it. */
-const RADIUS = 1.15
+const RADIUS = GLOBE_RADIUS
 const HOLE = RADIUS / 2
 /** The height of the tallest slice: as tall as the ring is wide. */
 const TALL = RADIUS - HOLE
 /** The widest step a slice is cut into, 6°: so every footprint is about one size. */
 const STEP = Math.PI / 30
+/** The numbers a slice glides, by the first letter of their keys: its value, its fade and its place round the ring. */
+const AMOUNT = "a"
+const OPACITY = "o"
+const PLACE = "p"
 
 // An entry is any object: `object`, not `Record<string, unknown>`, lets one
 // declared as an interface in, which has no index signature.
@@ -44,8 +49,8 @@ export type DonutChart3DProps<T extends object = Record<string, unknown>> = {
   /**
    * The field that identifies an entry and titles its tooltip: through
    * updates a new slice widens out of its neighbours, a gone one narrows back
-   * into them and one that changes glides. A name that repeats is a slice of
-   * its own.
+   * into them and one that changes glides. A name is its own within its
+   * series, and one that repeats is a slice of its own.
    * @defaultValue the place of the entry in the data
    */
   id?: keyof T & string
@@ -97,24 +102,23 @@ export function DonutChart3D<T extends object>({
 }: DonutChart3DProps<T>) {
   const { config, camera } = useChart3D()
   const fields = { value, id, series }
-  const { entries, amounts, order, present } = useSlices(data, fields)
-  // A slice glides to its new share and height; a new one widens and rises out
-  // of nothing as it fades in, and a gone one sinks back as it fades out, where
-  // it stood in the ring.
-  const shown = useTween(amounts, 0)
-  const opacity = useTween(present, 0)
-  const place = useTween(order)
-  const keyFor = useConfigKeys(entries, series ?? id, Object.keys(config)[0], shown)
+  const fallback = Object.keys(config)[0]
+  const { entries, numbers, order, total } = useSlices(data, fields, fallback)
+  // Every number of every slice in one glide, on one clock: its value - a new
+  // slice widens and rises out of nothing, a gone one narrows and sinks back -
+  // its fade, and its place round the ring, where a gone one stands.
+  const glide = useTween(numbers, (key) => (key[0] === PLACE ? undefined : 0))
+  const { amount, opacity, place } = split(glide)
+  const keyFor = useConfigKeys(entries, series ?? id, fallback, amount)
   const tips = useTooltips([data, value, id, series, config, format, tooltip])
-  const reading = { config, fields, total: sum(Object.values(amounts)), format, tooltip }
+  const reading = { config, fields, total, format, tooltip }
   // A new slice and a gone one that stood in its place: the new one first.
   const rank = (name: string) => order[name] ?? Infinity
-  const names = Object.keys(shown).sort((a, b) => place[a] - place[b] || rank(a) - rank(b))
-  const marks = ringShapes(camera, ring(names, shown)).flatMap((step) =>
+  const names = Object.keys(amount).sort((a, b) => place[a] - place[b] || rank(a) - rank(b))
+  const marks = ringShapes(camera, ring(names, amount)).flatMap((step) =>
     stepMarks(
       step,
       colorOf(keyFor(step.name)),
-      // Fed the keys of one render, the glides let a gone slice go in one frame.
       opacity[step.name],
       tips(step.name, () => sliceTooltip(keyFor(step.name), entries.get(step.name), reading))
     )
@@ -123,21 +127,42 @@ export function DonutChart3D<T extends object>({
 }
 
 /**
- * The slices of `data` by name, with their values, their places in the ring
- * and their presence - built once per change of the data, not at every frame
- * the camera turns.
+ * The slices of `data` by name - its id within its series - with the numbers
+ * each glides, its place in the ring and the whole the slices share, built
+ * once per change of the data, not at every frame the camera turns. A value
+ * of 0 is no slice: it leaves the numbers as a gone entry does.
  */
-function useSlices<T extends object>(data: T[], { value, id }: Fields<T>) {
+function useSlices<T extends object>(data: T[], fields: Fields<T>, fallback?: string) {
+  const { value, id, series } = fields
   return React.useMemo(() => {
     // Two entries of one name are two slices.
-    const names = uniqueIds(data.map((d, i) => (id ? String(d[id]) : String(i))))
+    const ids = uniqueIds(data.map((d, i) => (id ? String(d[id]) : String(i))))
+    const color = series ?? id
+    const slices = ids.flatMap((entry, i) => {
+      const amount = nonNegative(data[i][value])
+      const name = joined(keyOf(color && data[i][color], fallback), entry)
+      return amount > 0 ? [{ name, entry: data[i], amount }] : []
+    })
     return {
-      entries: new Map(names.map((name, i) => [name, data[i]])),
-      amounts: Object.fromEntries(names.map((name, i) => [name, nonNegative(data[i][value])])),
-      order: Object.fromEntries(names.map((name, i) => [name, i])),
-      present: Object.fromEntries(names.map((name) => [name, 1])),
+      entries: new Map(slices.map((s) => [s.name, s.entry])),
+      numbers: Object.fromEntries(
+        slices.flatMap((s, i) => [
+          [AMOUNT + s.name, s.amount],
+          [OPACITY + s.name, 1],
+          [PLACE + s.name, i],
+        ])
+      ),
+      order: Object.fromEntries(slices.map((s, i) => [s.name, i])),
+      total: sum(slices, (s) => s.amount),
     }
-  }, [data, value, id])
+  }, [data, value, id, series, fallback])
+}
+
+/** The numbers of the slices apart by what they are - their values, fades and places - each by the name of its slice. */
+function split(numbers: Record<string, number>) {
+  const kinds: Record<string, Record<string, number>> = { [AMOUNT]: {}, [OPACITY]: {}, [PLACE]: {} }
+  for (const key in numbers) kinds[key[0]][key.slice(1)] = numbers[key]
+  return { amount: kinds[AMOUNT], opacity: kinds[OPACITY], place: kinds[PLACE] }
 }
 
 /** The slices of `names` round the ring, in their order, by their `amounts`; a slice of nothing has no room. */
@@ -166,15 +191,15 @@ function ringShapes(camera: Camera3DInstance, slices: Slice[]) {
       { ...spec, startAngle: start, endAngle: end },
       Math.ceil((end - start) / STEP)
     )
-    return corners.map((step, i) =>
-      Object.assign(step, { name, step: i, first: i === 0, last: i === corners.length - 1 })
+    return corners.map((step, index) =>
+      Object.assign(step, { name, index, first: index === 0, last: index === corners.length - 1 })
     )
   })
   const toward = cubes.viewDirection()
   return cubes
     .data(steps)
-    .map((step) => Object.assign(step, { floor: facing(step, toward) }))
-    .sort((a, b) => sort(a.floor, b.floor))
+    .map((step) => Object.assign(step, { near: nearness(step, toward) }))
+    .sort((a, b) => sort(a.near, b.near))
 }
 
 /**
@@ -189,7 +214,7 @@ function ringShapes(camera: Camera3DInstance, slices: Slice[]) {
  * that their boxes overlap. Rounded as `floored` rounds, so the server and
  * the browser, which differ in the last bit of a sine, paint in one order.
  */
-function facing(step: Point3D[], toward: Point3D) {
+function nearness(step: Point3D[], toward: Point3D) {
   // Never 0: the camera never looks straight down the axis, as the cosine of
   // its tilt, even of a quarter turn, is never exactly 0 in floating point.
   const length = Math.hypot(toward.x, toward.z)
@@ -198,10 +223,10 @@ function facing(step: Point3D[], toward: Point3D) {
   // starts and ends, as far from the axis as the ring is wide.
   const [from, to] = [step[2], step[1]].map((p) => ({ x: p.x / RADIUS, z: p.z / RADIUS }))
   const cross = (a: Flat, b: Flat) => a.x * b.z - a.z * b.x
-  const holds = (side: Flat) => cross(from, side) >= 0 && cross(side, to) >= 0
-  const near = holds(eye)
+  const spans = (side: Flat) => cross(from, side) >= 0 && cross(side, to) >= 0
+  const near = spans(eye)
     ? 1
-    : holds({ x: -eye.x, z: -eye.z })
+    : spans({ x: -eye.x, z: -eye.z })
       ? -1
       : Math.max(from.x * eye.x + from.z * eye.z, to.x * eye.x + to.z * eye.z)
   return { centroid: { z: Math.round(near * 1e9) / 1e9 } }
@@ -211,10 +236,10 @@ function facing(step: Point3D[], toward: Point3D) {
 type Flat = { x: number; z: number }
 
 /**
- * The marks of one step: its faces that look at the camera, shaded in
- * `color` and faded to `opacity`. The ends of a slice close it, the walls
- * between its steps are inside it, and its group is the slice, so hovering
- * lights the slice whole.
+ * The marks of one step, as the bars draw theirs: its faces that look at the
+ * camera, shaded in `color` and faded to `opacity`. The ends of a slice close
+ * it, the walls between its steps are inside it, and its group is the slice,
+ * so hovering lights the slice whole.
  */
 function stepMarks(
   step: ReturnType<typeof ringShapes>[number],
@@ -226,9 +251,9 @@ function stepMarks(
   const faces = step.faces.filter(
     (face) => (face.face !== "right" || step.first) && (face.face !== "left" || step.last)
   )
-  return cubeMarks(joined(step.name, String(step.step)), faces, color, tooltip).map((mark) => ({
+  const id = joined(step.name, String(step.index))
+  return barMarks({ id, faces, color, tooltip, opacity }).map((mark) => ({
     ...mark,
-    fill: faded(mark.fill, opacity),
     groups: [step.name],
   }))
 }
@@ -236,8 +261,8 @@ function stepMarks(
 /**
  * What a slice says on hover, made when the pointer lands on it: its name,
  * or its series, over its value and its share of the whole, labelled by the
- * field - or what `tooltip` makes of that. A slice whose entry has left the
- * data says nothing.
+ * field - or what `tooltip` makes of that. A slice on its way out - its
+ * entry gone from the data, or its value 0 - says nothing.
  */
 function sliceTooltip<T extends object>(
   key: string,
