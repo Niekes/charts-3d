@@ -8,7 +8,7 @@ sees, not how the code draws it.
 
 **Entry**:
 What the data of a chart lists, one by one: a row of bars, a point, a stop, a
-place, the value of a region. Its identity - a name of its own, the region
+place, the value of a region, a slice. Its identity - a name of its own, the region
 it colors, or else its place in the data - is what its marks follow through
 new data. A name is its own within its series: Jan of one line is not Jan
 of another. A cell of a grid is no entry: it is where it stands.
@@ -101,6 +101,14 @@ A circle on the land at a place, its area the value of the place - the mark
 of the places chart. It grows from nothing as it fades in, and a dot on the
 far side of the globe is hidden by it.
 _Avoid_: bubble, marker, pin, point
+
+**Slice**:
+The part of the ring of a donut between two angles, as wide as its share of
+the whole and as tall as its value - the mark of the donut chart. Slices
+touch, in the order of the data, clockwise seen from above. A slice that
+comes widens out of its neighbours and rises as it fades in, and a gone one
+narrows back into them as it sinks; a value below 0, or none, is no slice.
+_Avoid_: wedge, sector, segment (a piece of a line), arc, piece
 
 **Line**:
 The points of one series joined in the order of the data, as wide on the
@@ -269,7 +277,7 @@ _Avoid_: alignment, anchor, position
 The element under the pointer, lit: its fill in its own color lightened - or
 in the focus color, where one is set; a stroke of its own stays. Every
 chart's marks carry their `groups`, naming the marks lit together: one bar,
-one point, one cell, the point of a line.
+one point, one cell, one slice, the point of a line.
 _Avoid_: selection, active state, fade, edge
 
 ## Navigation

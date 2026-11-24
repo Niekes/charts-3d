@@ -1,0 +1,125 @@
+---
+title: Donut Chart 3D
+description: A 3D pie with a hole - slices as wide as their share and as tall as their value.
+---
+
+import DonutChart3DDemo from "@/docs/examples/donut-chart-3d-demo"
+import DonutChart3DUpdateDemo from "@/docs/examples/donut-chart-3d-update-demo"
+import DonutChart3DEnterDemo from "@/docs/examples/donut-chart-3d-enter-demo"
+import DonutChart3DRenderersDemo from "@/docs/examples/donut-chart-3d-renderers-demo"
+import DonutChart3DManyDemo from "@/docs/examples/donut-chart-3d-many-demo"
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <DonutChart3DDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/donut-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+The pie of this registry, with a hole: a slice is as wide as its share of the
+whole and as tall as its value, relative to the largest, so the depth carries
+the value twice over - the angle tells the share, the height compares the
+slices where the tilt bends their angles. A pie whose depth is only thickness
+has no place here ([ADR-0014](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0014-depth-shows-data.md)).
+The slices run in the order of the data, clockwise seen from above, the first
+from the back; each takes the color its `id` keys in the chart config, as the
+slices of the shadcn/ui pie do, unless `series` names another field.
+
+## Installation
+
+<Tabs items={["CLI", "npm", "Manual"]}>
+  <Tab value="CLI">
+    ```package-install
+    npx shadcn@latest add niekes/charts-3d/donut-chart-3d
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```package-install
+    npm install @niekes/charts-3d
+    ```
+
+    Import `DonutChart3D` from `@niekes/charts-3d`, and add the package to the sources of Tailwind, see [Installation](/docs/installation#from-npm).
+
+  </Tab>
+  <Tab value="Manual">
+    Install the dependencies, and their types for TypeScript:
+
+    ```package-install
+    npm install d3-3d d3-array
+    npm install -D @types/d3-array
+    ```
+
+    Copy [chart-3d](/docs/components/chart-3d) into `components/ui/chart-3d.tsx`, then this code into `components/ui/donut-chart-3d.tsx`:
+
+    <include>../../../registry/new-york/ui/donut-chart-3d.tsx</include>
+
+    Update the import paths to match your project setup.
+
+  </Tab>
+</Tabs>
+
+## Update
+
+Press Update: every slice glides to its new share and height over the
+`animationDuration` of its container.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <DonutChart3DUpdateDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/donut-chart-3d-update-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Enter and leave
+
+New data may also bring and drop whole slices - a slice follows the name of
+its entry, in the `id` field. An added browser widens out of its neighbours
+and rises as it fades in; a removed one narrows back into them and sinks as it
+fades out, the mirror of its entering, where it stood in the ring (see Enter
+in the [glossary](https://github.com/Niekes/charts-3d/blob/main/GLOSSARY.md)).
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <DonutChart3DEnterDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/donut-chart-3d-enter-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Renderers
+
+The same chart on every renderer, side by side. The marks are data the chart hands to the container, and `"svg"` and `"canvas"` draw them all - where the browser has no canvas, as SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <DonutChart3DRenderersDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/donut-chart-3d-renderers-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Many marks
+
+A thousand slices - the most populous places of the world, the capitals in a
+color of their own - and the chart stays interactive. The scene is one list of
+marks, so the demo starts on `"canvas"`, the renderer for many marks, and the
+select shows the same scene on SVG.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <DonutChart3DManyDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/donut-chart-3d-many-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## API Reference
+
+<auto-type-table path="../../../registry/new-york/ui/donut-chart-3d.tsx" name="DonutChart3DProps" />

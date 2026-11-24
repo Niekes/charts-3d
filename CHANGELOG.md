@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `donut-chart-3d`, `DonutChart3D`: the pie of the registry, with a hole -
+  slices as wide as their share of the whole and as tall as their value,
+  relative to the largest, so the depth carries the value (ADR-0014). The
+  slices run in the order of the data, clockwise seen from above from the
+  back, and glide, widen out of their neighbours and narrow back into them
+  as the data changes. It reads its entries as the places chart does -
+  `value`, `id`, `series`, `format`, `tooltip` - and `series` falls back to
+  `id`, so every slice takes the color its name keys in the chart config
+  (#111).
+
 ### Changed
 
 - A tick mark follows its label where the label moved to make room: in a
   curve where it slid along the edge, straight out where it took a second
   row - unless that way runs through a tick label of the first row, where
   the mark stays short.
+- `d3-3d` 2.5.0 or later, for `sector`, the steps of a ring sector that the
+  slices of the donut chart are built from (#111).
 
 ## [1.0.0] - 2026-11-23
 
