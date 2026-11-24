@@ -8,7 +8,7 @@
       "type": "registry:ui",
       "title": "Chart 3D",
       "description": "The container, camera, orbit, axes and tooltip that every 3D chart builds on.",
-      "dependencies": ["d3-3d@^2.4.0", "d3-array@^3.2.4"],
+      "dependencies": ["d3-3d@^2.5.0", "d3-array@^3.2.4"],
       "devDependencies": ["@types/d3-array"],
       "registryDependencies": ["utils"],
       "files": [
@@ -72,6 +72,20 @@
       "files": [
         {
           "path": "registry/new-york/ui/choropleth-chart-3d.tsx",
+          "type": "registry:ui"
+        }
+      ],
+      "categories": ["charts", "3d"]
+    },
+    {
+      "name": "donut-chart-3d",
+      "type": "registry:ui",
+      "title": "Donut Chart 3D",
+      "description": "A 3D pie with a hole: slices as wide as their share and as tall as their value.",
+      "registryDependencies": ["niekes/charts-3d/chart-3d"],
+      "files": [
+        {
+          "path": "registry/new-york/ui/donut-chart-3d.tsx",
           "type": "registry:ui"
         }
       ],

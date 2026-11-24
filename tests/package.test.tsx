@@ -12,6 +12,7 @@ import * as bar from "@/registry/new-york/ui/bar-chart-3d"
 import * as barField from "@/registry/new-york/ui/bar-field-chart-3d"
 import * as core from "@/registry/new-york/ui/chart-3d"
 import * as choropleth from "@/registry/new-york/ui/choropleth-chart-3d"
+import * as donut from "@/registry/new-york/ui/donut-chart-3d"
 import * as globe from "@/registry/new-york/ui/globe-chart-3d"
 import * as line from "@/registry/new-york/ui/line-chart-3d"
 import * as places from "@/registry/new-york/ui/places-chart-3d"
@@ -28,6 +29,7 @@ describe("the npm package", () => {
       bar,
       barField,
       choropleth,
+      donut,
       globe,
       line,
       places,
@@ -170,6 +172,15 @@ describe("the npm package", () => {
         value="population"
         tooltip={(tip, data) => {
           expectTypeOf(data).toEqualTypeOf<{ entry: City }>()
+          return tip
+        }}
+      />,
+      <pkg.DonutChart3D
+        data={sales}
+        id="month"
+        value="revenue"
+        tooltip={(tip, data) => {
+          expectTypeOf(data).toEqualTypeOf<{ entry: Sale }>()
           return tip
         }}
       />,
