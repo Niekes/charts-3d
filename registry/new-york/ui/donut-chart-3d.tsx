@@ -135,12 +135,14 @@ export function DonutChart3D<T extends object>({
 function useSlices<T extends object>(data: T[], fields: Fields<T>, fallback?: string) {
   const { value, id, series } = fields
   return React.useMemo(() => {
-    // Two entries of one name are two slices.
-    const ids = uniqueIds(data.map((d, i) => (id ? String(d[id]) : String(i))))
     const color = series ?? id
-    const slices = ids.flatMap((entry, i) => {
+    // Two entries of one name in one series are two slices; in two series, a
+    // slice in each, which one leaving leaves the other as it is.
+    const names = uniqueIds(
+      data.map((d, i) => joined(keyOf(color && d[color], fallback), id ? String(d[id]) : String(i)))
+    )
+    const slices = names.flatMap((name, i) => {
       const amount = nonNegative(data[i][value])
-      const name = joined(keyOf(color && data[i][color], fallback), entry)
       return amount > 0 ? [{ name, entry: data[i], amount }] : []
     })
     return {

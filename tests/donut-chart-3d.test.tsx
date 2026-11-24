@@ -589,6 +589,29 @@ describe("DonutChart3D transitions", () => {
     expect(marksOf(chart.svg, "a")).toHaveLength(0)
     await chart.unmount()
   })
+
+  test("a name repeats within its series only: when the entry of one series leaves, the same name in another stays as it is", async () => {
+    const two = { a: { color: "red" }, b: { color: "blue" } }
+    const keyed = (data: Record<string, unknown>[]) => (
+      <ChartContainer3D config={two} defaultView={FROM_ABOVE}>
+        <DonutChart3D data={data} id="browser" value="visitors" series="kind" />
+      </ChartContainer3D>
+    )
+    const both = [
+      { browser: "chrome", visitors: 100, kind: "a" },
+      { browser: "chrome", visitors: 100, kind: "b" },
+    ]
+    const chart = await mount(keyed(both))
+    await act(() => vi.advanceTimersByTime(700))
+    await chart.render(keyed([both[1]]))
+    await act(() => vi.advanceTimersByTime(300))
+    // Chrome of `a` fades out; Chrome of `b` widens, and stays opaque.
+    expect(fadedOnes(chart.svg, "a")).toBe(true)
+    expect(
+      marksOf(chart.svg, "b").some((m) => m.getAttribute("fill")!.includes("transparent"))
+    ).toBe(false)
+    await chart.unmount()
+  })
 })
 
 async function mount(element: ReactElement) {
