@@ -80,6 +80,21 @@ twice. They were taken before this log and name no commit.
   2026-11-09): keep a default SVG demo under about 1,000 paths.
 - **The land of the globe is cheap**: d3-geo projects its 110m land in about
   2 ms a frame (2026-11-09).
+- **The frame on main after the caching** (canvas, production build,
+  2026-11-26, commit 2c970ab; the rows of that date in the log). The surface
+  numbers of 2026-11-15 above are superseded: its colors, keys and tooltips
+  are built when the data moves now. JavaScript is 85 to 90 % of the main
+  thread's frame on the slowest charts, and no single cost leads it: the
+  slices are 1 to 3 ms each. Two are in the core: `fitCanvas` reads
+  `clientWidth` at every frame, which recalculates the styles inside the
+  script, 1 to 3.4 ms on the charts with axes; and `resolved` with `ink`
+  look every fill up by a string built anew, 5.4 ms on the surface. The
+  places chart spends 5.5 ms a frame in its body and the closure that makes
+  a place. React leads no profile: `commitHostUpdate` shows once, at 1.2 %.
+- **The screen rounds the frame time.** At 120 Hz a median is 8.3, 16.7 or
+  25 ms, so a frame of 19 ms reads as 16.7 there and as 33 at 60 Hz. The
+  time of the main thread a frame, from a trace, compares where the median
+  cannot; the log names it under Change. The line to stay under is 16.7 ms.
 - **Measure real frames.** A benchmark that reads pixels back with
   `getImageData` forces the canvas to rasterise at once and overstates
   paint many times over.
@@ -89,5 +104,16 @@ twice. They were taken before this log and name no commit.
 One row per measurement, newest first. The frame time is the median of
 three runs of the snippet above.
 
-| Date | Commit | Chart | Renderer | Marks | Median ms | p95 ms | Machine, refresh, browser | Change |
-| ---- | ------ | ----- | -------- | ----- | --------- | ------ | ------------------------- | ------ |
+| Date       | Commit  | Chart      | Renderer | Marks | Median ms | p95 ms | Machine, refresh, browser                     | Change                                |
+| ---------- | ------- | ---------- | -------- | ----- | --------- | ------ | --------------------------------------------- | ------------------------------------- |
+| 2026-11-26 | 2c970ab | surface    | canvas   | 6,241 | 25.0      | 33.4   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 22.3 ms a frame |
+| 2026-11-26 | 2c970ab | line       | canvas   | 8,998 | 24.9      | 25.3   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 21.9 ms a frame |
+| 2026-11-26 | 2c970ab | bar-field  | canvas   | 4,800 | 24.6      | 25.1   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 20.6 ms a frame |
+| 2026-11-26 | 2c970ab | globe      | canvas   | 4,913 | 24.6      | 25.4   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 20.3 ms a frame |
+| 2026-11-26 | 2c970ab | area       | canvas   | 1,422 | 16.7      | 25.1   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 19.7 ms a frame |
+| 2026-11-26 | 2c970ab | places     | canvas   | 5,932 | 16.7      | 25.1   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 18.5 ms a frame |
+| 2026-11-26 | 2c970ab | routes     | canvas   | 2,111 | 16.6      | 16.7   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 14.0 ms a frame |
+| 2026-11-26 | 2c970ab | scatter    | canvas   | 5,000 | 16.6      | 17.2   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 13.4 ms a frame |
+| 2026-11-26 | 2c970ab | bar        | canvas   | 900   | 8.4       | 16.7   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 10.5 ms a frame |
+| 2026-11-26 | 2c970ab | donut      | canvas   | 3,002 | 8.3       | 16.7   | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 9.7 ms a frame  |
+| 2026-11-26 | 2c970ab | choropleth | canvas   | 213   | 8.3       | 8.7    | MacBook Pro M5 on battery, 120 Hz, Chrome 158 | baseline; main thread 5.6 ms a frame  |

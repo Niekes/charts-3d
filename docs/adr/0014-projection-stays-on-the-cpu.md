@@ -30,3 +30,9 @@ demo.
   CSS colors would have to be resolved for it; and three.js would land in
   every project that installs a chart. The projection it would move to the
   GPU is a small part of a frame today.
+- **deck.gl, projecting on the GPU.** Rejected for the same reasons as
+  three.js. Its speed comes from bypassing the scene: geometry built once,
+  the camera a matrix in a shader, a depth buffer instead of the sort, no
+  work per mark in a frame - so it cannot draw the marks of ADR-0003, only
+  replace them. What transfers is the rule it follows: a turn of the camera
+  pays for nothing the camera does not change.
