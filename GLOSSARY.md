@@ -77,6 +77,21 @@ One shape of a chart - a bar, a point, a face of a ribbon - projected into
 the chart box, in paint order.
 _Avoid_: shape, element, datum
 
+**Bar**:
+A box upright on the floor from 0 to the value of one series of an entry -
+the mark of the bar chart and the bar field. In a stack it starts where the
+bar before it ends instead.
+_Avoid_: column, block, cuboid, segment (a piece of a line)
+
+**Stack**:
+The bars of one entry whose series stand together in one row along z, each
+on the one before it in the order of the series: those above 0 upward from
+the floor, those below 0 downward from it. The row bears the name of the
+stack. A bar that comes grows in its place and lifts the bars over it; a
+gone one shrinks and lets them down. Pointing at a bar of a stack names that
+bar alone, with its own value.
+_Avoid_: group, pile, layer (a renderer), block, segment
+
 **Tile**:
 The piece of the globe between two meridians and two parallels, a fixed
 number of degrees wide. A tile with an entry rises from the globe to its
@@ -97,10 +112,18 @@ its value.
 _Avoid_: country, polygon, area, feature
 
 **Dot**:
-A circle on the land at a place, its area the value of the place - the mark
+A circle on the land at a place, its area the value of the place - a mark
 of the places chart. It grows from nothing as it fades in, and a dot on the
 far side of the globe is hidden by it.
 _Avoid_: bubble, marker, pin, point
+
+**Spike**:
+A thin prism on the land at a place, a fixed number of degrees wide, rising
+to the value of the place as a tile does - a mark of the places chart, in
+place of the dot. It rises from the land as it fades in. One whose foot is
+beyond the horizon is hidden, its tip too.
+_Avoid_: pin, needle, column, bar (a bar stands on a floor), tile (a tile is a
+piece of the grid)
 
 **Slice**:
 The part of the ring of a donut between two angles, as wide as its share of

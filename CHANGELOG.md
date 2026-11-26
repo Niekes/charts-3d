@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `stack` on `BarChart3D`: keys of the same stack stand on one another in
+  one row along z, in the order of `keys` - those above 0 upward from the
+  floor, those below 0 downward from it - and the axis names the row by the
+  stack. A key of no stack is a row of its own, so the chart without `stack`
+  is unchanged. A bar says its own value on hover, and one that comes grows
+  where it stands and lifts the bars over it (ADR-0016, #121).
+- `useSeries` takes `stack` and hands back `stacks`, the keys of every lane;
+  `barCorners` takes the `base` a bar starts at.
+
 ## [1.1.0] - 2026-11-24
 
 ### Added

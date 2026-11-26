@@ -45,6 +45,14 @@ export type BarChart3DProps<T extends object = Record<string, unknown>> = {
    * @defaultValue 0.6
    */
   barSize?: number
+  /**
+   * The name of the stack of a key: keys of the same name stand on one
+   * another in one row along z, in the order of `keys` - those above 0
+   * upward from the floor, those below 0 downward from it - and the axis
+   * names the row by the stack. A key of no stack is a row of its own.
+   * @defaultValue every key its own row
+   */
+  stack?: Record<string, string>
   /** Formats the labels of the entries along x and the values along y. */
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
   /** The titles of the axes. */
@@ -68,6 +76,7 @@ export function BarChart3D<T extends object>({
   index,
   keys,
   barSize = 0.6,
+  stack,
   format,
   titles,
   tooltip,
@@ -80,6 +89,7 @@ export function BarChart3D<T extends object>({
   // fade away, so a flat bar never pops.
   const {
     series,
+    stacks,
     target,
     filled,
     entries,
@@ -95,14 +105,20 @@ export function BarChart3D<T extends object>({
     index,
     keys,
     format,
+    stack,
   })
   const fill = useTween(filled, 0)
-  const cells = barCells(rows, lanes, values).filter((cell) =>
+  const base = useStackBases({ values, target, stacks, series, lanes })
+  const cells = barCells(rows, lanes, values, base.drawn).filter((cell) =>
     Object.hasOwn(fill, joined(cell.name, cell.key))
   )
   const tips = useTooltips([data, index, keys, config, format, tooltip])
 
-  const box = barBox(data.length, series.length, Object.values(target))
+  // A stack reaches from the floor to the ends of its bars.
+  const ends = [...entries.keys()].flatMap((name) =>
+    series.map((key) => base.data(name, key) + target[joined(name, key)])
+  )
+  const box = barBox(data.length, stacks.length, ends)
   // Every axis glides with the bars: the value ends with the heights, the row
   // and series ends - and the depth of the box - as rows come and go. The
   // size of a bar comes from the gliding ends, so it eases with its cell.
@@ -148,34 +164,124 @@ function barShapes(
   size: { width: number; depth: number }
 ) {
   const cubes = cubes3D().camera(camera)
+  // How high the eye stands; where it is infinitely far, only the side it looks from counts.
+  const eye = cubes.perspective() * cubes.viewDirection().y || 0
+  const height = Math.max(-FAR, Math.min(FAR, eye))
   return floored(
     cubes.data(
-      cells.map(({ name, x, j, key, value }) =>
-        Object.assign(barCorners(world, x, j, value, size), { name, key, value })
+      cells.map(({ name, x, j, key, value, base }) =>
+        Object.assign(barCorners(world, x, j, value, size, base), {
+          name,
+          j,
+          key,
+          value,
+          span: [world.y(base), world.y(base + value)],
+        })
       )
     ),
     cubes
-  ).sort((a, b) => sort(a.floor, b.floor))
+  ).sort((a, b) => sort(a.floor, b.floor) || stackOrder(a, b, height))
+}
+
+// Further than any bar stands from the box, which spans -1 to 1.
+const FAR = 1e6
+
+/**
+ * The order of two bars of one stack, on one footprint: a flat one first, as
+ * it lies on the face of another, then the one further from the height of the
+ * eye, which sees the nearer one over it. Bars of two footprints that stand
+ * equally near keep the order of the data.
+ */
+function stackOrder(
+  a: { name: string; j: number; value: number; span: number[] },
+  b: typeof a,
+  eye: number
+) {
+  if (a.name !== b.name || a.j !== b.j) return 0
+  if ((a.value === 0) !== (b.value === 0)) return a.value === 0 ? -1 : 1
+  const away = ({ span }: typeof a) => Math.max(Math.min(...span) - eye, eye - Math.max(...span), 0)
+  return away(b) - away(a)
 }
 
 /**
  * The cell of every bar, the rows and the series still gliding away among
  * them: the row position along x, the place `j` of the series `key` along z,
- * with the tweened value. A cell only one of the tweens still knows is on its
+ * with the tweened value and where it starts in its stack. A cell only one of
+ * the tweens still knows is on its
  * way out and stays unseen.
  */
 function barCells(
   rows: Record<string, number>,
   lanes: Record<string, number>,
-  values: Record<string, number>
+  values: Record<string, number>,
+  baseOf: (name: string, key: string) => number
 ) {
   return Object.entries(rows).flatMap(([name, x]) =>
     Object.entries(lanes).flatMap(([key, j]) => {
       const value = values[joined(name, key)]
-      return value === undefined ? [] : [{ name, x, j, key, value }]
+      return value === undefined ? [] : [{ name, x, j, key, value, base: baseOf(name, key) }]
     })
   )
 }
+
+/**
+ * Where every bar starts: `drawn` from the values on screen, so a stack never
+ * parts while its values glide, and `data` from the values of the data, which
+ * the box spans. Which bar stands on which glides too, from 0 to 1: a key that
+ * moves into or out of a stack rises or sinks there, where one that comes or
+ * goes keeps its place, and the bars over it ride on it as it grows or shrinks.
+ */
+function useStackBases({
+  values,
+  target,
+  stacks,
+  series,
+  lanes,
+}: {
+  values: Record<string, number>
+  target: Record<string, number>
+  stacks: string[][]
+  series: string[]
+  lanes: Record<string, number>
+}) {
+  const pairs = React.useMemo(
+    () =>
+      Object.fromEntries(
+        stacks.flatMap((keys) =>
+          keys.flatMap((above, i) => keys.slice(0, i).map((below) => [joined(below, above), 1]))
+        )
+      ),
+    [stacks]
+  )
+  // `lanes` are still those on screen when new keys arrive: a key in them and in `series` stays.
+  const stays = (key: string) => series.includes(key) && Object.hasOwn(lanes, key)
+  const shares = useTween(pairs, (pair) => (parts(pair).every(stays) ? 0 : undefined))
+  return { drawn: basesFrom(values, shares), data: basesFrom(target, pairs) }
+}
+
+/**
+ * Where every bar of `values` starts: on the bars under it in its stack with a
+ * value of its sign, each as far as its share in `shares` - those above 0
+ * upward from the floor, those below 0 downward from it.
+ */
+function basesFrom(values: Record<string, number>, shares: Record<string, number>) {
+  const under = new Map<string, [string, number][]>()
+  for (const [pair, share] of Object.entries(shares)) {
+    const [below, above] = parts(pair)
+    under.set(above, [...(under.get(above) ?? []), [below, share]])
+  }
+  return (name: string, key: string) => {
+    const own = values[joined(name, key)]
+    return (under.get(key) ?? []).reduce((base, [below, share]) => {
+      // An entry that comes while a key leaves has no value of it: it lifts nothing.
+      const value = values[joined(name, below)] ?? 0
+      return value < 0 === own < 0 ? base + share * value : base
+    }, 0)
+  }
+}
+
+/** The parts of a key that `joined` made. */
+const parts = (key: string) => key.split("\u0001")
 
 /**
  * The box of a bar chart: a row per entry along x, a row per series along z,
