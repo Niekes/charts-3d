@@ -1423,3 +1423,311 @@ describe("BarChart3D entries of the same name", () => {
     await view.unmount()
   })
 })
+
+describe("BarChart3D stacks", () => {
+  const four = { ...config, c: { label: "C", color: "green" }, d: { label: "D", color: "gold" } }
+  // Every corner of the faces of a series, as the server draws it, from a little above.
+  const corners = (html: string, key: string) =>
+    [
+      ...html.matchAll(
+        new RegExp(`<path d="M([^"]*)Z" fill="color-mix\\(in oklch, var\\(--color-${key},`, "g")
+      ),
+    ].flatMap((face) => face[1].split("L").map((c) => c.split(",").map(Number) as [number, number]))
+  const draw = (
+    row: Record<string, number>,
+    props: { keys?: string[]; stack?: Record<string, string> }
+  ) =>
+    renderToString(
+      <ChartContainer3D config={four} defaultView={{ yaw: 0.4, tilt: 0.3 }}>
+        <BarChart3D data={[{ name: "x", ...row }]} index="name" {...props} />
+      </ChartContainer3D>
+    )
+  const ys = (points: [number, number][]) => points.map(([, y]) => y)
+
+  test("keys of one stack stand on one another: the stack is as tall as one bar of their sum", () => {
+    const stacked = draw({ a: 1, b: 2 }, { keys: ["a", "b"], stack: { a: "s", b: "s" } })
+    const sum = draw({ c: 3 }, { keys: ["c"] })
+    const all = [...corners(stacked, "a"), ...corners(stacked, "b")]
+    expect(Math.min(...ys(all))).toBeCloseTo(Math.min(...ys(corners(sum, "c"))), 6)
+    expect(Math.max(...ys(all))).toBeCloseTo(Math.max(...ys(corners(sum, "c"))), 6)
+    // The first key stands on the floor, the second on it, never on the floor.
+    expect(Math.max(...ys(corners(stacked, "a")))).toBeCloseTo(
+      Math.max(...ys(corners(sum, "c"))),
+      6
+    )
+    expect(Math.max(...ys(corners(stacked, "b")))).toBeLessThan(
+      Math.max(...ys(corners(stacked, "a"))) - 1
+    )
+  })
+
+  test("in a stack the bars below 0 hang from the floor, and a bar above 0 stands on the ones above 0 before it", () => {
+    const html = draw(
+      { a: 2, b: -1, d: 1 },
+      { keys: ["a", "b", "d"], stack: { a: "s", b: "s", d: "s" } }
+    )
+    const lowest = (key: string) =>
+      corners(html, key).reduce((low, point) => (point[1] > low[1] ? point : low))
+    // From above, the lowest corner on screen is where a bar starts, at the front.
+    expect(corners(html, "b")).toContainEqual(lowest("a"))
+    expect(corners(html, "a")).toContainEqual(lowest("d"))
+    expect(lowest("d")).not.toEqual(lowest("a"))
+  })
+
+  test("a bar of a stack paints after the one it covers: the upper last from above, the lower last from below", () => {
+    const order = (tilt: number) => {
+      const html = renderToString(
+        <ChartContainer3D config={four} defaultView={{ yaw: 0.4, tilt }}>
+          <BarChart3D
+            data={[{ name: "x", a: 1, b: 2 }]}
+            index="name"
+            keys={["a", "b"]}
+            stack={{ a: "s", b: "s" }}
+          />
+        </ChartContainer3D>
+      )
+      return [
+        ...new Set(
+          [...html.matchAll(/<path d="[^"]*" fill="color-mix\(in oklch, var\(--color-(\w+)/g)].map(
+            (face) => face[1]
+          )
+        ),
+      ]
+    }
+    expect(order(0.3)).toEqual(["a", "b"])
+    expect(order(-0.3)).toEqual(["b", "a"])
+  })
+
+  test("a bar of a stack says its own value on hover, not where the stack reaches", async () => {
+    const view = await mount(
+      <ChartContainer3D config={four} defaultView={{ yaw: 0.4, tilt: 0.3 }}>
+        <BarChart3D
+          data={[{ name: "x", a: 1, b: 2 }]}
+          index="name"
+          keys={["a", "b"]}
+          stack={{ a: "s", b: "s" }}
+        />
+      </ChartContainer3D>
+    )
+    // The middle of the face painted last, the top of the upper bar, which nothing covers.
+    const face = [...view.host.querySelectorAll('path[fill^="color-mix"]')].at(-1)!
+    const points = face.getAttribute("d")!.slice(1, -1).split("L")
+    const [clientX, clientY] = [0, 1].map(
+      (i) => points.reduce((sum, c) => sum + Number(c.split(",")[i]), 0) / points.length
+    )
+    await view.send("pointermove", { clientX, clientY })
+    expect(tip(view.host)).toBe("xB2")
+    await view.unmount()
+  })
+
+  test("a key alone in its stack, or in a stack named as another key, stands in a row of its own, where it stands without one", () => {
+    const faces = (html: string) => html.match(/<path d="[^"]*" fill="[^"]*"/g)
+    const alone = draw({ a: 1, b: 2 }, { keys: ["a", "b"] })
+    expect(faces(draw({ a: 1, b: 2 }, { keys: ["a", "b"], stack: { a: "s" } }))).toEqual(
+      faces(alone)
+    )
+    expect(faces(draw({ a: 1, b: 2 }, { keys: ["a", "b"], stack: { a: "b" } }))).toEqual(
+      faces(alone)
+    )
+  })
+
+  test("a bar of 0 in a stack never paints over the bar it lies on, from above or below", () => {
+    for (const tilt of [0.3, -0.3]) {
+      const html = renderToString(
+        <ChartContainer3D config={four} defaultView={{ yaw: 0.4, tilt }}>
+          <BarChart3D
+            data={[{ name: "x", a: 2, b: 0, c: 0 }]}
+            index="name"
+            keys={["c", "a", "b"]}
+            stack={{ a: "s", b: "s", c: "s" }}
+          />
+        </ChartContainer3D>
+      )
+      const painted = [...html.matchAll(/fill="color-mix\(in oklch, var\(--color-(\w+)/g)].map(
+        (f) => f[1]
+      )
+      expect(painted.at(-1)).toBe("a")
+    }
+  })
+
+  test("in perspective, the bar of a stack nearer the height of the eye paints last", () => {
+    const html = renderToString(
+      <ChartContainer3D config={four} defaultView={{ yaw: 0.4, tilt: 0.05, perspective: 3 }}>
+        <BarChart3D
+          data={[{ name: "x", a: 2.5, b: 0.5 }]}
+          index="name"
+          keys={["a", "b"]}
+          stack={{ a: "s", b: "s" }}
+        />
+      </ChartContainer3D>
+    )
+    const painted = [...html.matchAll(/fill="color-mix\(in oklch, var\(--color-(\w+)/g)].map(
+      (f) => f[1]
+    )
+    // The eye stands lower than the joint: b is seen from below, behind a.
+    expect([...new Set(painted)]).toEqual(["b", "a"])
+  })
+
+  test("a key of an undefined or null stack is no stack: it stands in a row of its own", () => {
+    const loose = { a: "s", b: undefined, c: null } as unknown as Record<string, string>
+    const html = draw({ a: 1, b: 2, c: 3 }, { keys: ["a", "b", "c"], stack: loose })
+    const faces = (h: string) => h.match(/<path d="[^"]*" fill="[^"]*"/g)
+    expect(faces(html)).toEqual(
+      faces(draw({ a: 1, b: 2, c: 3 }, { keys: ["a", "b", "c"], stack: { a: "s" } }))
+    )
+    const labels = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((t) => t[1])
+    expect(labels).toEqual(expect.arrayContaining(["s", "B", "C"]))
+    expect(() =>
+      draw({ a: 1 }, { keys: ["a"], stack: null as unknown as Record<string, string> })
+    ).not.toThrow()
+  })
+
+  test("a stack is one row along z, named by its stack; a key of no stack keeps its row and its label", () => {
+    const html = draw(
+      { a: 1, b: 2, c: 3 },
+      { keys: ["a", "b", "c"], stack: { a: "Web", b: "Web" } }
+    )
+    const labels = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((t) => t[1])
+    expect(labels).toContain("Web")
+    expect(labels).toContain("C")
+    expect(labels).not.toContain("A")
+    expect(labels).not.toContain("B")
+    // Two rows: the box of two lone keys.
+    const two = draw({ a: 3, c: 3 }, { keys: ["a", "c"] })
+    const walls = (h: string) => h.match(/<path d="[^"]*"[^>]*stroke-width="0.75"/g)
+    expect(walls(html)).toEqual(walls(two))
+  })
+})
+
+describe("BarChart3D stacks in motion", () => {
+  // A browser that says the reader has not asked for reduced motion, so the chart may glide.
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("no-preference") }))
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+  const three = { ...config, c: { label: "C", color: "green" } }
+  const row = [{ name: "x", a: 2, b: 1, c: 3 }]
+
+  /** Renders the chart again and again into one root; `corners` reads the corners of the faces of a series on screen. */
+  async function chart() {
+    const host = document.body.appendChild(document.createElement("div"))
+    const root = createRoot(host)
+    const render = ({
+      data = row,
+      ...props
+    }: {
+      keys: string[]
+      stack: Record<string, string>
+      data?: Record<string, number | string>[]
+    }) =>
+      act(async () =>
+        root.render(
+          // Seen from the side, the floor stands at one height on screen in every row.
+          <ChartContainer3D config={three} defaultView={{ yaw: Math.PI / 2, tilt: 0.3 }}>
+            <BarChart3D data={data} index="name" {...props} />
+          </ChartContainer3D>
+        )
+      )
+    const corners = (key: string) =>
+      [...host.querySelectorAll(`path[fill*="var(--color-${key}, currentColor)"]`)].flatMap((f) =>
+        f
+          .getAttribute("d")!
+          .slice(1, -1)
+          .split("L")
+          .map((c) => c.split(",").map(Number) as [number, number])
+      )
+    // From above, the lowest corner on screen is where a bar starts, at the front.
+    const lowest = (key: string) =>
+      corners(key).reduce((low, point) => (point[1] > low[1] ? point : low))
+    const unmount = async () => {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+    return { render, corners, lowest, unmount }
+  }
+
+  test("a bar that comes grows where it stands in its stack and lifts the bar over it; one that goes lets it down", async () => {
+    const view = await chart()
+    const stack = { a: "s", b: "s", c: "s" }
+    await view.render({ keys: ["a", "c"], stack })
+    await view.render({ keys: ["a", "b", "c"], stack })
+    await act(() => vi.advanceTimersByTime(150))
+    // Mid-glide b grows on a, not out of the floor, and c stands on b, never in the air.
+    expect(view.corners("a")).toContainEqual(view.lowest("b"))
+    expect(view.corners("b")).toContainEqual(view.lowest("c"))
+
+    await act(() => vi.advanceTimersByTime(700))
+    await view.render({ keys: ["a", "c"], stack })
+    await act(() => vi.advanceTimersByTime(150))
+    expect(view.corners("b").length).toBeGreaterThan(0)
+    expect(view.corners("a")).toContainEqual(view.lowest("b"))
+    expect(view.corners("b")).toContainEqual(view.lowest("c"))
+    await view.unmount()
+  })
+
+  test("a whole entry that comes or goes keeps its stack together: the upper bar rides on the lower", async () => {
+    const view = await chart()
+    const stack = { a: "s", b: "s" }
+    await view.render({ keys: ["a", "b"], stack, data: [] })
+    await view.render({ keys: ["a", "b"], stack })
+    await act(() => vi.advanceTimersByTime(300))
+    expect(view.corners("a")).toContainEqual(view.lowest("b"))
+    await act(() => vi.advanceTimersByTime(700))
+    await view.render({ keys: ["a", "b"], stack, data: [] })
+    await act(() => vi.advanceTimersByTime(300))
+    expect(view.corners("b").length).toBeGreaterThan(0)
+    expect(view.corners("a")).toContainEqual(view.lowest("b"))
+    await view.unmount()
+  })
+
+  test("new data on the way, or a value that turns below 0, never parts a stack", async () => {
+    const view = await chart()
+    const stack = { a: "s", b: "s", c: "s" }
+    await view.render({ keys: ["a", "c"], stack })
+    await view.render({ keys: ["a", "b", "c"], stack })
+    await act(() => vi.advanceTimersByTime(300))
+    // Only the top bar changes: the glide starts over from where the values stand.
+    await view.render({ keys: ["a", "b", "c"], stack, data: [{ name: "x", a: 2, b: 1, c: 3.5 }] })
+    await act(() => vi.advanceTimersByTime(320))
+    expect(view.corners("b")).toContainEqual(view.lowest("c"))
+    await act(() => vi.advanceTimersByTime(700))
+    // a heads below 0: on the way down it still carries b while it stands above 0.
+    await view.render({ keys: ["a", "b"], stack, data: [{ name: "x", a: -1, b: 1, c: 3 }] })
+    await act(() => vi.advanceTimersByTime(100))
+    expect(view.corners("a")).toContainEqual(view.lowest("b"))
+    await view.unmount()
+  })
+
+  test("an entry that comes while a key of its stack leaves stands on the keys it has", async () => {
+    const view = await chart()
+    const stack = { a: "s", b: "s", c: "s" }
+    await view.render({ keys: ["a", "b", "c"], stack })
+    const both = [row[0], { name: "y", a: 2, b: 1, c: 3 }]
+    await view.render({ keys: ["a", "c"], stack, data: both })
+    await act(() => vi.advanceTimersByTime(300))
+    // The c of y is drawn, as the c of x: as many faces as a has, on both entries.
+    const faces = (key: string) =>
+      document.querySelectorAll(`path[fill*="var(--color-${key}, currentColor)"]`).length
+    expect(faces("c")).toBe(faces("a"))
+    await view.unmount()
+  })
+
+  test("a key that leaves its stack glides down to the floor of its own row, never jumps", async () => {
+    const view = await chart()
+    // c, alone and as tall as the stack, holds the value axis still.
+    await view.render({ keys: ["a", "b", "c"], stack: { a: "s", b: "s" } })
+    const from = view.lowest("b")[1]
+    await view.render({ keys: ["a", "b", "c"], stack: { a: "s" } })
+    await act(() => vi.advanceTimersByTime(150))
+    const mid = view.lowest("b")[1]
+    await act(() => vi.advanceTimersByTime(700))
+    const to = view.lowest("b")[1]
+    // At the end b stands on the floor, as c does.
+    expect(to).toBeCloseTo(view.lowest("c")[1], 6)
+    expect(from + 1 < mid && mid < to - 1).toBe(true)
+    await view.unmount()
+  })
+})

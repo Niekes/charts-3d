@@ -8,6 +8,7 @@ import BarChart3DUpdateDemo from "@/docs/examples/bar-chart-3d-update-demo"
 import BarChart3DEnterDemo from "@/docs/examples/bar-chart-3d-enter-demo"
 import BarChart3DRenderersDemo from "@/docs/examples/bar-chart-3d-renderers-demo"
 import BarChart3DManyDemo from "@/docs/examples/bar-chart-3d-many-demo"
+import BarChart3DStackDemo from "@/docs/examples/bar-chart-3d-stack-demo"
 
 <Tabs items={["Preview", "Code"]}>
   <Tab value="Preview">
@@ -15,6 +16,30 @@ import BarChart3DManyDemo from "@/docs/examples/bar-chart-3d-many-demo"
   </Tab>
   <Tab value="Code">
     <include>../../examples/bar-chart-3d-demo.tsx</include>
+  </Tab>
+</Tabs>
+
+## Stacks
+
+Keys of the same name in `stack` stand on one another in one row along z, in
+the order of `keys` - those above 0 upward from the floor, those below 0
+downward from it - and the axis names the row by its stack. Here the browsers
+stack as Web and the apps as App, so the depth still sets the two side by
+side ([ADR-0016](https://github.com/Niekes/charts-3d/blob/main/docs/adr/0016-a-stack-is-a-row-along-z.md)).
+A bar says its own value on hover; the `tooltip` of the demo adds the total
+of its stack. A bar that comes grows where it stands in its stack and lifts
+the bars over it.
+
+One stack of every key leaves nothing on z: that is a 2D stacked bar chart,
+and a 2D chart draws it better. For stacks of 100 %, normalise the data
+first, with a `map` over the entries.
+
+<Tabs items={["Preview", "Code"]}>
+  <Tab value="Preview">
+    <BarChart3DStackDemo />
+  </Tab>
+  <Tab value="Code">
+    <include>../../examples/bar-chart-3d-stack-demo.tsx</include>
   </Tab>
 </Tabs>
 

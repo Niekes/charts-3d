@@ -3597,9 +3597,10 @@ function useTooltips(deps: React.DependencyList) {
  * `presence` from 0 to 1 as an entry comes and back as it goes, the gone ones
  * still among them; so does every series, `lanes` its place along z and
  * `lanePresence` how far it has come, so a series that is turned off flattens
- * and fades away while the others glide to their new places. `labels` name the ticks: the entry at a tick of x, through
- * `format.x` - a tick of a gone entry fades out unnamed - and the series at a
- * tick of z. Every entry is keyed by its id - its name, made unique where a
+ * and fades away while the others glide to their new places. The series of
+ * one `stack` share a lane, and `stacks` lists the series of every lane. `labels` name the ticks: the entry at a tick of x, through
+ * `format.x` - a tick of a gone entry fades out unnamed - and the series or
+ * the stack at a tick of z. Every entry is keyed by its id - its name, made unique where a
  * name repeats - and `nameOf` reads the name back; `entries` holds the entry
  * behind every id still in the data.
  *
@@ -3610,15 +3611,18 @@ function useSeries<T extends object>({
   index,
   keys,
   format = {},
+  stack,
 }: {
   data: T[]
   index: keyof T & string
   keys?: string[]
   format?: { x?: (label: string) => React.ReactNode; y?: (value: number) => React.ReactNode }
+  stack?: Record<string, string>
 }) {
   const { config } = useChart3D()
   // A key listed twice is one series, not a second lane.
   const series = React.useMemo(() => [...new Set(keys ?? Object.keys(config))], [keys, config])
+  const stacks = React.useMemo(() => stacksOf(series, stack), [series, stack])
   // Built once per change of the data, not at every frame the camera turns.
   const { names, ids, target, filled, order, present } = React.useMemo(() => {
     const names = data.map((d) => String(d[index] ?? ""))
@@ -3641,18 +3645,22 @@ function useSeries<T extends object>({
   }, [data, index, series])
   const lanes = React.useMemo(
     () => ({
-      at: Object.fromEntries(series.map((key, j) => [key, j])),
+      at: Object.fromEntries(stacks.flatMap((keys, j) => keys.map((key) => [key, j]))),
       present: Object.fromEntries(series.map((key) => [key, 1])),
     }),
-    [series]
+    [series, stacks]
   )
   const labels = {
     x: (i: number) => (format.x ?? String)(names[i] ?? ""),
     y: format.y,
-    z: (j: number) => config[series[j]]?.label ?? series[j],
+    z: (j: number) => {
+      const first = stacks[j]?.[0]
+      return stackOf(stack, first) ?? config[first]?.label ?? first
+    },
   }
   return {
     series,
+    stacks,
     target,
     filled,
     entries: new Map(data.map((d, i) => [ids[i], d])),
@@ -3665,6 +3673,25 @@ function useSeries<T extends object>({
     nameOf,
   }
 }
+
+/**
+ * The lanes of `series` along z: one per stack of `stack`, where its first
+ * key stands, its keys in the order of `series`, and one per key of no stack.
+ */
+function stacksOf(series: string[], stack?: Record<string, string>) {
+  const lanes = new Map<string, string[]>()
+  for (const key of series) {
+    const name = stackOf(stack, key)
+    // A stack named as a key is a lane of its own: joined sets it apart.
+    const lane = name === undefined ? key : joined("", name)
+    lanes.set(lane, [...(lanes.get(lane) ?? []), key])
+  }
+  return [...lanes.values()]
+}
+
+/** The name of the stack of `key`, or none: a name that is missing, undefined or null is no stack. */
+const stackOf = (stack: Record<string, string> | undefined, key: string | undefined) =>
+  stack && key !== undefined && Object.hasOwn(stack, key) ? (stack[key] ?? undefined) : undefined
 
 // Between a name and the count of its repeat, in the id of an entry: a
 // character no name of the data is expected to hold.
@@ -3723,8 +3750,8 @@ function cubeMarks(
 
 /**
  * The corners of a bar on the floor of `world`, at `x` and `z` in the values
- * of the data, from 0 to `value`, `size` wide and deep in the world box.
- * box() rises towards -y, so a negative bar starts at its value.
+ * of the data, from `base` to `base` and `value`, `size` wide and deep in the
+ * world box. box() rises towards -y, so a negative bar starts at its value.
  *
  * @experimental A part a chart is built from: a minor version may change it.
  */
@@ -3733,10 +3760,11 @@ function barCorners(
   x: number,
   z: number,
   value: number,
-  size: { width: number; depth: number }
+  size: { width: number; depth: number },
+  base = 0
 ) {
-  const floor = world.y(0)
-  const top = world.y(value)
+  const floor = world.y(base)
+  const top = world.y(base + value)
   return box({
     x: world.x(x),
     y: Math.max(floor, top),
